@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'dashboard_screen.dart'; // Make sure this file exists and is imported correctly
+import 'dashboard_screen.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -14,13 +14,15 @@ class LoginScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size; // Get screen dimensions
+
     return Scaffold(
       body: Stack(
         children: [
           // Background image
           Positioned.fill(
             child: Image.asset(
-              'assets/images/gym.jpg', // Replace with your image path
+              'assets/images/gym.jpg',
               fit: BoxFit.cover,
             ),
           ),
@@ -31,8 +33,8 @@ class LoginScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.transparent,
-                    Colors.deepPurple.shade300,
+                    Colors.black.withOpacity(0.3),
+                    Colors.deepPurple.shade800.withOpacity(0.8),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -41,85 +43,105 @@ class LoginScreen extends StatelessWidget {
             ),
           ),
 
-          // Content
+          // Main Content
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  const SizedBox(height: 40),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: size.height),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        const SizedBox(height: 60),
 
-                  CupertinoButton.filled(
-                    borderRadius: BorderRadius.circular(10),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: const Text('Sign up with email'),
-                    onPressed: () {
-                      _goToDashboard(context); // Simulate email sign-up
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  const Text(
-                    'or use social sign up',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  _socialButton(
-                    icon: Icons.g_mobiledata,
-                    label: 'Continue with Google',
-                    onTap: () {
-                      _goToDashboard(context); // Simulate Google login
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  _socialButton(
-                    icon: Icons.facebook,
-                    label: 'Continue with Facebook',
-                    onTap: () {
-                      _goToDashboard(context); // Simulate Facebook login
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  _socialButton(
-                    icon: Icons.apple,
-                    label: 'Continue with Apple',
-                    onTap: () {
-                      _goToDashboard(context); // Simulate Apple login
-                    },
-                  ),
-                  const SizedBox(height: 24),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        "Already have an account? ",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          _goToDashboard(context); // Simulate Log In
-                        },
-                        child: const Text(
-                          "Log In",
-                          style: TextStyle(
+                        // App title (optional logo can be added here)
+                        Text(
+                          'RepEat',
+                          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                             color: Colors.white,
-                            decoration: TextDecoration.underline,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Track your reps. Fuel your body.',
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
+
+                        const Spacer(),
+
+                        CupertinoButton.filled(
+                          borderRadius: BorderRadius.circular(10),
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                          onPressed: () => _goToDashboard(context),
+                          child: const Text(
+                          'Sign up with Email',
+                          style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                          ),
+                          ),
+                          ),
+
+                        const SizedBox(height: 16),
+
+                        const Text(
+                          'Or sign up with',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        _socialButton(
+                          icon: Icons.g_mobiledata,
+                          label: 'Continue with Google',
+                          onTap: () => _goToDashboard(context),
+                        ),
+                        const SizedBox(height: 12),
+                        _socialButton(
+                          icon: Icons.facebook,
+                          label: 'Continue with Facebook',
+                          onTap: () => _goToDashboard(context),
+                        ),
+                        const SizedBox(height: 12),
+                        _socialButton(
+                          icon: Icons.apple,
+                          label: 'Continue with Apple',
+                          onTap: () => _goToDashboard(context),
+                        ),
+                        const SizedBox(height: 24),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text(
+                              "Already have an account? ",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            GestureDetector(
+                              onTap: () => _goToDashboard(context),
+                              child: const Text(
+                                "Log In",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  decoration: TextDecoration.underline,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 32),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 32),
-                ],
+                ),
               ),
             ),
           ),
@@ -143,11 +165,11 @@ class LoginScreen extends StatelessWidget {
           foregroundColor: Colors.black,
           backgroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
-          side: BorderSide.none,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ),
     );
   }
 }
-//
