@@ -1,8 +1,16 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'dashboard_screen.dart'; // Make sure this file exists and is imported correctly
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
+
+  void _goToDashboard(BuildContext context) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const DashboardScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,6 +24,7 @@ class LoginScreen extends StatelessWidget {
               fit: BoxFit.cover,
             ),
           ),
+
           // Gradient overlay
           Positioned.fill(
             child: Container(
@@ -31,6 +40,7 @@ class LoginScreen extends StatelessWidget {
               ),
             ),
           ),
+
           // Content
           SafeArea(
             child: Padding(
@@ -39,15 +49,17 @@ class LoginScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   const SizedBox(height: 40),
+
                   CupertinoButton.filled(
                     borderRadius: BorderRadius.circular(10),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: const Text('Sign up with email'),
                     onPressed: () {
-                      // Handle email signup
+                      _goToDashboard(context); // Simulate email sign-up
                     },
                   ),
                   const SizedBox(height: 16),
+
                   const Text(
                     'or use social sign up',
                     style: TextStyle(
@@ -56,40 +68,44 @@ class LoginScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   _socialButton(
                     icon: Icons.g_mobiledata,
                     label: 'Continue with Google',
                     onTap: () {
-                      // Google sign-in logic
+                      _goToDashboard(context); // Simulate Google login
                     },
                   ),
                   const SizedBox(height: 12),
+
                   _socialButton(
                     icon: Icons.facebook,
                     label: 'Continue with Facebook',
                     onTap: () {
-                      // Facebook sign-in logic
+                      _goToDashboard(context); // Simulate Facebook login
                     },
                   ),
                   const SizedBox(height: 12),
+
                   _socialButton(
                     icon: Icons.apple,
                     label: 'Continue with Apple',
                     onTap: () {
-                      // Apple sign-in logic
+                      _goToDashboard(context); // Simulate Apple login
                     },
                   ),
                   const SizedBox(height: 24),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text(
-                        "Already have account? ",
+                        "Already have an account? ",
                         style: TextStyle(color: Colors.white),
                       ),
                       GestureDetector(
                         onTap: () {
-                          // Navigate to login screen
+                          _goToDashboard(context); // Simulate Log In
                         },
                         child: const Text(
                           "Log In",
