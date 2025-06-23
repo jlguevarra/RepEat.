@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'workout_screen.dart';
+import 'meal_plan_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -25,8 +27,13 @@ class DashboardScreen extends StatelessWidget {
                   const Text('Last Exercise: Pull-Ups'),
                   const SizedBox(height: 12),
                   ElevatedButton(
-                    onPressed: () {},
-                    child: const Text('Start New Workout'),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const WorkoutScreen()),
+                      );
+                    },
+                    child: const Text('Start Workout'),
                   ),
                 ],
               ),
@@ -125,9 +132,14 @@ class DashboardScreen extends StatelessWidget {
                   child: _simpleCard(
                     title: "View Meal Plan",
                     content: "",
-                    child: ElevatedButton(
-                      onPressed: () {},
-                      child: const Text("Open"),
+                    child:ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const MealPlanScreen()),
+                        );
+                      },
+                      child: const Text('View Meal Plan'),
                     ),
                   ),
                 ),
@@ -199,4 +211,6 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 }
+
+
 //
