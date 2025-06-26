@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'reset_password_screen.dart';
+import 'package:flutter/services.dart';
 
 class VerifyCodeScreen extends StatefulWidget {
   final String email;
@@ -156,6 +157,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                 TextFormField(
                   controller: _codeCtrl,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Allow numbers only
                   style: const TextStyle(color: Colors.white),
                   maxLength: 6,
                   decoration: InputDecoration(
@@ -178,6 +180,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                     return null;
                   },
                 ),
+
                 const SizedBox(height: 30),
                 SizedBox(
                   width: double.infinity,
