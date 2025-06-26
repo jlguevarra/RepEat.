@@ -1,78 +1,54 @@
 <?php
+require 'db_connection.php';
+require 'vendor/autoload.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
 header("Content-Type: application/json");
-require_once 'db_connection.php';
 
-// Allow only POST requests
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode([
-        "success" => false,
-        "message" => "Only POST requests are allowed."
-    ]);
-    exit;
-}
-
-// Get and sanitize input
+$name = trim($_POST['name'] ?? '');
 $email = trim($_POST['email'] ?? '');
 $password = trim($_POST['password'] ?? '');
-$name = trim($_POST['name'] ?? '');
 
-// Validation
-if (empty($email) || empty($password)) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Email and password are required."
-    ]);
+if (empty($name) || empty($email) || empty($password)) {
+    echo json_encode(["success" => false, "message" => "All fields required."]);
     exit;
 }
 
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Invalid email format."
-    ]);
+$stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+$stmt->bind_param("s", $email);
+$stmt->execute();
+$stmt->store_result();
+if ($stmt->num_rows > 0) {
+    echo json_encode(["success" => false, "message" => "Email already registered."]);
     exit;
 }
 
-if (strlen($password) < 6) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Password must be at least 6 characters."
-    ]);
-    exit;
+$code = rand(100000, 999999);
+$insert = $conn->prepare("INSERT INTO email_verifications (email, code) VALUES (?, ?)");
+$insert->bind_param("ss", $email, $code);
+$insert->execute();
+
+$mail = new PHPMailer(true);
+try {
+    $mail->isSMTP();
+    $mail->Host = 'smtp.gmail.com';
+    $mail->SMTPAuth = true;
+    $mail->Username = 'banknorthland@gmail.com';
+    $mail->Password = 'fkqz ajze pczf nmgl'; // App Password
+    $mail->SMTPSecure = 'tls';
+    $mail->Port = 587;
+
+    $mail->setFrom('banknorthland@gmail.com', 'RepEat Verification');
+    $mail->addAddress($email);
+    $mail->isHTML(true);
+    $mail->Subject = 'Your RepEat Verification Code';
+    $mail->Body = "<h3>Your code is <b>$code</b></h3><p>This code expires in 10 minutes.</p>";
+
+    $mail->send();
+    echo json_encode(["success" => true, "message" => "Verification code sent."]);
+} catch (Exception $e) {
+    echo json_encode(["success" => false, "message" => "Mailer Error: {$mail->ErrorInfo}"]);
 }
-
-// Check if user already exists
-$checkQuery = $conn->prepare("SELECT id FROM users WHERE email = ?");
-$checkQuery->bind_param("s", $email);
-$checkQuery->execute();
-$checkQuery->store_result();
-
-if ($checkQuery->num_rows > 0) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Email is already registered."
-    ]);
-    exit;
-}
-
-// Hash password
-$hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-
-// Insert user
-$insertQuery = $conn->prepare("INSERT INTO users (email, password, name) VALUES (?, ?, ?)");
-$insertQuery->bind_param("sss", $email, $hashedPassword, $name);
-
-if ($insertQuery->execute()) {
-    echo json_encode([
-        "success" => true,
-        "message" => "User registered successfully."
-    ]);
-} else {
-    echo json_encode([
-        "success" => false,
-        "message" => "Failed to register user."
-    ]);
-}
-
-$conn->close();
 ?>
