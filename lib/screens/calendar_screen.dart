@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -12,20 +14,49 @@ class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
-  // Sample workout data (can be replaced with backend data)
-  final Map<DateTime, List<Map<String, dynamic>>> workoutData = {
-    DateTime.utc(2024, 5, 20): [
-      {'exercise': 'Push-ups', 'sets': 3, 'reps': 12},
-      {'exercise': 'Squats', 'sets': 3, 'reps': 15},
-    ],
-    DateTime.utc(2024, 5, 22): [
-      {'exercise': 'Pull-ups', 'sets': 3, 'reps': 10},
-    ],
-    DateTime.utc(2024, 5, 24): [
-      {'exercise': 'Lunges', 'sets': 3, 'reps': 12},
-      {'exercise': 'Plank', 'sets': 3, 'reps': 1}, // Plank in minutes
-    ],
-  };
+  // ✅ Remove final to allow updating the map
+  Map<DateTime, List<Map<String, dynamic>>> workoutData = {};
+
+  @override
+  void initState() {
+    super.initState();
+    fetchWorkoutHistory(1).then((data) {
+      setState(() {
+        workoutData = data;
+      });
+    });
+  }
+
+  Future<Map<DateTime, List<Map<String, dynamic>>>> fetchWorkoutHistory(int userId) async {
+    final response = await http.get(
+      Uri.parse('http://localhost/repEatApi/get_workout_history.php?user_id=$userId'),
+      // 🔥 Use 10.0.2.2 for emulator or your local IP address for real device
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['success']) {
+        Map<DateTime, List<Map<String, dynamic>>> history = {};
+
+        for (var item in data['data']) {
+          DateTime date = DateTime.parse(item['date']);
+          date = DateTime.utc(date.year, date.month, date.day);
+
+          history.putIfAbsent(date, () => []).add({
+            'exercise': item['exercise_name'],
+            'sets': item['sets'],
+            'reps': item['reps'],
+          });
+        }
+
+        return history;
+      } else {
+        throw Exception("Failed to load data.");
+      }
+    } else {
+      throw Exception("Error connecting to server.");
+    }
+  }
 
   List<Map<String, dynamic>> _getWorkoutsForDay(DateTime day) {
     return workoutData[DateTime.utc(day.year, day.month, day.day)] ?? [];
@@ -40,7 +71,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
         title: const Text('Workout Calendar'),
         backgroundColor: Colors.deepPurple,
       ),
-      body: Column(
+      body: workoutData.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
         children: [
           TableCalendar(
             firstDay: DateTime.utc(2024, 1, 1),
@@ -87,7 +120,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
               itemBuilder: (context, index) {
                 final workout = workouts[index];
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  margin: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
                   child: ListTile(
                     title: Text(workout['exercise']),
                     subtitle: Text(
