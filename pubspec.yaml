@@ -36,6 +36,11 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.4.0
   table_calendar: ^3.0.9
+  camera: ^0.10.5+9
+  google_mlkit_pose_detection: ^0.6.0
+  flutter_spinkit: ^5.2.0  # Optional loading animations
+  permission_handler: ^11.3.1
+  google_mlkit_commons: 0.3.0
 
 dev_dependencies:
   flutter_test:

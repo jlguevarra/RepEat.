@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'camera_workout_screen.dart'; // ✅ Import camera workout screen
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -10,10 +13,11 @@ class WorkoutScreen extends StatefulWidget {
 class _WorkoutScreenState extends State<WorkoutScreen> {
   String selectedCategory = 'Upper Body';
   String selectedExercise = 'Push-ups';
-  int targetSets = 3;
-  int targetReps = 10;
   int completedReps = 0;
   bool isWorkoutStarted = false;
+
+  final setsController = TextEditingController();
+  final repsController = TextEditingController();
 
   final categories = {
     'Upper Body': ['Push-ups', 'Pull-ups', 'Shoulder Press'],
@@ -22,10 +26,27 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     'Cardio': ['Jumping Jacks', 'Burpees'],
   };
 
+  @override
+  void dispose() {
+    setsController.dispose();
+    repsController.dispose();
+    super.dispose();
+  }
+
   void _toggleWorkout() {
+    if (!isWorkoutStarted) {
+      if (setsController.text.isEmpty || repsController.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please input sets and reps')),
+        );
+        return;
+      }
+    }
+
     setState(() {
       isWorkoutStarted = !isWorkoutStarted;
       if (!isWorkoutStarted) {
+        saveCameraWorkout();
         completedReps = 0;
       }
     });
@@ -34,6 +55,47 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   void _incrementRep() {
     if (isWorkoutStarted) {
       setState(() => completedReps++);
+    }
+  }
+
+  Future<void> saveCameraWorkout() async {
+    final url = Uri.parse('http://10.0.2.2/repeat_api/save_camera_workout.php');
+
+    final data = {
+      'user_id': 1, // 🔥 Replace with dynamic user id later
+      'date': DateTime.now().toIso8601String().split('T')[0],
+      'category': selectedCategory,
+      'exercise_name': selectedExercise,
+      'detected_reps': completedReps,
+      'duration_seconds': 0,
+      'accuracy_score': 0,
+    };
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(data),
+      );
+
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+        if (result['success']) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✅ Workout saved successfully!')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('❌ Failed: ${result['message']}')),
+          );
+        }
+      } else {
+        throw Exception('❌ Failed to connect to API');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error: $e')),
+      );
     }
   }
 
@@ -51,8 +113,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
-            // Category Selector
+            // 🔥 Category Selector
             DropdownButtonFormField<String>(
               value: selectedCategory,
               items: categories.keys
@@ -73,7 +134,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Exercise Selector
+            // 🔥 Exercise Selector
             DropdownButtonFormField<String>(
               value: selectedExercise,
               items: exerciseList
@@ -89,43 +150,35 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Target Set & Reps
+            // 🔥 Target Sets & Reps
             Row(
               children: [
                 Expanded(
                   child: TextFormField(
-                    initialValue: targetSets.toString(),
+                    controller: setsController,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: 'Target Sets',
                       border: OutlineInputBorder(),
                     ),
-                    onChanged: (val) {
-                      final parsed = int.tryParse(val);
-                      if (parsed != null) setState(() => targetSets = parsed);
-                    },
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: TextFormField(
-                    initialValue: targetReps.toString(),
+                    controller: repsController,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: 'Reps per Set',
                       border: OutlineInputBorder(),
                     ),
-                    onChanged: (val) {
-                      final parsed = int.tryParse(val);
-                      if (parsed != null) setState(() => targetReps = parsed);
-                    },
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 30),
 
-            // Rep Tracker
+            // 🔥 Rep Counter
             Center(
               child: Column(
                 children: [
@@ -142,7 +195,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             ),
             const SizedBox(height: 30),
 
-            // Start / End Workout
+            // 🔥 Start/End Workout Button
             Center(
               child: ElevatedButton.icon(
                 icon: Icon(isWorkoutStarted ? Icons.stop : Icons.play_arrow),
@@ -157,7 +210,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
             const SizedBox(height: 16),
 
-            // Simulated rep counting
+            // 🔥 Simulated Rep Counter Button
             if (isWorkoutStarted)
               Center(
                 child: OutlinedButton(
@@ -165,6 +218,28 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   child: const Text('Simulate Rep'),
                 ),
               ),
+
+            const SizedBox(height: 16),
+
+            // 🔥 Camera-based Detection Button
+            Center(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.camera_alt),
+                label: const Text('Use Camera for Rep Detection'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CameraWorkoutScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
