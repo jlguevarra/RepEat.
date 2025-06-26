@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 24, 2025 at 05:46 AM
+-- Generation Time: Jun 25, 2025 at 12:58 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -20,6 +20,27 @@ SET time_zone = "+00:00";
 --
 -- Database: `repeat_app`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `password_resets`
+--
+
+CREATE TABLE `password_resets` (
+  `id` int(11) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `code` varchar(10) NOT NULL,
+  `used` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `password_resets`
+--
+
+INSERT INTO `password_resets` (`id`, `email`, `code`, `used`, `created_at`) VALUES
+(1, 'johnlloydguevarra0405@gmail.com', '410729', 1, '2025-06-25 10:54:35');
 
 -- --------------------------------------------------------
 
@@ -41,11 +62,18 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`id`, `email`, `password`, `name`, `created_at`) VALUES
 (1, 'user@example.com', '$2y$10$HgCCmDOEwZ93e9ghn.dfjO.r9dA4nYpo3e8GhLj4u03pKVSxYNV/e', 'John Doe', '2025-06-24 03:21:10'),
-(2, 'sample@gmail.com', '$2y$10$JqRi70.0i92ZEhgJ8sBCmukffoR3zSjrX.7f4e8fUze6lmzYOb2n2', 'John Lloyd Guevarra', '2025-06-24 03:45:08');
+(2, 'johnlloydguevarra0405@gmail.com', '$2y$10$d1DuiEx8qnAilb39TZk63uYsZyjyfQWsSGrj7TMbxxix4xAeEXv0O', 'John Lloyd Guevarra', '2025-06-24 03:45:08'),
+(3, 'sample1@gmail.com', '$2y$10$cfgwRBhztrlOzAOQD89kkel65R0vY0UpJRD5w8sfqRvEfZXHW/t3a', 'Sample', '2025-06-25 08:19:18');
 
 --
 -- Indexes for dumped tables
 --
+
+--
+-- Indexes for table `password_resets`
+--
+ALTER TABLE `password_resets`
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `users`
@@ -59,10 +87,16 @@ ALTER TABLE `users`
 --
 
 --
+-- AUTO_INCREMENT for table `password_resets`
+--
+ALTER TABLE `password_resets`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

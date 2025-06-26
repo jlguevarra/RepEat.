@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
 import 'sign_up_screen.dart';
+import 'forgot_password_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -177,16 +178,18 @@ class _LoginScreenState extends State<LoginScreen> {
                               Align(
                                 alignment: Alignment.center,
                                 child: TextButton(
-                                  onPressed: _forgotPassword,
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                                    );
+                                  },
                                   child: const Text(
-                                    'Forgot Password?',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      decoration: TextDecoration.underline,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                    "Forgot Password?",
+                                    style: TextStyle(color: Colors.white70),
                                   ),
                                 ),
+
                               ),
 
                               const SizedBox(height: 12),
