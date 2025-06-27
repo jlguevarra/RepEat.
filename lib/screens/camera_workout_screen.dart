@@ -3,7 +3,6 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 
 class CameraWorkoutScreen extends StatefulWidget {
   const CameraWorkoutScreen({super.key});
@@ -37,13 +36,8 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         _errorMessage = null;
       });
 
-      // First check if camera plugin is available
-      try {
-        WidgetsFlutterBinding.ensureInitialized();
-        _cameras = await availableCameras();
-      } catch (e) {
-        throw Exception('Camera plugin not available. Please rebuild your app.');
-      }
+      WidgetsFlutterBinding.ensureInitialized();
+      _cameras = await availableCameras();
 
       if (_cameras == null || _cameras!.isEmpty) {
         throw Exception('No cameras found on this device');
@@ -87,7 +81,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         _errorMessage = e.toString();
         _isInitializing = false;
       });
-      debugPrint('Camera initialization error: $e');
     }
   }
 
@@ -108,28 +101,21 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   }
 
   InputImage _convertCameraImage(CameraImage image) {
-    final inputImageData = InputImageData(
-      size: Size(image.width.toDouble(), image.height.toDouble()),
-      imageRotation: InputImageRotation.rotation0deg,
-      inputImageFormat: InputImageFormat.nv21,
-      planeData: image.planes.map(
-            (Plane plane) => InputImagePlaneMetadata(
-          bytesPerRow: plane.bytesPerRow,
-          height: plane.height,
-          width: plane.width,
-        ),
-      ).toList(),
-    );
-
-    final allBytes = BytesBuilder();
-    for (final plane in image.planes) {
-      allBytes.add(plane.bytes);
+    final BytesBuilder bytesBuilder = BytesBuilder();
+    for (final Plane plane in image.planes) {
+      bytesBuilder.add(plane.bytes);
     }
-    final bytes = allBytes.toBytes();
+    final bytes = bytesBuilder.toBytes();
+
 
     return InputImage.fromBytes(
       bytes: bytes,
-      inputImageData: inputImageData,
+      metadata: InputImageMetadata(
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: InputImageRotation.rotation0deg,
+        format: InputImageFormat.yuv_420_888,
+        bytesPerRow: image.planes.first.bytesPerRow,
+      ),
     );
   }
 
@@ -142,10 +128,13 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
     final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
 
-    if (leftShoulder != null && leftHip != null &&
-        rightShoulder != null && rightHip != null) {
+    if (leftShoulder != null &&
+        leftHip != null &&
+        rightShoulder != null &&
+        rightHip != null) {
       final diff = ((leftShoulder.y - leftHip.y).abs() +
-          (rightShoulder.y - rightHip.y).abs()) / 2;
+          (rightShoulder.y - rightHip.y).abs()) /
+          2;
 
       if (diff < 50) {
         isDownPosition = true;
@@ -184,41 +173,13 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
               onPressed: _initializeCamera,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.deepPurple,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
               child: const Text(
                 'Retry Camera',
                 style: TextStyle(fontSize: 16),
               ),
-            ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Troubleshooting Tips'),
-                    content: const SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('1. Ensure camera permissions are granted'),
-                          Text('2. Restart the application'),
-                          Text('3. Check if your device has a working camera'),
-                          Text('4. Try cleaning and rebuilding the app'),
-                        ],
-                      ),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('OK'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-              child: const Text('Need Help?'),
             ),
           ],
         ),
@@ -247,7 +208,8 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       );
     }
 
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+    if (_cameraController == null ||
+        !_cameraController!.value.isInitialized) {
       return _buildErrorScreen();
     }
 
@@ -289,11 +251,12 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
                       color: Colors.white,
                       letterSpacing: 1.5,
                       shadows: [
-                      Shadow(
-                      blurRadius: 5,
-                      color: Colors.black,
-                      offset: Offset(1, 1),
-                      )],
+                        Shadow(
+                          blurRadius: 5,
+                          color: Colors.black,
+                          offset: Offset(1, 1),
+                        )
+                      ],
                     ),
                   ),
                 ],

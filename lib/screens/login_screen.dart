@@ -27,7 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    final apiUrl = 'http://localhost/repEatApi/login.php'; // <-- Replace with your API URL
+    final apiUrl = 'http://192.168.0.25/repEatApi/login.php'; // <-- Replace with your API URL
 
     try {
       final response = await http.post(
