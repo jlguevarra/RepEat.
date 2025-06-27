@@ -5,6 +5,8 @@ import 'sign_up_screen.dart';
 import 'forgot_password_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../main_nav_screen.dart';
+
 
 
 class LoginScreen extends StatefulWidget {
@@ -27,7 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    final apiUrl = 'http://192.168.0.25/repEatApi/login.php'; // <-- Replace with your API URL
+    final apiUrl = 'http://192.168.100.79/repEatApi/login.php'; // <-- Replace with your API URL
 
     try {
       final response = await http.post(
@@ -49,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          MaterialPageRoute(builder: (_) => const MainNavScreen()),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -32,7 +32,7 @@ class _SplashScreenState extends State<SplashScreen>
     Future.delayed(const Duration(seconds: 2), () {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        MaterialPageRoute(builder: (_) => const LoginScreen()), // ✅ go to login
       );
     });
   }
@@ -53,7 +53,6 @@ class _SplashScreenState extends State<SplashScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Circular logo container
               Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,

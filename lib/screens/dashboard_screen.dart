@@ -19,12 +19,8 @@ class DashboardScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Profile Section
             _profileSection(),
-
             const SizedBox(height: 16),
-
-            // Workout + Meal Plan Row
             Row(
               children: [
                 Expanded(child: _workoutSummary(context)),
@@ -32,16 +28,8 @@ class DashboardScreen extends StatelessWidget {
                 Expanded(child: _mealPlanSummary(context)),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // Progress Section
-            _progressSection(),
-
-            const SizedBox(height: 16),
-
-            // Quick Navigation
-            _quickNavigation(context),
+            _progressSection(context), // Pass context here for calendar nav
           ],
         ),
       ),
@@ -137,7 +125,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _progressSection() {
+  Widget _progressSection(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: _boxDecoration(),
@@ -162,96 +150,42 @@ class DashboardScreen extends StatelessWidget {
               );
             }).toList(),
           ),
-          const Padding(
-            padding: EdgeInsets.only(top: 4.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                Text('S'),
-                Text('M'),
-                Text('T'),
-                Text('W'),
-                Text('T'),
-                Text('F'),
-                Text('S'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _quickNavigation(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: _boxDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Quick Navigation",
-            style: TextStyle(fontWeight: FontWeight.bold),
+          const SizedBox(height: 6),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              Text('S'),
+              Text('M'),
+              Text('T'),
+              Text('W'),
+              Text('T'),
+              Text('F'),
+              Text('S'),
+            ],
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _navButton(Icons.fitness_center, "Workout", () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const WorkoutScreen()),
-                );
-              }),
-              _navButton(Icons.restaurant_menu, "Meal Plan", () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MealPlanScreen()),
-                );
-              }),
-              _navButton(Icons.calendar_today, "Calendar", () {
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const CalendarScreen()),
                 );
-              }),
-
-              _navButton(Icons.person, "Profile", () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              }),
-            ],
+              },
+              icon: const Icon(Icons.calendar_today),
+              label: const Text('Open Workout Calendar'),
+              style: ElevatedButton.styleFrom(
+                textStyle: TextStyle(fontWeight: FontWeight.bold),
+                backgroundColor: Colors.deepPurple.shade600,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-
-  Widget _navButton(IconData icon, String label, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 80,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.deepPurple.shade100,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 30, color: Colors.deepPurple),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ],
-        ),
       ),
     );
   }

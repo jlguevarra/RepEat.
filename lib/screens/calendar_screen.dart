@@ -29,7 +29,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Future<Map<DateTime, List<Map<String, dynamic>>>> fetchWorkoutHistory(int userId) async {
     final response = await http.get(
-      Uri.parse('http://192.168.0.25/repEatApi/get_workout_history.php?user_id=$userId'),
+      Uri.parse('http://192.168.100.79/repEatApi/get_workout_history.php?user_id=$userId'),
       // 🔥 Use 10.0.2.2 for emulator or your local IP address for real device
     );
 
