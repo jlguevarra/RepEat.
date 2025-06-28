@@ -42,7 +42,8 @@ class MealPlanScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Today\'s Meal Plan'),
+        automaticallyImplyLeading: false, // ✅ Remove back arrow
+        title: const Text('Meal Plan'),   // ✅ Updated title
         backgroundColor: Colors.deepPurple,
       ),
       body: ListView.builder(
@@ -64,7 +65,9 @@ class MealPlanScreen extends StatelessWidget {
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  ...List<Widget>.from((meal['items'] as List).map((item) => Text("• $item"))),
+                  ...List<Widget>.from((meal['items'] as List).map(
+                        (item) => Text("• $item"),
+                  )),
                   const SizedBox(height: 8),
                   Text(
                     "Calories: ${meal['calories']} kcal",

@@ -25,7 +25,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false, // clear back stack
+          (route) => false,
     );
   }
 
@@ -33,9 +33,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile & Planner'),
+        automaticallyImplyLeading: false, // ✅ Remove back arrow
+        title: const Text('Profile'), // ✅ Updated title
         backgroundColor: Colors.deepPurple,
-
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -57,7 +57,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               value: selectedGoal,
               items: goals
                   .map((goal) => DropdownMenuItem(
-                  value: goal, child: Text(goal)))
+                value: goal,
+                child: Text(goal),
+              ))
                   .toList(),
               onChanged: (value) {
                 if (value != null) setState(() => selectedGoal = value);
@@ -98,7 +100,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                     ),
                     onPressed: () {
-                      // Save functionality (connect to API later)
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Profile Saved')),
                       );
@@ -128,7 +129,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Text(
       title,
       style: const TextStyle(
-          fontWeight: FontWeight.bold, fontSize: 16, color: Colors.deepPurple),
+        fontWeight: FontWeight.bold,
+        fontSize: 16,
+        color: Colors.deepPurple,
+      ),
     );
   }
 

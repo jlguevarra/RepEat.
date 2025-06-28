@@ -105,7 +105,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Workout Tracker"),
+        automaticallyImplyLeading: false, // ✅ Remove back arrow
+        title: const Text("Workout"), // ✅ Updated title
         backgroundColor: Colors.deepPurple,
       ),
       body: SingleChildScrollView(
@@ -113,7 +114,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔥 Category Selector
             DropdownButtonFormField<String>(
               value: selectedCategory,
               items: categories.keys
@@ -133,8 +133,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // 🔥 Exercise Selector
             DropdownButtonFormField<String>(
               value: selectedExercise,
               items: exerciseList
@@ -149,8 +147,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // 🔥 Target Sets & Reps
             Row(
               children: [
                 Expanded(
@@ -177,8 +173,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ],
             ),
             const SizedBox(height: 30),
-
-            // 🔥 Rep Counter
             Center(
               child: Column(
                 children: [
@@ -194,8 +188,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ),
             ),
             const SizedBox(height: 30),
-
-            // 🔥 Start/End Workout Button
             Center(
               child: ElevatedButton.icon(
                 icon: Icon(isWorkoutStarted ? Icons.stop : Icons.play_arrow),
@@ -207,10 +199,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 onPressed: _toggleWorkout,
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // 🔥 Simulated Rep Counter Button
             if (isWorkoutStarted)
               Center(
                 child: OutlinedButton(
@@ -218,10 +207,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   child: const Text('Simulate Rep'),
                 ),
               ),
-
             const SizedBox(height: 16),
-
-            // 🔥 Camera-based Detection Button
             Center(
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.camera_alt),

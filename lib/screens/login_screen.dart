@@ -6,6 +6,8 @@ import 'forgot_password_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../main_nav_screen.dart';
+import 'onboarding/onboarding_step1.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -47,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const MainNavScreen()),
+          MaterialPageRoute(builder: (_) => const OnboardingStep1()),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

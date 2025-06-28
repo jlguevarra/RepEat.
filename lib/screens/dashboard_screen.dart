@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'meal_plan_screen.dart';
-import 'workout_screen.dart';
-import 'profile_screen.dart';
 import 'calendar_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -11,7 +8,8 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("RepEat Dashboard"),
+        automaticallyImplyLeading: false, // ✅ Removes back arrow
+        title: const Text("Home"),
         backgroundColor: Colors.deepPurple,
       ),
       body: SingleChildScrollView(
@@ -21,15 +19,7 @@ class DashboardScreen extends StatelessWidget {
           children: [
             _profileSection(),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: _workoutSummary(context)),
-                const SizedBox(width: 12),
-                Expanded(child: _mealPlanSummary(context)),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _progressSection(context), // Pass context here for calendar nav
+            _progressSection(context),
           ],
         ),
       ),
@@ -63,62 +53,6 @@ class DashboardScreen extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _workoutSummary(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: _boxDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Workout Summary",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text("Last: Push-ups\n3 Sets of 12 Reps"),
-          const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const WorkoutScreen()),
-              );
-            },
-            child: const Text("Start Workout"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _mealPlanSummary(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: _boxDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Today's Meal Plan",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text("Calories: 1800 kcal\nProtein: 140g\nCarbs: 150g\nFat: 60g"),
-          const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MealPlanScreen()),
-              );
-            },
-            child: const Text("View Meal Plan"),
           ),
         ],
       ),
@@ -176,7 +110,7 @@ class DashboardScreen extends StatelessWidget {
               icon: const Icon(Icons.calendar_today),
               label: const Text('Open Workout Calendar'),
               style: ElevatedButton.styleFrom(
-                textStyle: TextStyle(fontWeight: FontWeight.bold),
+                textStyle: const TextStyle(fontWeight: FontWeight.bold),
                 backgroundColor: Colors.deepPurple.shade600,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
