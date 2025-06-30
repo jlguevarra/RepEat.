@@ -3,6 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 
 class CameraWorkoutScreen extends StatefulWidget {
   const CameraWorkoutScreen({super.key});
@@ -14,216 +15,147 @@ class CameraWorkoutScreen extends StatefulWidget {
 class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   CameraController? _cameraController;
   late PoseDetector _poseDetector;
+  List<Pose> poses = [];
   bool isBusy = false;
+  bool isDown = false;
   int repCount = 0;
-  bool isDownPosition = false;
-  bool _isDisposed = false;
-  String? _errorMessage;
-  bool _isInitializing = true;
-  List<CameraDescription>? _cameras;
+  Size? _imageSize;
 
   @override
   void initState() {
     super.initState();
-    _poseDetector = PoseDetector(options: PoseDetectorOptions());
     _initializeCamera();
+    _poseDetector = PoseDetector(options: PoseDetectorOptions());
   }
 
   Future<void> _initializeCamera() async {
     try {
-      setState(() {
-        _isInitializing = true;
-        _errorMessage = null;
-      });
-
-      WidgetsFlutterBinding.ensureInitialized();
-      _cameras = await availableCameras();
-
-      if (_cameras == null || _cameras!.isEmpty) {
-        throw Exception('No cameras found on this device');
-      }
-
-      final status = await Permission.camera.request();
-      if (!status.isGranted) {
-        throw Exception('Camera permission not granted');
-      }
-
-      final camera = _cameras!.firstWhere(
+      await Permission.camera.request();
+      final cameras = await availableCameras();
+      final camera = cameras.firstWhere(
             (cam) => cam.lensDirection == CameraLensDirection.front,
-        orElse: () => _cameras!.first,
+        orElse: () => cameras.first,
       );
 
       _cameraController = CameraController(
         camera,
         ResolutionPreset.medium,
         enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.yuv420,
+        imageFormatGroup: ImageFormatGroup.nv21,
       );
 
       await _cameraController!.initialize();
+      _imageSize = Size(
+        _cameraController!.value.previewSize!.height,
+        _cameraController!.value.previewSize!.width,
+      );
 
-      if (!_cameraController!.value.isInitialized) {
-        throw Exception('Failed to initialize camera');
-      }
-
-      _cameraController!.startImageStream((CameraImage image) {
-        if (!isBusy && !_isDisposed) {
+      _cameraController!.startImageStream((image) {
+        if (!isBusy) {
           isBusy = true;
           _processCameraImage(image);
         }
       });
 
-      setState(() {
-        _isInitializing = false;
-      });
+      setState(() {});
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString();
-        _isInitializing = false;
-      });
+      debugPrint('Camera initialization error: $e');
     }
   }
 
   Future<void> _processCameraImage(CameraImage image) async {
     try {
       final inputImage = _convertCameraImage(image);
-      final poses = await _poseDetector.processImage(inputImage);
-      if (!_isDisposed) {
-        _countRepsLogic(poses);
+      final result = await _poseDetector.processImage(inputImage);
+
+      if (mounted) {
+        setState(() {
+          poses = result;
+        });
+
+        if (result.isNotEmpty) {
+          final pose = result.first;
+          final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+          final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
+
+          if (leftShoulder != null && leftHip != null) {
+            final diff = (leftShoulder.y - leftHip.y).abs();
+            if (diff < 50) {
+              isDown = true;
+            }
+            if (diff > 100 && isDown) {
+              setState(() {
+                repCount++;
+              });
+              isDown = false;
+            }
+          }
+        }
       }
     } catch (e) {
       debugPrint('Error processing image: $e');
     } finally {
-      if (!_isDisposed) {
-        isBusy = false;
-      }
+      isBusy = false;
     }
   }
 
   InputImage _convertCameraImage(CameraImage image) {
-    final BytesBuilder bytesBuilder = BytesBuilder();
+    final bytesBuilder = BytesBuilder();
     for (final Plane plane in image.planes) {
       bytesBuilder.add(plane.bytes);
     }
     final bytes = bytesBuilder.toBytes();
-
 
     return InputImage.fromBytes(
       bytes: bytes,
       metadata: InputImageMetadata(
         size: Size(image.width.toDouble(), image.height.toDouble()),
         rotation: InputImageRotation.rotation0deg,
-        format: InputImageFormat.yuv_420_888,
+        format: InputImageFormat.nv21,
         bytesPerRow: image.planes.first.bytesPerRow,
       ),
     );
   }
 
-  void _countRepsLogic(List<Pose> poses) {
-    if (poses.isEmpty || _isDisposed) return;
-
-    final pose = poses.first;
-    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
-    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
-    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
-    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
-
-    if (leftShoulder != null &&
-        leftHip != null &&
-        rightShoulder != null &&
-        rightHip != null) {
-      final diff = ((leftShoulder.y - leftHip.y).abs() +
-          (rightShoulder.y - rightHip.y).abs()) /
-          2;
-
-      if (diff < 50) {
-        isDownPosition = true;
-      }
-
-      if (diff > 100 && isDownPosition) {
-        setState(() => repCount++);
-        isDownPosition = false;
-      }
-    }
-  }
-
   @override
   void dispose() {
-    _isDisposed = true;
     _cameraController?.dispose();
     _poseDetector.close();
     super.dispose();
   }
 
-  Widget _buildErrorScreen() {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.camera_alt, size: 64, color: Colors.blue),
-            const SizedBox(height: 20),
-            Text(
-              _errorMessage ?? 'Camera initialization failed',
-              style: const TextStyle(fontSize: 18, color: Colors.red),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _initializeCamera,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                padding:
-                const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: const Text(
-                'Retry Camera',
-                style: TextStyle(fontSize: 16),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_errorMessage != null) {
-      return _buildErrorScreen();
-    }
-
-    if (_isInitializing) {
+    if (_cameraController == null || !_cameraController!.value.isInitialized || _imageSize == null) {
       return const Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 20),
-              Text('Initializing Camera...'),
-            ],
-          ),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    if (_cameraController == null ||
-        !_cameraController!.value.isInitialized) {
-      return _buildErrorScreen();
-    }
+    final size = MediaQuery.of(context).size;
+    final camera = _cameraController!.value;
+    final scale = size.aspectRatio * camera.aspectRatio;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Workout Rep Counter'),
         backgroundColor: Colors.deepPurple,
-        centerTitle: true,
       ),
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          CameraPreview(_cameraController!),
+          Transform.scale(
+            scale: scale,
+            child: Center(child: CameraPreview(_cameraController!)),
+          ),
+          CustomPaint(
+            painter: PosePainter(
+              poses,
+              imageSize: _imageSize!,
+            ),
+          ),
           Positioned(
-            bottom: 80,
+            bottom: 50,
             left: 0,
             right: 0,
             child: Center(
@@ -249,13 +181,12 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
                     style: TextStyle(
                       fontSize: 18,
                       color: Colors.white,
-                      letterSpacing: 1.5,
                       shadows: [
                         Shadow(
                           blurRadius: 5,
                           color: Colors.black,
                           offset: Offset(1, 1),
-                        )
+                        ),
                       ],
                     ),
                   ),
@@ -266,10 +197,67 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => setState(() => repCount = 0),
         backgroundColor: Colors.deepPurple,
+        onPressed: () => setState(() => repCount = 0),
         child: const Icon(Icons.refresh, color: Colors.white),
       ),
     );
   }
+}
+
+class PosePainter extends CustomPainter {
+  final List<Pose> poses;
+  final Size imageSize;
+  PosePainter(this.poses, {required this.imageSize});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..strokeWidth = 4
+      ..color = Colors.greenAccent;
+
+    for (var pose in poses) {
+      for (var landmark in pose.landmarks.values) {
+        final point = _translate(landmark, size);
+        canvas.drawCircle(point, 6, paint);
+      }
+
+      void drawLine(PoseLandmarkType type1, PoseLandmarkType type2) {
+        final point1 = pose.landmarks[type1];
+        final point2 = pose.landmarks[type2];
+        if (point1 != null && point2 != null) {
+          canvas.drawLine(
+            _translate(point1, size),
+            _translate(point2, size),
+            paint,
+          );
+        }
+      }
+
+      drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
+      drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow);
+      drawLine(PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist);
+      drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow);
+      drawLine(PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist);
+      drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip);
+      drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip);
+      drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.rightHip);
+      drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee);
+      drawLine(PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle);
+      drawLine(PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee);
+      drawLine(PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle);
+    }
+  }
+
+  Offset _translate(PoseLandmark landmark, Size size) {
+    final scaleX = size.width / imageSize.width;
+    final scaleY = size.height / imageSize.height;
+    return Offset(
+      landmark.x * scaleX,
+      landmark.y * scaleY,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
