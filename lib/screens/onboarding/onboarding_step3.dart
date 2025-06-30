@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'onboarding_step4.dart';
 
 class OnboardingStep3 extends StatefulWidget {
-  final int userId; // ✅ Added
+  final int userId;
   final String gender;
   final DateTime birthdate;
 
   const OnboardingStep3({
     super.key,
-    required this.userId, // ✅ Added
+    required this.userId,
     required this.gender,
     required this.birthdate,
   });
@@ -36,7 +36,7 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
 
   void _nextStep() {
     if (_formKey.currentState!.validate()) {
-      double height = double.parse(_heightController.text) / 100; // convert to meters
+      double height = double.parse(_heightController.text) / 100;
       double weight = double.parse(_currentWeightController.text);
       double bmi = weight / (height * height);
 
@@ -53,7 +53,7 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
         context,
         MaterialPageRoute(
           builder: (_) => OnboardingStep4(
-            userId: widget.userId, // ✅ Pass userId forward
+            userId: widget.userId,
             gender: widget.gender,
             birthdate: widget.birthdate,
             bodyType: bodyType,
@@ -112,9 +112,23 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                 validator: (value) {
                   final baseValidation = _validateNumber(value, 'Target weight', min: 30, max: 300);
                   if (baseValidation != null) return baseValidation;
-                  if (value == _currentWeightController.text) {
+
+                  final current = double.tryParse(_currentWeightController.text);
+                  final target = double.tryParse(value ?? '');
+                  if (current == null || target == null) return 'Invalid weight values';
+
+                  if (target == current) {
                     return 'Target weight must be different from current weight';
                   }
+
+                  if (_selectedGoal == 'Weight Loss' && target > current) {
+                    return 'Target must be less than current (Weight Loss)';
+                  }
+
+                  if (_selectedGoal == 'Muscle Gain' && target < current) {
+                    return 'Target must be more than current (Muscle Gain)';
+                  }
+
                   return null;
                 },
               ),

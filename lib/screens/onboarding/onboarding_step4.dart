@@ -105,6 +105,7 @@ class _OnboardingStep4State extends State<OnboardingStep4> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false, // ✅ Removes the back arrow
         title: const Text("Step 3: Injury Info"),
         backgroundColor: Colors.deepPurple,
       ),
