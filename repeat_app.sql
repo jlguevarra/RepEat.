@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 26, 2025 at 11:07 AM
+-- Generation Time: Jun 30, 2025 at 11:38 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -20,6 +20,24 @@ SET time_zone = "+00:00";
 --
 -- Database: `repeat_app`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `camera_workouts`
+--
+
+CREATE TABLE `camera_workouts` (
+  `workout_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `category` varchar(50) NOT NULL,
+  `exercise_name` varchar(100) NOT NULL,
+  `detected_reps` int(11) NOT NULL,
+  `duration_seconds` int(11) DEFAULT 0,
+  `accuracy_score` float DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -45,6 +63,36 @@ INSERT INTO `email_verifications` (`id`, `email`, `code`, `created_at`) VALUES
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `onboarding_data`
+--
+
+CREATE TABLE `onboarding_data` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `gender` varchar(10) DEFAULT NULL,
+  `birthdate` date DEFAULT NULL,
+  `body_type` varchar(50) DEFAULT NULL,
+  `current_weight` varchar(10) DEFAULT NULL,
+  `target_weight` varchar(10) DEFAULT NULL,
+  `goal` varchar(50) DEFAULT NULL,
+  `preferred_sets` varchar(10) DEFAULT NULL,
+  `preferred_reps` varchar(10) DEFAULT NULL,
+  `has_injury` tinyint(1) DEFAULT NULL,
+  `injury_details` varchar(100) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `onboarding_data`
+--
+
+INSERT INTO `onboarding_data` (`id`, `user_id`, `gender`, `birthdate`, `body_type`, `current_weight`, `target_weight`, `goal`, `preferred_sets`, `preferred_reps`, `has_injury`, `injury_details`, `created_at`) VALUES
+(6, 2, 'Male', '2003-11-04', 'Normal', '61', '70', 'Muscle Gain', '3', '12', 0, '', '2025-06-30 09:18:04'),
+(7, 5, 'Male', '2007-01-01', 'Normal', '61', '70', 'Muscle Gain', '3', '12', 0, '', '2025-06-30 09:31:51');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `password_resets`
 --
 
@@ -65,7 +113,8 @@ INSERT INTO `password_resets` (`id`, `email`, `code`, `used`, `created_at`) VALU
 (2, 'johnlloydguevarra0405@gmail.com', '443043', 0, '2025-06-26 06:46:27'),
 (3, 'johnlloydguevarra0405@gmail.com', '184765', 0, '2025-06-26 07:05:13'),
 (4, 'johnlloydguevarra0405@gmail.com', '454097', 0, '2025-06-26 07:06:20'),
-(5, 'johnlloydguevarra2@gmail.com', '499286', 0, '2025-06-26 08:50:44');
+(5, 'johnlloydguevarra2@gmail.com', '499286', 0, '2025-06-26 08:50:44'),
+(6, 'johnlloydguevarra2@gmail.com', '858167', 1, '2025-06-30 09:30:16');
 
 -- --------------------------------------------------------
 
@@ -78,18 +127,19 @@ CREATE TABLE `users` (
   `email` varchar(100) NOT NULL,
   `password` varchar(255) NOT NULL,
   `name` varchar(100) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `is_onboarded` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `email`, `password`, `name`, `created_at`) VALUES
-(2, 'johnlloydguevarra0405@gmail.com', '$2y$10$d1DuiEx8qnAilb39TZk63uYsZyjyfQWsSGrj7TMbxxix4xAeEXv0O', 'John Lloyd Guevarra', '2025-06-24 03:45:08'),
-(3, 'sample1@gmail.com', '$2y$10$cfgwRBhztrlOzAOQD89kkel65R0vY0UpJRD5w8sfqRvEfZXHW/t3a', 'Sample', '2025-06-25 08:19:18'),
-(4, 'user@example.com', '$2y$10$VIOGkFDh1sD8FXqMBkPrR.0/.1PTI4gur3MCymM39KJM2q2JPsUO2', 'John Doe', '2025-06-26 07:17:53'),
-(5, 'johnlloydguevarra2@gmail.com', '$2y$10$DigHHKbzwG7Ogcxf4g8obOGfr5gjUsfMMjkrUYk2Xp.UJdbKA7Jc.', 'juan Tamad', '2025-06-26 08:41:07');
+INSERT INTO `users` (`id`, `email`, `password`, `name`, `created_at`, `is_onboarded`) VALUES
+(2, 'johnlloydguevarra0405@gmail.com', '$2y$10$d1DuiEx8qnAilb39TZk63uYsZyjyfQWsSGrj7TMbxxix4xAeEXv0O', 'John Lloyd Guevarra', '2025-06-24 03:45:08', 1),
+(3, 'sample1@gmail.com', '$2y$10$cfgwRBhztrlOzAOQD89kkel65R0vY0UpJRD5w8sfqRvEfZXHW/t3a', 'Sample', '2025-06-25 08:19:18', 0),
+(4, 'user@example.com', '$2y$10$VIOGkFDh1sD8FXqMBkPrR.0/.1PTI4gur3MCymM39KJM2q2JPsUO2', 'John Doe', '2025-06-26 07:17:53', 0),
+(5, 'johnlloydguevarra2@gmail.com', '$2y$10$c0Z.SrMKhgkBVKU6q8WoauRToUj/W1YziGYPkA9BOBuNi70KRwMfK', 'juan Tamad', '2025-06-26 08:41:07', 0);
 
 -- --------------------------------------------------------
 
@@ -113,9 +163,22 @@ CREATE TABLE `workouts` (
 --
 
 --
+-- Indexes for table `camera_workouts`
+--
+ALTER TABLE `camera_workouts`
+  ADD PRIMARY KEY (`workout_id`),
+  ADD KEY `user_id` (`user_id`);
+
+--
 -- Indexes for table `email_verifications`
 --
 ALTER TABLE `email_verifications`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `onboarding_data`
+--
+ALTER TABLE `onboarding_data`
   ADD PRIMARY KEY (`id`);
 
 --
@@ -143,16 +206,28 @@ ALTER TABLE `workouts`
 --
 
 --
+-- AUTO_INCREMENT for table `camera_workouts`
+--
+ALTER TABLE `camera_workouts`
+  MODIFY `workout_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `email_verifications`
 --
 ALTER TABLE `email_verifications`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
+-- AUTO_INCREMENT for table `onboarding_data`
+--
+ALTER TABLE `onboarding_data`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+
+--
 -- AUTO_INCREMENT for table `password_resets`
 --
 ALTER TABLE `password_resets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `users`
@@ -169,6 +244,12 @@ ALTER TABLE `workouts`
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `camera_workouts`
+--
+ALTER TABLE `camera_workouts`
+  ADD CONSTRAINT `camera_workouts_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `workouts`
