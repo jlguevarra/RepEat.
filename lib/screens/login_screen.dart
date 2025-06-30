@@ -29,7 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    final apiUrl = 'http://192.168.100.79/repEatApi/login.php';
+    final apiUrl = 'http://192.168.0.11/repEatApi/login.php';
 
     try {
       final response = await http.post(

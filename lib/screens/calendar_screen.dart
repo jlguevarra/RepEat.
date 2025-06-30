@@ -14,47 +14,66 @@ class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
-  // ✅ Remove final to allow updating the map
   Map<DateTime, List<Map<String, dynamic>>> workoutData = {};
+
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    fetchWorkoutHistory(1).then((data) {
-      setState(() {
-        workoutData = data;
-      });
-    });
+    loadWorkoutHistory();
   }
 
-  Future<Map<DateTime, List<Map<String, dynamic>>>> fetchWorkoutHistory(int userId) async {
-    final response = await http.get(
-      Uri.parse('http://192.168.100.79/repEatApi/get_workout_history.php?user_id=$userId'),
-      // 🔥 Use 10.0.2.2 for emulator or your local IP address for real device
-    );
+  Future<void> loadWorkoutHistory() async {
+    try {
+      final data = await fetchWorkoutHistory(1); // 🔥 Replace with dynamic user_id if needed
+      setState(() {
+        workoutData = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<Map<DateTime, List<Map<String, dynamic>>>> fetchWorkoutHistory(
+      int userId) async {
+    final url = Uri.parse(
+        'http://192.168.0.11/repEatApi/get_workout_history.php?user_id=$userId');
+
+    final response = await http.get(url).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      if (data['success']) {
+
+      if (data['success'] == true) {
         Map<DateTime, List<Map<String, dynamic>>> history = {};
 
         for (var item in data['data']) {
-          DateTime date = DateTime.parse(item['date']);
-          date = DateTime.utc(date.year, date.month, date.day);
+          try {
+            DateTime date = DateTime.parse(item['date']);
+            date = DateTime.utc(date.year, date.month, date.day);
 
-          history.putIfAbsent(date, () => []).add({
-            'exercise': item['exercise_name'],
-            'sets': item['sets'],
-            'reps': item['reps'],
-          });
+            history.putIfAbsent(date, () => []).add({
+              'exercise': item['exercise_name'],
+              'sets': item['sets'].toString(),
+              'reps': item['reps'].toString(),
+            });
+          } catch (e) {
+            debugPrint('Date parsing error: $e');
+          }
         }
 
         return history;
       } else {
-        throw Exception("Failed to load data.");
+        throw Exception("No data found or API failed.");
       }
     } else {
-      throw Exception("Error connecting to server.");
+      throw Exception("Failed to connect to server. Status: ${response.statusCode}");
     }
   }
 
@@ -71,8 +90,34 @@ class _CalendarScreenState extends State<CalendarScreen> {
         title: const Text('Workout Calendar'),
         backgroundColor: Colors.deepPurple,
       ),
-      body: workoutData.isEmpty
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+          ? Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error, color: Colors.red, size: 50),
+            const SizedBox(height: 10),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.red),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                  _errorMessage = null;
+                });
+                loadWorkoutHistory();
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      )
           : Column(
         children: [
           TableCalendar(
@@ -106,7 +151,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
               });
             },
           ),
-
           const SizedBox(height: 16),
 
           // Workout details for selected day
