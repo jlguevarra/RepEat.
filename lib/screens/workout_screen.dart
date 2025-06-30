@@ -59,7 +59,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   Future<void> saveCameraWorkout() async {
-    final url = Uri.parse('http://192.168.0.11/repEatApi/save_camera_workout.php');
+    final url = Uri.parse('http://192.168.100.79/repEatApi/save_camera_workout.php');
 
     final data = {
       'user_id': 1, // 🔥 Replace with dynamic user id later

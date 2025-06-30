@@ -22,7 +22,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     setState(() => _isLoading = true);
 
-    final apiUrl = 'http://192.168.0.11/repEatApi/forgot_password.php'; // emulator local
+    final apiUrl = 'http://192.168.100.79/repEatApi/forgot_password.php'; // emulator local
 
     try {
       final response = await http.post(

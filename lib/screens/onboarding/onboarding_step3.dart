@@ -2,17 +2,15 @@ import 'package:flutter/material.dart';
 import 'onboarding_step4.dart';
 
 class OnboardingStep3 extends StatefulWidget {
+  final int userId; // ✅ Added
   final String gender;
   final DateTime birthdate;
-  final int currentBodyIndex;
-  final int targetBodyIndex;
 
   const OnboardingStep3({
     super.key,
+    required this.userId, // ✅ Added
     required this.gender,
     required this.birthdate,
-    required this.currentBodyIndex,
-    required this.targetBodyIndex,
   });
 
   @override
@@ -21,6 +19,8 @@ class OnboardingStep3 extends StatefulWidget {
 
 class _OnboardingStep3State extends State<OnboardingStep3> {
   final _formKey = GlobalKey<FormState>();
+
+  final TextEditingController _heightController = TextEditingController();
   final TextEditingController _currentWeightController = TextEditingController();
   final TextEditingController _targetWeightController = TextEditingController();
   final TextEditingController _setsController = TextEditingController(text: "3");
@@ -31,35 +31,58 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
     'Muscle Gain',
     'Weight Loss',
     'Endurance',
-    'General Fitness'
+    'General Fitness',
   ];
 
-  void _goToStep4() {
+  void _nextStep() {
     if (_formKey.currentState!.validate()) {
+      double height = double.parse(_heightController.text) / 100; // convert to meters
+      double weight = double.parse(_currentWeightController.text);
+      double bmi = weight / (height * height);
+
+      String bodyType;
+      if (bmi < 18.5) {
+        bodyType = 'Underweight';
+      } else if (bmi < 25) {
+        bodyType = 'Normal';
+      } else {
+        bodyType = 'Overweight';
+      }
+
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => OnboardingStep4(
+            userId: widget.userId, // ✅ Pass userId forward
             gender: widget.gender,
             birthdate: widget.birthdate,
-            currentBodyIndex: widget.currentBodyIndex,
-            targetBodyIndex: widget.targetBodyIndex,
-            currentWeight: _currentWeightController.text.trim(),
-            targetWeight: _targetWeightController.text.trim(),
+            bodyType: bodyType,
+            currentWeight: _currentWeightController.text,
+            targetWeight: _targetWeightController.text,
             goal: _selectedGoal!,
-            sets: _setsController.text.trim(),
-            reps: _repsController.text.trim(),
+            sets: _setsController.text,
+            reps: _repsController.text,
           ),
         ),
       );
     }
   }
 
+  String? _validateNumber(String? value, String label, {double? min, double? max}) {
+    if (value == null || value.isEmpty) return 'Required';
+    final parsed = double.tryParse(value);
+    if (parsed == null) return 'Enter a valid number';
+    if (min != null && parsed < min) return '$label must be ≥ $min';
+    if (max != null && parsed > max) return '$label must be ≤ $max';
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Step 3: Your Fitness Info'),
+        automaticallyImplyLeading: false,
+        title: const Text('Step 2: Your Fitness Info'),
         backgroundColor: Colors.deepPurple,
       ),
       body: Padding(
@@ -69,25 +92,37 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
           child: ListView(
             children: [
               TextFormField(
+                controller: _heightController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Height (cm)'),
+                validator: (value) => _validateNumber(value, 'Height', min: 100, max: 250),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
                 controller: _currentWeightController,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Current Weight (kg)'),
-                validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+                validator: (value) => _validateNumber(value, 'Current weight', min: 30, max: 300),
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _targetWeightController,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Target Weight (kg)'),
-                validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+                validator: (value) {
+                  final baseValidation = _validateNumber(value, 'Target weight', min: 30, max: 300);
+                  if (baseValidation != null) return baseValidation;
+                  if (value == _currentWeightController.text) {
+                    return 'Target weight must be different from current weight';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: _selectedGoal,
                 decoration: const InputDecoration(labelText: 'Fitness Goal'),
-                items: _goals
-                    .map((goal) => DropdownMenuItem(value: goal, child: Text(goal)))
-                    .toList(),
+                items: _goals.map((goal) => DropdownMenuItem(value: goal, child: Text(goal))).toList(),
                 onChanged: (value) => setState(() => _selectedGoal = value),
                 validator: (value) => value == null ? 'Please select a goal' : null,
               ),
@@ -99,7 +134,7 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                       controller: _setsController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: 'Preferred Sets'),
-                      validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+                      validator: (value) => _validateNumber(value, 'Sets', min: 1, max: 10),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -108,7 +143,7 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                       controller: _repsController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: 'Reps per Set'),
-                      validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+                      validator: (value) => _validateNumber(value, 'Reps', min: 1, max: 100),
                     ),
                   ),
                 ],
@@ -117,7 +152,7 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _goToStep4,
+                  onPressed: _nextStep,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepPurple,
                     padding: const EdgeInsets.symmetric(vertical: 16),

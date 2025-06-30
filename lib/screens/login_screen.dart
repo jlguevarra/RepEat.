@@ -8,7 +8,6 @@ import 'dart:convert';
 import '../main_nav_screen.dart';
 import 'onboarding/onboarding_step1.dart';
 
-
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -29,7 +28,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    final apiUrl = 'http://192.168.0.11/repEatApi/login.php';
+    final apiUrl = 'http://192.168.100.79/repEatApi/login.php';
 
     try {
       final response = await http.post(
@@ -43,13 +42,21 @@ class _LoginScreenState extends State<LoginScreen> {
       final data = json.decode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        final user = data['user'];
+        final int userId = int.parse(user['id'].toString());
+        final bool isOnboarded = user['is_onboarded'] == true;
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Login successful')),
         );
 
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const OnboardingStep1()),
+          MaterialPageRoute(
+            builder: (_) => isOnboarded
+                ? const MainNavScreen()
+                : OnboardingStep1(userId: userId),
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -173,7 +180,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                              builder: (_) => const ForgotPasswordScreen()),
+                                            builder: (_) => const ForgotPasswordScreen(),
+                                          ),
                                         );
                                       },
                                       child: const Text(
