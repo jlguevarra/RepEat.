@@ -224,7 +224,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                     "Sign Up",
                                     style: TextStyle(
                                       color: Colors.white,
-                                      decoration: TextDecoration.underline,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
