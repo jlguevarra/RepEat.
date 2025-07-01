@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'login_screen.dart'; // <-- Import your login screen
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ Add this
+import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -21,7 +22,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   final goals = ['Muscle Gain', 'Weight Loss', 'Endurance', 'General Fitness'];
 
-  void _logout() {
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear(); // ✅ Clear session data
+
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -33,8 +38,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false, // ✅ Remove back arrow
-        title: const Text('Profile'), // ✅ Updated title
+        automaticallyImplyLeading: false,
+        title: const Text('Profile'),
         backgroundColor: Colors.deepPurple,
       ),
       body: SingleChildScrollView(
@@ -55,12 +60,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _sectionTitle('Fitness Goal'),
             DropdownButtonFormField<String>(
               value: selectedGoal,
-              items: goals
-                  .map((goal) => DropdownMenuItem(
+              items: goals.map((goal) => DropdownMenuItem(
                 value: goal,
                 child: Text(goal),
-              ))
-                  .toList(),
+              )).toList(),
               onChanged: (value) {
                 if (value != null) setState(() => selectedGoal = value);
               },
@@ -108,7 +111,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
-                    onPressed: _logout,
+                    onPressed: _logout, // ✅ Calls logout with session clear
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.deepPurple,
                       side: const BorderSide(color: Colors.deepPurple),

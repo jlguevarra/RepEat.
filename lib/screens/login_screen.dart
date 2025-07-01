@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../main_nav_screen.dart';
 import 'onboarding/onboarding_step1.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -46,6 +47,11 @@ class _LoginScreenState extends State<LoginScreen> {
         final int userId = int.parse(user['id'].toString());
         final bool isOnboarded = user['is_onboarded'] == true;
 
+        // ✅ Save user session using SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('user_id', userId);
+        await prefs.setBool('is_onboarded', isOnboarded);
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Login successful')),
         );
@@ -71,6 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = false);
     }
   }
+
 
   void _goToSignUp() {
     Navigator.push(

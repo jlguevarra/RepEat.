@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'screens/splash_screen.dart';
-import 'main_nav_screen.dart'; // ✅ Import MainNavScreen
+import 'screens/splash_screen.dart'; // ✅ This is now the only splash
+
 
 void main() {
   runApp(const MyApp());
@@ -18,7 +18,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.deepPurple,
         scaffoldBackgroundColor: Colors.white,
       ),
-      home: const SplashScreen(), // ✅ still starts with Splash
+      home: const SplashScreen(), // ✅ Using the correct splash screen
     );
   }
 }
