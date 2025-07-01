@@ -51,6 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('user_id', userId);
         await prefs.setBool('is_onboarded', isOnboarded);
+        await prefs.setBool('is_logged_in', true); // ✅ Add this to fix session
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Login successful')),
