@@ -38,7 +38,7 @@ class _OnboardingStep1State extends State<OnboardingStep1> {
       context,
       MaterialPageRoute(
         builder: (_) => OnboardingStep3(
-          userId: widget.userId, // ✅ Pass userId to step 3
+          userId: widget.userId,
           gender: _selectedGender!,
           birthdate: _birthDate!,
         ),

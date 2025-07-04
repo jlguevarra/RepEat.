@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
-import '../main_nav_screen.dart'; // ✅ Make sure this import is correct
+import '../main_nav_screen.dart';
+import 'onboarding/onboarding_step1.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -31,21 +32,30 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // ✅ Delay a bit to let animation show
     Future.delayed(const Duration(milliseconds: 1500), _navigateNext);
   }
 
   Future<void> _navigateNext() async {
     final prefs = await SharedPreferences.getInstance();
     final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+    final isOnboarded = prefs.getBool('is_onboarded') ?? false;
+    final userId = prefs.getInt('user_id');
 
     if (!mounted) return;
 
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => isLoggedIn ? const MainNavScreen() : const LoginScreen(),
-      ),
-    );
+    if (!isLoggedIn) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    } else if (!isOnboarded && userId != null) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => OnboardingStep1(userId: userId)),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainNavScreen()),
+      );
+    }
   }
 
   @override
