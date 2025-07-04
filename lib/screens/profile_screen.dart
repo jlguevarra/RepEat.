@@ -7,8 +7,32 @@ import 'diet_preference_screen.dart';
 import 'physical_stats_screen.dart';
 import 'account_settings_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  String fullName = '';
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final storedName = prefs.getString('name');
+
+    setState(() {
+      fullName = storedName ?? 'User';
+      isLoading = false;
+    });
+  }
 
   Future<void> _logout(BuildContext context) async {
     final confirm = await showDialog<bool>(
@@ -47,6 +71,12 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
@@ -67,15 +97,15 @@ class ProfileScreen extends StatelessWidget {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
-                      'Welcome Back!',
-                      style: TextStyle(
+                      '$fullName',
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
                       ),
                     ),
-                    Text(
+                    const Text(
                       'Manage your account and preferences',
                       style: TextStyle(
                         color: Colors.black54,
