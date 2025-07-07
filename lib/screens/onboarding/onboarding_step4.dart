@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../main_nav_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingStep4 extends StatefulWidget {
-  final int userId; // ✅ Added
+  final int userId;
   final String gender;
   final DateTime birthdate;
   final String bodyType;
@@ -16,7 +17,7 @@ class OnboardingStep4 extends StatefulWidget {
 
   const OnboardingStep4({
     super.key,
-    required this.userId, // ✅ Added
+    required this.userId,
     required this.gender,
     required this.birthdate,
     required this.bodyType,
@@ -34,8 +35,8 @@ class OnboardingStep4 extends StatefulWidget {
 class _OnboardingStep4State extends State<OnboardingStep4> {
   bool hasInjury = false;
   final TextEditingController injuryController = TextEditingController();
+  bool _isSubmitting = false;
 
-  // ✅ Predefined valid injuries
   final List<String> validInjuries = [
     "Knee Pain",
     "Back Pain",
@@ -48,10 +49,12 @@ class _OnboardingStep4State extends State<OnboardingStep4> {
   ];
 
   Future<void> submitOnboardingData() async {
-    final url = Uri.parse("http://192.168.100.79/repEatApi/save_onboarding.php");
+    setState(() => _isSubmitting = true);
+
+    final url = Uri.parse("http://localhost/repEatApi/save_onboarding.php");
 
     final data = {
-      "user_id": widget.userId, // ✅ Pass real user ID here
+      "user_id": widget.userId,
       "gender": widget.gender,
       "birthdate": widget.birthdate.toIso8601String().split('T')[0],
       "body_type": widget.bodyType,
@@ -61,7 +64,7 @@ class _OnboardingStep4State extends State<OnboardingStep4> {
       "preferred_sets": widget.sets,
       "preferred_reps": widget.reps,
       "has_injury": hasInjury ? 1 : 0,
-      "injury_details": hasInjury ? injuryController.text.trim().toLowerCase() : "",
+      "injury_details": hasInjury ? injuryController.text.trim() : "",
     };
 
     try {
@@ -73,20 +76,30 @@ class _OnboardingStep4State extends State<OnboardingStep4> {
 
       final result = jsonDecode(response.body);
 
-      if (result['success']) {
+      if (response.statusCode == 200 && result['success']) {
+        // Update shared preferences to mark onboarding as complete
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_onboarded', true);
+
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const MainNavScreen()),
+          MaterialPageRoute(
+            builder: (_) => MainNavScreen(userId: widget.userId), // Pass userId here
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['message'])),
+          SnackBar(content: Text(result['message'] ?? 'Failed to save onboarding data')),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error: $e')),
+        SnackBar(content: Text('Error: ${e.toString()}')),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
 
@@ -105,8 +118,8 @@ class _OnboardingStep4State extends State<OnboardingStep4> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false, // ✅ Removes the back arrow
-        title: const Text("Step 3: Injury Info"),
+        automaticallyImplyLeading: false,
+        title: const Text("Step 4: Injury Info"),
         backgroundColor: Colors.deepPurple,
       ),
       body: Padding(
@@ -138,7 +151,8 @@ class _OnboardingStep4State extends State<OnboardingStep4> {
               },
             ),
 
-            if (hasInjury)
+            if (hasInjury) ...[
+              const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: injuryController.text.isNotEmpty ? injuryController.text : null,
                 items: validInjuries.map((injury) {
@@ -155,20 +169,33 @@ class _OnboardingStep4State extends State<OnboardingStep4> {
                 decoration: const InputDecoration(
                   labelText: "Select Your Injury",
                   border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
+                validator: (value) => hasInjury && (value == null || value.isEmpty)
+                    ? 'Please select an injury'
+                    : null,
               ),
+            ],
 
             const Spacer(),
 
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _finishSetup,
+                onPressed: _isSubmitting ? null : _finishSetup,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepPurple,
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: const Text("Complete Setup"),
+                child: _isSubmitting
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
+                  "Complete Setup",
+                  style: TextStyle(fontSize: 16),
+                ),
               ),
             ),
           ],

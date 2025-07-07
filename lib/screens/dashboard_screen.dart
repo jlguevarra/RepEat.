@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'calendar_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key});
+  final int userId; // Add userId parameter
+
+  const DashboardScreen({super.key, required this.userId}); // Make userId required
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false, // ✅ Removes back arrow
+        automaticallyImplyLeading: false,
         title: const Text("Home"),
         backgroundColor: Colors.deepPurple,
       ),
@@ -104,7 +106,9 @@ class DashboardScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const CalendarScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => CalendarScreen(userId: userId), // Pass the userId
+                  ),
                 );
               },
               icon: const Icon(Icons.calendar_today),

@@ -51,9 +51,16 @@ class _SplashScreenState extends State<SplashScreen>
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => OnboardingStep1(userId: userId)),
       );
-    } else {
+    } else if (userId != null) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainNavScreen()),
+        MaterialPageRoute(
+          builder: (_) => MainNavScreen(userId: userId), // Pass userId here
+        ),
+      );
+    } else {
+      // If somehow we're logged in but don't have a user ID, go to login
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
     }
   }

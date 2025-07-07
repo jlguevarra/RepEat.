@@ -29,7 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    final apiUrl = 'http://192.168.100.79/repEatApi/login.php';
+    final apiUrl = 'http://localhost/repEatApi/login.php';
 
     try {
       final response = await http.post(
@@ -47,12 +47,12 @@ class _LoginScreenState extends State<LoginScreen> {
         final int userId = int.parse(user['id'].toString());
         final bool isOnboarded = user['is_onboarded'] == true;
 
-        // ✅ Save user session using SharedPreferences
+        // Save user session using SharedPreferences
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('user_id', userId);
         await prefs.setBool('is_onboarded', isOnboarded);
         await prefs.setBool('is_logged_in', true);
-        await prefs.setString('name', user['name']); // ✅ Save full name
+        await prefs.setString('name', user['name']);
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Login successful')),
@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
           context,
           MaterialPageRoute(
             builder: (_) => isOnboarded
-                ? const MainNavScreen()
+                ? MainNavScreen(userId: userId) // Pass userId here
                 : OnboardingStep1(userId: userId),
           ),
         );
@@ -79,7 +79,6 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = false);
     }
   }
-
   void _goToSignUp() {
     Navigator.push(
       context,

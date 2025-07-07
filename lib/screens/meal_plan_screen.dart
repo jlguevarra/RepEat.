@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 class MealPlanScreen extends StatelessWidget {
-  const MealPlanScreen({super.key});
+  final int userId;
+  const MealPlanScreen({super.key, required this.userId});
 
   final meals = const [
     {

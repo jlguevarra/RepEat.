@@ -19,31 +19,31 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
   bool isBusy = false;
   bool isDown = false;
-  int repCount = 0;
+  bool isWorkoutStarted = false;
 
-  Timer? timer;
-  int secondsElapsed = 0;
+  int repCount = 0;
+  int setCount = 1;
+  int targetReps = 0;
+  int targetSets = 0;
 
   Size? imageSize;
+
+  Timer? _timer;
+  int _seconds = 0;
+
+  final TextEditingController setsController = TextEditingController();
+  final TextEditingController repsController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _initializeCamera();
     _poseDetector = PoseDetector(options: PoseDetectorOptions());
-    startTimer();
-  }
-
-  void startTimer() {
-    timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        secondsElapsed++;
-      });
-    });
   }
 
   Future<void> _initializeCamera() async {
     await Permission.camera.request();
+
     final cameras = await availableCameras();
     final camera = cameras.firstWhere(
           (cam) => cam.lensDirection == CameraLensDirection.front,
@@ -54,7 +54,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       camera,
       ResolutionPreset.medium,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.nv21,
+      imageFormatGroup: ImageFormatGroup.yuv420,
     );
 
     await _cameraController!.initialize();
@@ -65,7 +65,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     );
 
     _cameraController!.startImageStream((image) {
-      if (!isBusy) {
+      if (!isBusy && isWorkoutStarted) {
         isBusy = true;
         _processCameraImage(image);
       }
@@ -81,7 +81,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         bytes: bytes,
         metadata: InputImageMetadata(
           size: Size(image.width.toDouble(), image.height.toDouble()),
-          rotation: InputImageRotation.rotation90deg,
+          rotation: InputImageRotation.rotation270deg, // ✅ Portrait
           format: InputImageFormat.nv21,
           bytesPerRow: image.planes.first.bytesPerRow,
         ),
@@ -95,25 +95,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         });
       }
 
-      // ✅ Rep counting logic example (based on shoulder-hip distance)
-      if (result.isNotEmpty) {
-        final pose = result.first;
-        final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
-        final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
-
-        if (leftShoulder != null && leftHip != null) {
-          final diff = (leftShoulder.y - leftHip.y).abs();
-          if (diff < 50) {
-            isDown = true;
-          }
-          if (diff > 100 && isDown) {
-            setState(() {
-              repCount++;
-            });
-            isDown = false;
-          }
-        }
-      }
+      _countRepsLogic(result);
     } catch (e) {
       debugPrint('Error processing image: $e');
     } finally {
@@ -129,134 +111,266 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     return bytesBuilder.toBytes();
   }
 
+  void _countRepsLogic(List<Pose> result) {
+    if (result.isEmpty) return;
+
+    final pose = result.first;
+    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
+
+    if (leftShoulder != null && leftHip != null) {
+      final diff = (leftShoulder.y - leftHip.y).abs();
+
+      if (diff < 50) {
+        isDown = true;
+      }
+
+      if (diff > 100 && isDown) {
+        setState(() {
+          repCount++;
+        });
+
+        isDown = false;
+
+        if (repCount >= targetReps) {
+          if (setCount >= targetSets) {
+            _endWorkout();
+          } else {
+            setState(() {
+              setCount++;
+              repCount = 0;
+            });
+          }
+        }
+      }
+    }
+  }
+
+  void _startWorkout() {
+    if (setsController.text.isEmpty || repsController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter sets and reps")),
+      );
+      return;
+    }
+
+    setState(() {
+      targetSets = int.parse(setsController.text);
+      targetReps = int.parse(repsController.text);
+      repCount = 0;
+      setCount = 1;
+      _seconds = 0;
+      isWorkoutStarted = true;
+    });
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _seconds++;
+      });
+    });
+  }
+
+  void _endWorkout() {
+    _timer?.cancel();
+    setState(() {
+      isWorkoutStarted = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Workout Completed!')),
+    );
+
+    Navigator.pop(context);
+  }
+
+  void _cancelWorkout() {
+    _timer?.cancel();
+    setState(() {
+      isWorkoutStarted = false;
+      repCount = 0;
+      setCount = 1;
+      _seconds = 0;
+    });
+    Navigator.pop(context);
+  }
+
+  String get formattedTime {
+    final minutes = (_seconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (_seconds % 60).toString().padLeft(2, '0');
+    return "$minutes:$seconds";
+  }
+
   @override
   void dispose() {
     _cameraController?.dispose();
     _poseDetector.close();
-    timer?.cancel();
+    _timer?.cancel();
+    setsController.dispose();
+    repsController.dispose();
     super.dispose();
-  }
-
-  String formatTime(int seconds) {
-    final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
-    final secs = (seconds % 60).toString().padLeft(2, '0');
-    return '$minutes:$secs';
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+    final screenSize = MediaQuery.of(context).size;
 
     return Scaffold(
-      body: Stack(
+      appBar: AppBar(
+        title: const Text('Workout Camera'),
+        backgroundColor: Colors.deepPurple,
+      ),
+      body: _cameraController == null ||
+          !_cameraController!.value.isInitialized ||
+          imageSize == null
+          ? const Center(child: CircularProgressIndicator())
+          : Stack(
         children: [
-          // ✅ Mirror the camera for front camera
-          Transform(
-            alignment: Alignment.center,
-            transform: Matrix4.rotationY(3.1416),
-            child: CameraPreview(_cameraController!),
-          ),
+          CameraPreview(_cameraController!),
 
-          // ✅ Draw Skeleton
-          if (imageSize != null)
+          if (isWorkoutStarted)
             CustomPaint(
               painter: PosePainter(
                 poses,
                 imageSize: imageSize!,
                 isFrontCamera: true,
               ),
-              size: MediaQuery.of(context).size,
+              size: screenSize,
             ),
 
-          // ✅ Timer
+          if (!isWorkoutStarted)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.6),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _inputField('Sets', setsController),
+                      const SizedBox(height: 16),
+                      _inputField('Reps per Set', repsController),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: _startWorkout,
+                        child: const Text('Start Workout'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Timer
           Positioned(
-            top: 40,
-            left: 0,
-            right: 0,
-            child: Center(
+            top: 50,
+            left: 20,
+            child: Container(
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Text(
-                formatTime(secondsElapsed),
+                formattedTime,
                 style: const TextStyle(
-                  color: Colors.red,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontSize: 18,
                 ),
               ),
             ),
           ),
 
-          // ✅ Workout counter
+          // Rep Counter
           Positioned(
-            top: 100,
+            top: 50,
             right: 20,
             child: Container(
-              padding: const EdgeInsets.all(10),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.4),
+                color: Colors.black54,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Reps: $repCount',
-                      style: const TextStyle(color: Colors.white)),
-                ],
+              child: Text(
+                'Set: $setCount/$targetSets  |  Reps: $repCount/$targetReps',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                ),
               ),
             ),
           ),
 
-          // ✅ Bottom buttons
+          // Bottom Buttons
           Positioned(
-            bottom: 20,
+            bottom: 30,
             left: 30,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-          ),
-          Positioned(
-            bottom: 20,
             right: 30,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              onPressed: () {},
-              child: const Text('Complete'),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                ElevatedButton(
+                  onPressed: _cancelWorkout,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                  ),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: _endWorkout,
+                  child: const Text('Complete'),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
-}
 
+  Widget _inputField(String label, TextEditingController controller) {
+    return SizedBox(
+      width: 200,
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Colors.white70),
+          enabledBorder: OutlineInputBorder(
+            borderSide: const BorderSide(color: Colors.white54),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: const BorderSide(color: Colors.white),
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+    );
+  }
+}
 class PosePainter extends CustomPainter {
   final List<Pose> poses;
   final Size imageSize;
   final bool isFrontCamera;
 
-  PosePainter(this.poses,
-      {required this.imageSize, this.isFrontCamera = true});
+  PosePainter(
+      this.poses, {
+        required this.imageSize,
+        this.isFrontCamera = true,
+      });
 
   @override
-  void paint(Canvas canvas, Size size) {
+  void paint(Canvas canvas, Size screenSize) {
     final paint = Paint()
       ..strokeWidth = 4
       ..color = Colors.greenAccent;
 
     for (var pose in poses) {
       for (var landmark in pose.landmarks.values) {
-        final point = _translate(landmark, size);
+        final point = _translate(landmark, screenSize);
         canvas.drawCircle(point, 6, paint);
       }
 
@@ -265,8 +379,8 @@ class PosePainter extends CustomPainter {
         final point2 = pose.landmarks[type2];
         if (point1 != null && point2 != null) {
           canvas.drawLine(
-            _translate(point1, size),
-            _translate(point2, size),
+            _translate(point1, screenSize),
+            _translate(point2, screenSize),
             paint,
           );
         }
@@ -288,8 +402,8 @@ class PosePainter extends CustomPainter {
   }
 
   Offset _translate(PoseLandmark landmark, Size screenSize) {
-    final scaleX = screenSize.width / imageSize.height;
-    final scaleY = screenSize.height / imageSize.width;
+    final double scaleX = screenSize.width / imageSize.height;
+    final double scaleY = screenSize.height / imageSize.width;
 
     double x = landmark.y * scaleX;
     double y = landmark.x * scaleY;

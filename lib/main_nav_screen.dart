@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'screens/dashboard_screen.dart';      // Your home/dashboard screen
-import 'screens/workout_screen.dart';        // Workout screen
-import 'screens/meal_plan_screen.dart';      // Meal plan screen
-import 'screens/profile_screen.dart';        // Profile screen
+import 'screens/dashboard_screen.dart';
+import 'screens/workout_screen.dart';
+import 'screens/meal_plan_screen.dart';
+import 'screens/profile_screen.dart';
 
 class MainNavScreen extends StatefulWidget {
-  const MainNavScreen({super.key});
+  final int userId;
+
+  const MainNavScreen({super.key, required this.userId});
 
   @override
   State<MainNavScreen> createState() => _MainNavScreenState();
@@ -14,12 +16,18 @@ class MainNavScreen extends StatefulWidget {
 class _MainNavScreenState extends State<MainNavScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [
-    const DashboardScreen(),
-    const WorkoutScreen(),
-    const MealPlanScreen(),
-    const ProfileScreen(),
-  ];
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      DashboardScreen(userId: widget.userId),
+      WorkoutScreen(userId: widget.userId),
+      MealPlanScreen(userId: widget.userId),
+      ProfileScreen(userId: widget.userId),
+    ];
+  }
 
   void _onTap(int index) {
     setState(() {

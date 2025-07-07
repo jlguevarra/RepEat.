@@ -4,7 +4,9 @@ import 'package:http/http.dart' as http;
 import 'camera_workout_screen.dart'; // ✅ Import camera workout screen
 
 class WorkoutScreen extends StatefulWidget {
-  const WorkoutScreen({super.key});
+  final int userId;
+
+  const WorkoutScreen({super.key, required this.userId});
 
   @override
   State<WorkoutScreen> createState() => _WorkoutScreenState();
@@ -59,7 +61,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   Future<void> saveCameraWorkout() async {
-    final url = Uri.parse('http://192.168.100.79/repEatApi/save_camera_workout.php');
+    final url = Uri.parse('http://localhost/repEatApi/camera_workout_screen.php');
 
     final data = {
       'user_id': 1, // 🔥 Replace with dynamic user id later
