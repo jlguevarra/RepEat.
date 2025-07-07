@@ -51,7 +51,7 @@ class _OnboardingStep4State extends State<OnboardingStep4> {
   Future<void> submitOnboardingData() async {
     setState(() => _isSubmitting = true);
 
-    final url = Uri.parse("http://localhost/repEatApi/save_onboarding.php");
+    final url = Uri.parse("http://192.168.100.79/repEatApi/save_onboarding.php");
 
     final data = {
       "user_id": widget.userId,

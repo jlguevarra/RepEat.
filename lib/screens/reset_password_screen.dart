@@ -27,7 +27,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
     setState(() => _isLoading = true);
 
-    final apiUrl = 'http://localhost/repEatApi/reset_password.php';
+    final apiUrl = 'http://192.168.100.79/repEatApi/reset_password.php';
 
     try {
       final response = await http.post(

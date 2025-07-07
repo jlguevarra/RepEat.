@@ -25,7 +25,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _loading = true);
 
     final response = await http.post(
-      Uri.parse('http://localhost/repEatApi/signup.php'),
+      Uri.parse('http://192.168.100.79/repEatApi/signup.php'),
       body: {
         'name': _nameCtrl.text.trim(),
         'email': _emailCtrl.text.trim(),
