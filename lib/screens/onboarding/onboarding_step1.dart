@@ -64,7 +64,7 @@ class _OnboardingStep1State extends State<OnboardingStep1> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('Step 1: Personal Info'),
+        title: const Text('Personal Info'),
         backgroundColor: Colors.deepPurple,
       ),
       body: Padding(

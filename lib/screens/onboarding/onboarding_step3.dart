@@ -34,20 +34,39 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
     'General Fitness',
   ];
 
+  String? _bmiCategory;
+
+  void _updateBMICategory() {
+    final height = double.tryParse(_heightController.text);
+    final weight = double.tryParse(_currentWeightController.text);
+    if (height != null && height > 0 && weight != null && weight > 0) {
+      final hMeters = height / 100;
+      final bmi = weight / (hMeters * hMeters);
+
+      String category;
+      if (bmi < 18.5) {
+        category = 'Underweight';
+      } else if (bmi < 25) {
+        category = 'Normal';
+      } else if (bmi < 30) {
+        category = 'Overweight';
+      } else {
+        category = 'Obese';
+      }
+
+      setState(() {
+        _bmiCategory = category;
+      });
+    } else {
+      setState(() {
+        _bmiCategory = null;
+      });
+    }
+  }
+
   void _nextStep() {
     if (_formKey.currentState!.validate()) {
-      double height = double.parse(_heightController.text) / 100;
-      double weight = double.parse(_currentWeightController.text);
-      double bmi = weight / (height * height);
-
-      String bodyType;
-      if (bmi < 18.5) {
-        bodyType = 'Underweight';
-      } else if (bmi < 25) {
-        bodyType = 'Normal';
-      } else {
-        bodyType = 'Overweight';
-      }
+      String bodyType = _bmiCategory ?? 'Unknown';
 
       Navigator.push(
         context,
@@ -56,6 +75,7 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
             userId: widget.userId,
             gender: widget.gender,
             birthdate: widget.birthdate,
+            height: _heightController.text, // ✅ Pass height
             bodyType: bodyType,
             currentWeight: _currentWeightController.text,
             targetWeight: _targetWeightController.text,
@@ -78,11 +98,28 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _heightController.addListener(_updateBMICategory);
+    _currentWeightController.addListener(_updateBMICategory);
+  }
+
+  @override
+  void dispose() {
+    _heightController.dispose();
+    _currentWeightController.dispose();
+    _targetWeightController.dispose();
+    _setsController.dispose();
+    _repsController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: const Text('Step 2: Your Fitness Info'),
+        automaticallyImplyLeading: false, // 🔷 Remove default back button
+        title: const Text('Your Fitness Info'),
         backgroundColor: Colors.deepPurple,
       ),
       body: Padding(
@@ -132,6 +169,16 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                   return null;
                 },
               ),
+              if (_bmiCategory != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'BMI Category: $_bmiCategory',
+                  style: const TextStyle(
+                    color: Colors.deepPurple,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: _selectedGoal,
