@@ -11,40 +11,45 @@ class DietPreferenceScreen extends StatefulWidget {
 }
 
 class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
-  String selectedDiet = '';
-  List<String> selectedAllergies = [];
-
   bool isLoading = true;
   bool isSaving = false;
+  bool isEditing = false;
 
   int? userId;
+  String selectedDiet = 'None';
+  Set<String> selectedAllergies = {};
 
   final List<String> dietOptions = [
-    'Vegan',
-    'Vegetarian',
-    'Low Carb',
-    'Mediterranean',
-    'Paleo',
-    'Keto',
-    'Balanced',
+    "None",
+    "Vegetarian",
+    "Vegan",
+    "Keto",
+    "Paleo",
+    "Mediterranean",
+    "Low-Carb",
+    "High-Protein",
   ];
 
   final List<String> allergyOptions = [
-    'Peanuts',
-    'Shellfish',
-    'Gluten',
-    'Dairy',
-    'Soy',
-    'Eggs',
+    "None",
+    "Peanuts",
+    "Tree Nuts",
+    "Shellfish",
+    "Fish",
+    "Milk",
+    "Eggs",
+    "Wheat",
+    "Soy",
+    "Gluten",
   ];
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadProfile();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadProfile() async {
     final prefs = await SharedPreferences.getInstance();
     userId = prefs.getInt('user_id');
 
@@ -65,24 +70,27 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
 
       if (data['success'] == true) {
         final profile = data['data'];
-        final profileDiet = profile['diet_preference'] ?? '';
-        selectedDiet =
-        dietOptions.contains(profileDiet) ? profileDiet : dietOptions.first;
+        final String diet = profile['diet_preference'] ?? 'None';
+        final String allergiesRaw = profile['allergies'] ?? '';
 
-        final allergiesString = profile['allergies'] ?? '';
-        selectedAllergies = allergiesString.isNotEmpty
-            ? allergiesString.split(',').map((e) => e.trim()).toList()
-            : [];
+        setState(() {
+          selectedDiet = dietOptions.contains(diet) ? diet : 'None';
+          selectedAllergies = allergiesRaw.isNotEmpty && allergiesRaw != "None"
+              ? Set<String>.from(
+            allergiesRaw.split(',').map((e) => e.trim()).where((e) => allergyOptions.contains(e)),
+          )
+              : {};
+        });
       } else {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Failed to load data.')),
+          SnackBar(content: Text(data['message'] ?? 'Failed to load profile.')),
         );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(content: Text('Error loading profile: $e')),
       );
     } finally {
       if (!mounted) return;
@@ -90,7 +98,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     }
   }
 
-  Future<void> _saveData() async {
+  Future<void> _saveProfile() async {
     setState(() => isSaving = true);
 
     try {
@@ -99,31 +107,27 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
         body: {
           'user_id': userId.toString(),
           'diet_preference': selectedDiet,
-          'allergies': selectedAllergies.join(','),
+          'allergies': selectedAllergies.isEmpty ? 'None' : selectedAllergies.join(', '),
         },
       );
 
-      final data = json.decode(response.body);
+      final result = json.decode(response.body);
 
-      if (!mounted) return;
-
-      if (data['success'] == true) {
+      if (result['success'] == true) {
+        setState(() => isEditing = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Preferences updated.')),
+          SnackBar(content: Text(result['message'] ?? 'Preferences updated.')),
         );
-        Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Failed to update preferences.')),
+          SnackBar(content: Text(result['message'] ?? 'Failed to update preferences.')),
         );
       }
     } catch (e) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
     } finally {
-      if (!mounted) return;
       setState(() => isSaving = false);
     }
   }
@@ -140,40 +144,50 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
       appBar: AppBar(
         title: const Text('Diet & Allergies'),
         backgroundColor: Colors.deepPurple,
+        actions: [
+          if (!isEditing)
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () => setState(() => isEditing = true),
+            ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
             const Text(
-              'Select Diet Preference',
+              'Diet Preference',
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
             ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
+            isEditing
+                ? DropdownButtonFormField<String>(
               value: selectedDiet,
-              items: dietOptions
-                  .map((diet) => DropdownMenuItem(
-                value: diet,
-                child: Text(diet),
-              ))
-                  .toList(),
+              items: dietOptions.map((diet) {
+                return DropdownMenuItem(
+                  value: diet,
+                  child: Text(diet),
+                );
+              }).toList(),
               onChanged: (val) {
                 if (val != null) {
-                  setState(() {
-                    selectedDiet = val;
-                  });
+                  setState(() => selectedDiet = val);
                 }
               },
               decoration: _inputDecoration(),
-            ),
+            )
+                : Text(selectedDiet, style: const TextStyle(fontSize: 16)),
+
             const SizedBox(height: 24),
             const Text(
-              'Select Allergies (if any)',
+              'Allergies',
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
             ),
             const SizedBox(height: 8),
-            Wrap(
+
+            isEditing
+                ? Wrap(
               spacing: 8,
               runSpacing: 8,
               children: allergyOptions.map((allergy) {
@@ -181,10 +195,16 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
                 return FilterChip(
                   label: Text(allergy),
                   selected: isSelected,
-                  onSelected: (val) {
+                  onSelected: (selected) {
                     setState(() {
-                      if (val) {
-                        selectedAllergies.add(allergy);
+                      if (selected) {
+                        if (allergy == 'None') {
+                          selectedAllergies.clear();
+                          selectedAllergies.add('None');
+                        } else {
+                          selectedAllergies.remove('None');
+                          selectedAllergies.add(allergy);
+                        }
                       } else {
                         selectedAllergies.remove(allergy);
                       }
@@ -194,25 +214,32 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
                   checkmarkColor: Colors.deepPurple,
                 );
               }).toList(),
+            )
+                : Text(
+              selectedAllergies.isEmpty
+                  ? "None"
+                  : selectedAllergies.join(', '),
+              style: const TextStyle(fontSize: 16),
             ),
-            const SizedBox(height: 30),
 
-            Center(
-              child: ElevatedButton(
-                onPressed: isSaving ? null : _saveData,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+            const SizedBox(height: 32),
+            if (isEditing)
+              Center(
+                child: ElevatedButton(
+                  onPressed: isSaving ? null : _saveProfile,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                      : const Text('Save', style: TextStyle(fontSize: 16)),
                 ),
-                child: isSaving
-                    ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                )
-                    : const Text('Save', style: TextStyle(fontSize: 16)),
               ),
-            ),
           ],
         ),
       ),
