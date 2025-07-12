@@ -39,7 +39,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
     try {
       final response = await http.get(Uri.parse(
-        'http://localhost/192.168.0.11get_profile.php?user_id=$userId',
+        'http://localhost/192.168.100.78get_profile.php?user_id=$userId',
       ));
       final data = json.decode(response.body);
 
@@ -65,7 +65,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.11/repEatApi/update_profile.php'),
+        Uri.parse('http://192.168.100.78/repEatApi/update_profile.php'),
         body: {
           'user_id': userId.toString(),
           'name': nameController.text.trim(),
