@@ -14,13 +14,22 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
   final setsController = TextEditingController();
   final repsController = TextEditingController();
 
-  String selectedGoal = 'Muscle Gain';
+  String? selectedGoal;
   bool isLoading = true;
   bool isSaving = false;
 
-  final goals = ['Muscle Gain', 'Weight Loss', 'Endurance', 'General Fitness'];
-
   int? userId;
+  double currentWeight = 0;
+  double targetWeight = 0;
+
+  final allGoals = [
+    'Muscle Gain',
+    'Weight Loss',
+    'Endurance',
+    'General Fitness',
+  ];
+
+  List<String> allowedGoals = [];
 
   @override
   void initState() {
@@ -40,6 +49,10 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       return;
     }
 
+    // Read weights from SharedPreferences if available
+    currentWeight = double.tryParse(prefs.getString('current_weight') ?? '') ?? 0;
+    targetWeight = double.tryParse(prefs.getString('target_weight') ?? '') ?? 0;
+
     try {
       final response = await http.get(Uri.parse(
         'http://192.168.100.78/repEatApi/get_profile.php?user_id=$userId',
@@ -48,7 +61,23 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
 
       if (data['success'] == true) {
         final profile = data['data'];
-        selectedGoal = profile['goal'] ?? 'Muscle Gain';
+
+        // Fallback if SharedPreferences values are not set yet
+        if (currentWeight == 0) {
+          currentWeight = double.tryParse(profile['current_weight'] ?? '0') ?? 0;
+        }
+        if (targetWeight == 0) {
+          targetWeight = double.tryParse(profile['target_weight'] ?? '0') ?? 0;
+        }
+
+        _determineAllowedGoals();
+
+        selectedGoal = profile['goal'] ?? allowedGoals.first;
+
+        if (!allowedGoals.contains(selectedGoal)) {
+          selectedGoal = allowedGoals.first;
+        }
+
         setsController.text = profile['preferred_sets'] ?? '';
         repsController.text = profile['preferred_reps'] ?? '';
       } else {
@@ -65,6 +94,16 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     }
   }
 
+  void _determineAllowedGoals() {
+    allowedGoals = ['Endurance', 'General Fitness'];
+    if (targetWeight > currentWeight) {
+      allowedGoals.insert(0, 'Muscle Gain');
+    }
+    if (targetWeight < currentWeight) {
+      allowedGoals.insert(0, 'Weight Loss');
+    }
+  }
+
   Future<void> _saveData() async {
     setState(() => isSaving = true);
 
@@ -78,7 +117,6 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
           'reps': repsController.text.trim(),
         },
       );
-
 
       final data = json.decode(response.body);
 
@@ -126,12 +164,12 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               value: selectedGoal,
-              items: goals
-                  .map((goal) => DropdownMenuItem(
-                value: goal,
-                child: Text(goal),
-              ))
-                  .toList(),
+              items: allowedGoals.map((goal) {
+                return DropdownMenuItem(
+                  value: goal,
+                  child: Text(goal),
+                );
+              }).toList(),
               onChanged: (val) {
                 if (val != null) setState(() => selectedGoal = val);
               },

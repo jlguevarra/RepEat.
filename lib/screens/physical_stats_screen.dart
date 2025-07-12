@@ -120,6 +120,10 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       final data = json.decode(response.body);
 
       if (data['success'] == true) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('current_weight', currentWeightController.text.trim());
+        await prefs.setString('target_weight', targetWeightController.text.trim());
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Physical stats updated.')),
         );
@@ -143,6 +147,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       setState(() => isSaving = false);
     }
   }
+
 
   Future<void> _confirmCancel() async {
     final result = await showDialog<bool>(
