@@ -8,7 +8,7 @@ class OnboardingStep5 extends StatefulWidget {
   final int userId;
   final String gender;
   final DateTime birthdate;
-  final String height; // ✅ added
+  final String height;
   final String bodyType;
   final String currentWeight;
   final String targetWeight;
@@ -23,7 +23,7 @@ class OnboardingStep5 extends StatefulWidget {
     required this.userId,
     required this.gender,
     required this.birthdate,
-    required this.height, // ✅ added
+    required this.height,
     required this.bodyType,
     required this.currentWeight,
     required this.targetWeight,
@@ -41,7 +41,7 @@ class OnboardingStep5 extends StatefulWidget {
 class _OnboardingStep5State extends State<OnboardingStep5> {
   final _formKey = GlobalKey<FormState>();
   String? _dietPreference;
-  String? _allergy;
+  Set<String> _selectedAllergies = {};
 
   bool _isSubmitting = false;
 
@@ -80,7 +80,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
       "user_id": widget.userId,
       "gender": widget.gender,
       "birthdate": widget.birthdate.toIso8601String().split('T')[0],
-      "height": widget.height, // ✅ added
+      "height": widget.height,
       "body_type": widget.bodyType,
       "current_weight": widget.currentWeight,
       "target_weight": widget.targetWeight,
@@ -90,7 +90,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
       "has_injury": widget.hasInjury ? 1 : 0,
       "injury_details": widget.injuryDetails,
       "diet_preference": _dietPreference ?? "",
-      "allergies": _allergy ?? "",
+      "allergies": _selectedAllergies.isEmpty ? "None" : _selectedAllergies.join(","),
     };
 
     try {
@@ -129,6 +129,76 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
     }
   }
 
+  void _showAllergySelector() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        Set<String> tempSelection = {..._selectedAllergies};
+
+        return AlertDialog(
+          title: const Text("Select Allergies"),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                return ListView(
+                  shrinkWrap: true,
+                  children: allergyOptions.map((allergy) {
+                    bool selected = tempSelection.contains(allergy);
+                    return CheckboxListTile(
+                      title: Text(allergy),
+                      value: selected,
+                      onChanged: (val) {
+                        if (allergy == "None" && val == true) {
+                          setState(() {
+                            tempSelection.clear();
+                            tempSelection.add("None");
+                          });
+                        } else {
+                          setState(() {
+                            tempSelection.remove("None");
+                            if (val == true) {
+                              tempSelection.add(allergy);
+                            } else {
+                              tempSelection.remove(allergy);
+                            }
+                          });
+                        }
+                      },
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _selectedAllergies = tempSelection;
+                });
+                Navigator.pop(context);
+              },
+              child: const Text("OK"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+  String getAllergyDisplay() {
+    if (_selectedAllergies.isEmpty) return "Select Allergies";
+    return _selectedAllergies.join(", ");
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -159,21 +229,25 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                 validator: (val) => val == null ? 'Please select a diet preference' : null,
               ),
               const SizedBox(height: 24),
-              DropdownButtonFormField<String>(
-                decoration: const InputDecoration(
-                  labelText: 'Allergies',
-                  border: OutlineInputBorder(),
-                ),
-                value: _allergy,
-                items: allergyOptions.map(
-                      (allergy) => DropdownMenuItem(
-                    value: allergy,
-                    child: Text(allergy),
+
+              GestureDetector(
+                onTap: _showAllergySelector,
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: "Allergies",
+                    border: OutlineInputBorder(),
                   ),
-                ).toList(),
-                onChanged: (val) => setState(() => _allergy = val),
-                validator: (val) => val == null ? 'Please select an allergy (or None)' : null,
+                  child: Text(
+                    getAllergyDisplay(),
+                    style: TextStyle(
+                      color: _selectedAllergies.isEmpty
+                          ? Colors.grey.shade600
+                          : Colors.black,
+                    ),
+                  ),
+                ),
               ),
+
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,

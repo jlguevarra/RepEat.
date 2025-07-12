@@ -11,12 +11,32 @@ class DietPreferenceScreen extends StatefulWidget {
 }
 
 class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
-  final dietController = TextEditingController();
+  String selectedDiet = '';
+  List<String> selectedAllergies = [];
 
   bool isLoading = true;
   bool isSaving = false;
 
   int? userId;
+
+  final List<String> dietOptions = [
+    'Vegan',
+    'Vegetarian',
+    'Low Carb',
+    'Mediterranean',
+    'Paleo',
+    'Keto',
+    'Balanced',
+  ];
+
+  final List<String> allergyOptions = [
+    'Peanuts',
+    'Shellfish',
+    'Gluten',
+    'Dairy',
+    'Soy',
+    'Eggs',
+  ];
 
   @override
   void initState() {
@@ -29,6 +49,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     userId = prefs.getInt('user_id');
 
     if (userId == null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('User ID not found. Please log in again.')),
       );
@@ -44,17 +65,27 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
 
       if (data['success'] == true) {
         final profile = data['data'];
-        dietController.text = profile['diet_preference'] ?? '';
+        final profileDiet = profile['diet_preference'] ?? '';
+        selectedDiet =
+        dietOptions.contains(profileDiet) ? profileDiet : dietOptions.first;
+
+        final allergiesString = profile['allergies'] ?? '';
+        selectedAllergies = allergiesString.isNotEmpty
+            ? allergiesString.split(',').map((e) => e.trim()).toList()
+            : [];
       } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Failed to load diet preference.')),
+          SnackBar(content: Text(data['message'] ?? 'Failed to load data.')),
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
     } finally {
+      if (!mounted) return;
       setState(() => isLoading = false);
     }
   }
@@ -64,30 +95,35 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.78/repEatApi/update_profile.php'),
+        Uri.parse('http://192.168.100.78/repEatApi/update_diet_allergies.php'),
         body: {
           'user_id': userId.toString(),
-          'diet_preference': dietController.text.trim(),
+          'diet_preference': selectedDiet,
+          'allergies': selectedAllergies.join(','),
         },
       );
 
       final data = json.decode(response.body);
 
+      if (!mounted) return;
+
       if (data['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Diet preference updated.')),
+          SnackBar(content: Text(data['message'] ?? 'Preferences updated.')),
         );
         Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Failed to update diet preference.')),
+          SnackBar(content: Text(data['message'] ?? 'Failed to update preferences.')),
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
     } finally {
+      if (!mounted) return;
       setState(() => isSaving = false);
     }
   }
@@ -102,22 +138,62 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Diet Preference'),
+        title: const Text('Diet & Allergies'),
         backgroundColor: Colors.deepPurple,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: ListView(
           children: [
             const Text(
-              'Diet Preference',
+              'Select Diet Preference',
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
             ),
             const SizedBox(height: 8),
-            TextFormField(
-              controller: dietController,
-              decoration: _inputDecoration(hintText: 'e.g., Vegan, Low Carb, Mediterranean'),
+            DropdownButtonFormField<String>(
+              value: selectedDiet,
+              items: dietOptions
+                  .map((diet) => DropdownMenuItem(
+                value: diet,
+                child: Text(diet),
+              ))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    selectedDiet = val;
+                  });
+                }
+              },
+              decoration: _inputDecoration(),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Select Allergies (if any)',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: allergyOptions.map((allergy) {
+                final isSelected = selectedAllergies.contains(allergy);
+                return FilterChip(
+                  label: Text(allergy),
+                  selected: isSelected,
+                  onSelected: (val) {
+                    setState(() {
+                      if (val) {
+                        selectedAllergies.add(allergy);
+                      } else {
+                        selectedAllergies.remove(allergy);
+                      }
+                    });
+                  },
+                  selectedColor: Colors.deepPurple.shade100,
+                  checkmarkColor: Colors.deepPurple,
+                );
+              }).toList(),
             ),
             const SizedBox(height: 30),
 
@@ -143,9 +219,8 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     );
   }
 
-  InputDecoration _inputDecoration({String? hintText}) {
+  InputDecoration _inputDecoration() {
     return InputDecoration(
-      hintText: hintText,
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
