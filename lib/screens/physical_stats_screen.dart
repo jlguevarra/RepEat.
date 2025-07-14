@@ -19,7 +19,8 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   bool isLoading = true;
   bool isSaving = false;
   bool isEditing = false;
-
+  String originalGoal = '';
+  String updatedGoal = '';
   String originalCurrentWeight = '';
   String originalTargetWeight = '';
   String originalInjuryDetails = '';
@@ -76,6 +77,9 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         originalTargetWeight = profile['target_weight'] ?? '';
         originalInjuryDetails = profile['injury_details'] ?? '';
         originalHasInjury = profile['has_injury'] == '1';
+        originalGoal = profile['goal'] ?? '';
+        updatedGoal = originalGoal;
+
 
         currentWeightController.text = originalCurrentWeight;
         targetWeightController.text = originalTargetWeight;
@@ -96,11 +100,32 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   }
 
   bool get hasChanges {
+    final target = targetWeightController.text.trim();
+    final current = currentWeightController.text.trim();
+
+    if (isEditing) {
+      // Determine if goal needs to change
+      double? currentW = double.tryParse(current);
+      double? targetW = double.tryParse(target);
+      updatedGoal = originalGoal;
+
+      if (currentW != null && targetW != null) {
+        if (originalGoal.toLowerCase() == 'muscle gain' && targetW < currentW) {
+          updatedGoal = 'Weight Loss';
+        } else if (originalGoal.toLowerCase() == 'weight loss' && targetW > currentW) {
+          updatedGoal = 'Muscle Gain';
+        }
+        // endurance and general fitness remain as-is
+      }
+    }
+
     return currentWeightController.text.trim() != originalCurrentWeight ||
         targetWeightController.text.trim() != originalTargetWeight ||
         hasInjury != originalHasInjury ||
-        (hasInjury && injuryController.text.trim() != originalInjuryDetails);
+        (hasInjury && injuryController.text.trim() != originalInjuryDetails) ||
+        updatedGoal != originalGoal;
   }
+
 
   Future<void> _saveData() async {
     setState(() => isSaving = true);
@@ -114,6 +139,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           'target_weight': targetWeightController.text.trim(),
           'has_injury': hasInjury ? '1' : '0',
           'injury_details': hasInjury ? injuryController.text.trim() : '',
+          'goal': updatedGoal,
         },
       );
 
