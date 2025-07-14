@@ -44,6 +44,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
   Set<String> _selectedAllergies = {};
 
   bool _isSubmitting = false;
+  bool _allergyError = false;
 
   final List<String> dietOptions = [
     "None",
@@ -71,6 +72,17 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
   Future<void> _submitData() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_selectedAllergies.isEmpty) {
+      setState(() {
+        _allergyError = true;
+      });
+      return;
+    } else {
+      setState(() {
+        _allergyError = false;
+      });
+    }
 
     setState(() => _isSubmitting = true);
 
@@ -193,7 +205,6 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
     );
   }
 
-
   String getAllergyDisplay() {
     if (_selectedAllergies.isEmpty) return "Select Allergies";
     return _selectedAllergies.join(", ");
@@ -233,9 +244,10 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
               GestureDetector(
                 onTap: _showAllergySelector,
                 child: InputDecorator(
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: "Allergies",
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    errorText: _allergyError ? "Please select allergies" : null,
                   ),
                   child: Text(
                     getAllergyDisplay(),

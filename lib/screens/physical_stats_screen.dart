@@ -13,35 +13,71 @@ class PhysicalStatsScreen extends StatefulWidget {
 class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   final currentWeightController = TextEditingController();
   final targetWeightController = TextEditingController();
-  final injuryController = TextEditingController();
+  final heightController = TextEditingController();
 
   bool hasInjury = false;
   bool isLoading = true;
   bool isSaving = false;
   bool isEditing = false;
+
   String originalGoal = '';
   String updatedGoal = '';
   String originalCurrentWeight = '';
   String originalTargetWeight = '';
+  String originalHeight = '';
   String originalInjuryDetails = '';
+  String originalBodyType = '';
   bool originalHasInjury = false;
 
+  String selectedInjuryCategory = '';
+  List<String> injuryCategories = [
+    "Knee Pain",
+    "Back Pain",
+    "Shoulder Injury",
+    "Ankle Sprain",
+    "Wrist Pain",
+    "Elbow Pain",
+    "Neck Strain",
+    "Hip Pain"
+  ];
+
   int? userId;
+
+  String bmiCategory = 'Unknown';
 
   @override
   void initState() {
     super.initState();
     _loadData();
 
-    // Add listeners to watch for text changes
     currentWeightController.addListener(_onFieldChanged);
-    targetWeightController.addListener(_onFieldChanged);
-    injuryController.addListener(_onFieldChanged);
+    heightController.addListener(_onFieldChanged);
   }
 
   void _onFieldChanged() {
     if (isEditing) {
-      setState(() {}); // Triggers re-build to check hasChanges
+      _updateBMI();
+      setState(() {});
+    }
+  }
+
+  void _updateBMI() {
+    final weightKg = double.tryParse(currentWeightController.text.trim());
+    final heightCm = double.tryParse(heightController.text.trim());
+    if (weightKg != null && heightCm != null && heightCm > 0) {
+      final heightM = heightCm / 100;
+      final bmi = weightKg / (heightM * heightM);
+      if (bmi < 18.5) {
+        bmiCategory = 'Underweight';
+      } else if (bmi < 24.9) {
+        bmiCategory = 'Normal';
+      } else if (bmi < 29.9) {
+        bmiCategory = 'Overweight';
+      } else {
+        bmiCategory = 'Obese';
+      }
+    } else {
+      bmiCategory = 'Unknown';
     }
   }
 
@@ -49,7 +85,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   void dispose() {
     currentWeightController.dispose();
     targetWeightController.dispose();
-    injuryController.dispose();
+    heightController.dispose();
     super.dispose();
   }
 
@@ -75,16 +111,24 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         final profile = data['data'];
         originalCurrentWeight = profile['current_weight'] ?? '';
         originalTargetWeight = profile['target_weight'] ?? '';
+        originalHeight = profile['height'] ?? '';
         originalInjuryDetails = profile['injury_details'] ?? '';
         originalHasInjury = profile['has_injury'] == '1';
         originalGoal = profile['goal'] ?? '';
         updatedGoal = originalGoal;
-
+        originalBodyType = profile['body_type'] ?? '';
+        selectedInjuryCategory = originalInjuryDetails;
 
         currentWeightController.text = originalCurrentWeight;
         targetWeightController.text = originalTargetWeight;
-        injuryController.text = originalInjuryDetails;
+        heightController.text = originalHeight;
         hasInjury = originalHasInjury;
+
+        if (hasInjury && selectedInjuryCategory.isEmpty) {
+          selectedInjuryCategory = injuryCategories.first;
+        }
+
+        bmiCategory = originalBodyType;
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Failed to load stats.')),
@@ -100,35 +144,21 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   }
 
   bool get hasChanges {
-    final target = targetWeightController.text.trim();
-    final current = currentWeightController.text.trim();
-
-    if (isEditing) {
-      // Determine if goal needs to change
-      double? currentW = double.tryParse(current);
-      double? targetW = double.tryParse(target);
-      updatedGoal = originalGoal;
-
-      if (currentW != null && targetW != null) {
-        if (originalGoal.toLowerCase() == 'muscle gain' && targetW < currentW) {
-          updatedGoal = 'Weight Loss';
-        } else if (originalGoal.toLowerCase() == 'weight loss' && targetW > currentW) {
-          updatedGoal = 'Muscle Gain';
-        }
-        // endurance and general fitness remain as-is
-      }
-    }
-
     return currentWeightController.text.trim() != originalCurrentWeight ||
         targetWeightController.text.trim() != originalTargetWeight ||
+        heightController.text.trim() != originalHeight ||
         hasInjury != originalHasInjury ||
-        (hasInjury && injuryController.text.trim() != originalInjuryDetails) ||
-        updatedGoal != originalGoal;
+        (hasInjury && selectedInjuryCategory != originalInjuryDetails);
   }
-
 
   Future<void> _saveData() async {
     setState(() => isSaving = true);
+
+    _updateBMI();
+
+    if (hasInjury && selectedInjuryCategory.isEmpty) {
+      selectedInjuryCategory = injuryCategories.first;
+    }
 
     try {
       final response = await http.post(
@@ -137,27 +167,27 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           'user_id': userId.toString(),
           'current_weight': currentWeightController.text.trim(),
           'target_weight': targetWeightController.text.trim(),
+          'height': heightController.text.trim(),
           'has_injury': hasInjury ? '1' : '0',
-          'injury_details': hasInjury ? injuryController.text.trim() : '',
+          'injury_details': hasInjury ? selectedInjuryCategory : '',
           'goal': updatedGoal,
+          'body_type': bmiCategory,
         },
       );
 
       final data = json.decode(response.body);
 
       if (data['success'] == true) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('current_weight', currentWeightController.text.trim());
-        await prefs.setString('target_weight', targetWeightController.text.trim());
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Physical stats updated.')),
         );
         setState(() {
           originalCurrentWeight = currentWeightController.text.trim();
           originalTargetWeight = targetWeightController.text.trim();
+          originalHeight = heightController.text.trim();
           originalHasInjury = hasInjury;
-          originalInjuryDetails = injuryController.text.trim();
+          originalInjuryDetails = selectedInjuryCategory;
+          originalBodyType = bmiCategory;
           isEditing = false;
         });
       } else {
@@ -174,22 +204,20 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     }
   }
 
-
   Future<void> _confirmCancel() async {
+    if (!hasChanges) {
+      setState(() => isEditing = false);
+      return;
+    }
+
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Cancel changes?'),
         content: const Text('Any unsaved changes will be lost. Are you sure?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('No'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Yes'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes')),
         ],
       ),
     );
@@ -198,8 +226,12 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       setState(() {
         currentWeightController.text = originalCurrentWeight;
         targetWeightController.text = originalTargetWeight;
-        injuryController.text = originalInjuryDetails;
+        heightController.text = originalHeight;
         hasInjury = originalHasInjury;
+        selectedInjuryCategory = originalInjuryDetails.isNotEmpty
+            ? originalInjuryDetails
+            : injuryCategories.first;
+        bmiCategory = originalBodyType;
         isEditing = false;
       });
     }
@@ -219,7 +251,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         backgroundColor: Colors.deepPurple,
         actions: [
           IconButton(
-            icon: Icon(isEditing ? Icons.cancel : Icons.edit),
+            icon: Icon(isEditing ? Icons.close : Icons.edit),
             onPressed: () {
               if (isEditing) {
                 _confirmCancel();
@@ -242,11 +274,25 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
             ),
             const SizedBox(height: 8),
-            _textInput('Current Weight (lbs)', currentWeightController),
+            _textInput('Current Weight (kg)', currentWeightController),
             const SizedBox(height: 12),
-            _textInput('Target Weight (lbs)', targetWeightController),
+            _textInput('Target Weight (kg)', targetWeightController),
+            const SizedBox(height: 12),
+            _textInput('Height (cm)', heightController),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.deepPurple.withOpacity(0.1),
+                border: Border.all(color: Colors.deepPurple),
+              ),
+              child: Text(
+                'BMI Category: $bmiCategory',
+                style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold),
+              ),
+            ),
             const SizedBox(height: 20),
-
             const Text(
               'Injury Information',
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
@@ -259,14 +305,40 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                   ? (val) {
                 setState(() {
                   hasInjury = val;
+                  if (hasInjury && selectedInjuryCategory.isEmpty) {
+                    selectedInjuryCategory = injuryCategories.first;
+                  }
                 });
               }
                   : null,
             ),
-            if (hasInjury) _textInput('Injury Details', injuryController),
-
+            if (hasInjury)
+              isEditing
+                  ? DropdownButtonFormField<String>(
+                value: selectedInjuryCategory,
+                items: injuryCategories
+                    .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                    .toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      selectedInjuryCategory = val;
+                    });
+                  }
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Injury Category',
+                  border: OutlineInputBorder(),
+                ),
+              )
+                  : Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Injury Details: $originalInjuryDetails',
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
             const SizedBox(height: 30),
-
             Center(
               child: ElevatedButton(
                 onPressed: (!isEditing || !hasChanges || isSaving) ? null : _saveData,
@@ -293,9 +365,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     return TextFormField(
       controller: controller,
       readOnly: !isEditing,
-      onChanged: (_) {
-        if (isEditing) setState(() {}); // to re-evaluate hasChanges
-      },
+      keyboardType: TextInputType.number,
       decoration: InputDecoration(
         labelText: label,
         filled: true,
