@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+
 
 class DietPreferenceScreen extends StatefulWidget {
   const DietPreferenceScreen({super.key});
@@ -16,8 +18,12 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
   bool isEditing = false;
 
   int? userId;
+
   String selectedDiet = 'None';
+  String originalDiet = 'None';
+
   Set<String> selectedAllergies = {};
+  Set<String> originalAllergies = {};
 
   final List<String> dietOptions = [
     "None",
@@ -73,13 +79,17 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
         final String diet = profile['diet_preference'] ?? 'None';
         final String allergiesRaw = profile['allergies'] ?? '';
 
+        final Set<String> allergiesSet = allergiesRaw.isNotEmpty && allergiesRaw != "None"
+            ? Set<String>.from(
+          allergiesRaw.split(',').map((e) => e.trim()).where((e) => allergyOptions.contains(e)),
+        )
+            : {};
+
         setState(() {
           selectedDiet = dietOptions.contains(diet) ? diet : 'None';
-          selectedAllergies = allergiesRaw.isNotEmpty && allergiesRaw != "None"
-              ? Set<String>.from(
-            allergiesRaw.split(',').map((e) => e.trim()).where((e) => allergyOptions.contains(e)),
-          )
-              : {};
+          originalDiet = selectedDiet;
+          selectedAllergies = Set.from(allergiesSet);
+          originalAllergies = Set.from(allergiesSet);
         });
       } else {
         if (!mounted) return;
@@ -114,7 +124,11 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
       final result = json.decode(response.body);
 
       if (result['success'] == true) {
-        setState(() => isEditing = false);
+        setState(() {
+          isEditing = false;
+          originalDiet = selectedDiet;
+          originalAllergies = Set.from(selectedAllergies);
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(result['message'] ?? 'Preferences updated.')),
         );
@@ -132,6 +146,44 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     }
   }
 
+  Future<void> _cancelEditing() async {
+    final bool hasChanges =
+        selectedDiet != originalDiet || !setEquals(selectedAllergies, originalAllergies);
+
+    if (!hasChanges) {
+      setState(() {
+        isEditing = false;
+      });
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Cancel Changes?'),
+        content: const Text('You have unsaved changes. Do you want to discard them?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() {
+        selectedDiet = originalDiet;
+        selectedAllergies = Set.from(originalAllergies);
+        isEditing = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -145,6 +197,12 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
         title: const Text('Diet & Allergies'),
         backgroundColor: Colors.deepPurple,
         actions: [
+          if (isEditing)
+            IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: 'Cancel',
+              onPressed: _cancelEditing,
+            ),
           if (!isEditing)
             IconButton(
               icon: const Icon(Icons.edit),
@@ -185,7 +243,6 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
             ),
             const SizedBox(height: 8),
-
             isEditing
                 ? Wrap(
               spacing: 8,
@@ -221,7 +278,6 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
                   : selectedAllergies.join(', '),
               style: const TextStyle(fontSize: 16),
             ),
-
             const SizedBox(height: 32),
             if (isEditing)
               Center(
