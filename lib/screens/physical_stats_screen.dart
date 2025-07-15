@@ -1,3 +1,4 @@
+// same imports…
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -128,7 +129,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           selectedInjuryCategory = injuryCategories.first;
         }
 
-        bmiCategory = originalBodyType;
+        bmiCategory = originalBodyType.isNotEmpty ? originalBodyType : 'Unknown';
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Failed to load stats.')),
@@ -160,6 +161,19 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       selectedInjuryCategory = injuryCategories.first;
     }
 
+    final currentWeight = double.tryParse(currentWeightController.text.trim()) ?? 0;
+    final targetWeight = double.tryParse(targetWeightController.text.trim()) ?? 0;
+
+    // Auto-adjust goal if applicable
+    final goalLower = updatedGoal.toLowerCase();
+    if (goalLower == 'muscle gain' || goalLower == 'weight loss') {
+      if (currentWeight > targetWeight) {
+        updatedGoal = 'Weight Loss';
+      } else if (currentWeight < targetWeight) {
+        updatedGoal = 'Muscle Gain';
+      }
+    }
+
     try {
       final response = await http.post(
         Uri.parse('http://192.168.100.78/repEatApi/update_physical_stats.php'),
@@ -188,6 +202,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           originalHasInjury = hasInjury;
           originalInjuryDetails = selectedInjuryCategory;
           originalBodyType = bmiCategory;
+          updatedGoal = updatedGoal;
           isEditing = false;
         });
       } else {
@@ -232,6 +247,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
             ? originalInjuryDetails
             : injuryCategories.first;
         bmiCategory = originalBodyType;
+        updatedGoal = originalGoal;
         isEditing = false;
       });
     }
@@ -281,7 +297,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
             _textInput('Height (cm)', heightController),
             const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
                 color: Colors.deepPurple.withOpacity(0.1),
