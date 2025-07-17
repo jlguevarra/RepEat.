@@ -65,7 +65,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.11/repEatApi/update_profile.php'),
+        Uri.parse('http://192.168.100.78/repEatApi/update_profile.php'),
         body: {
           'user_id': userId.toString(),
           'name': nameController.text.trim(),

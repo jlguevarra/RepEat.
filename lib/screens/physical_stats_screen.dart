@@ -1,4 +1,3 @@
-// same imports…
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -31,7 +30,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   bool originalHasInjury = false;
 
   String selectedInjuryCategory = '';
-  List<String> injuryCategories = [
+  final List<String> injuryCategories = [
     "Knee Pain",
     "Back Pain",
     "Shoulder Injury",
@@ -50,7 +49,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   void initState() {
     super.initState();
     _loadData();
-
     currentWeightController.addListener(_onFieldChanged);
     heightController.addListener(_onFieldChanged);
   }
@@ -104,7 +102,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
     try {
       final response = await http.get(Uri.parse(
-        'http://192.168.0.11/repEatApi/get_profile.php?user_id=$userId',
+        'http://192.168.100.78/repEatApi/get_profile.php?user_id=$userId',
       ));
       final data = json.decode(response.body);
 
@@ -114,7 +112,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         originalTargetWeight = profile['target_weight'] ?? '';
         originalHeight = profile['height'] ?? '';
         originalInjuryDetails = profile['injury_details'] ?? '';
-        originalHasInjury = profile['has_injury'] == '1';
+        originalHasInjury = profile['has_injury'].toString() == '1';
         originalGoal = profile['goal'] ?? '';
         updatedGoal = originalGoal;
         originalBodyType = profile['body_type'] ?? '';
@@ -157,14 +155,13 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
     _updateBMI();
 
+    final currentWeight = double.tryParse(currentWeightController.text.trim()) ?? 0;
+    final targetWeight = double.tryParse(targetWeightController.text.trim()) ?? 0;
+
     if (hasInjury && selectedInjuryCategory.isEmpty) {
       selectedInjuryCategory = injuryCategories.first;
     }
 
-    final currentWeight = double.tryParse(currentWeightController.text.trim()) ?? 0;
-    final targetWeight = double.tryParse(targetWeightController.text.trim()) ?? 0;
-
-    // Auto-adjust goal if applicable
     final goalLower = updatedGoal.toLowerCase();
     if (goalLower == 'muscle gain' || goalLower == 'weight loss') {
       if (currentWeight > targetWeight) {
@@ -176,7 +173,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.11/repEatApi/update_physical_stats.php'),
+        Uri.parse('http://192.168.100.78/repEatApi/update_physical_stats.php'),
         body: {
           'user_id': userId.toString(),
           'current_weight': currentWeightController.text.trim(),
@@ -200,7 +197,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           originalTargetWeight = targetWeightController.text.trim();
           originalHeight = heightController.text.trim();
           originalHasInjury = hasInjury;
-          originalInjuryDetails = selectedInjuryCategory;
+          originalInjuryDetails = hasInjury ? selectedInjuryCategory : '';
           originalBodyType = bmiCategory;
           updatedGoal = updatedGoal;
           isEditing = false;
@@ -245,7 +242,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         hasInjury = originalHasInjury;
         selectedInjuryCategory = originalInjuryDetails.isNotEmpty
             ? originalInjuryDetails
-            : injuryCategories.first;
+            : (hasInjury ? injuryCategories.first : '');
         bmiCategory = originalBodyType;
         updatedGoal = originalGoal;
         isEditing = false;
@@ -321,7 +318,9 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                   ? (val) {
                 setState(() {
                   hasInjury = val;
-                  if (hasInjury && selectedInjuryCategory.isEmpty) {
+                  if (!hasInjury) {
+                    selectedInjuryCategory = '';
+                  } else if (selectedInjuryCategory.isEmpty) {
                     selectedInjuryCategory = injuryCategories.first;
                   }
                 });
@@ -350,7 +349,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                   : Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
-                  'Injury Details: $originalInjuryDetails',
+                  'Injury Details: ${originalInjuryDetails.isNotEmpty ? originalInjuryDetails : 'None'}',
                   style: const TextStyle(fontSize: 16),
                 ),
               ),
