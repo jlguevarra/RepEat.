@@ -56,7 +56,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     setState(() => _loading = true);
 
     final verifyRes = await http.post(
-      Uri.parse('http://192.168.100.78/repEatApi/verify_email_code.php'),
+      Uri.parse('http://192.168.0.11/repEatApi/verify_email_code.php'),
       body: {
         'email': widget.email,
         'code': _codeCtrl.text.trim(),
@@ -66,7 +66,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     final verifyData = jsonDecode(verifyRes.body);
     if (verifyData['success']) {
       final registerRes = await http.post(
-        Uri.parse('http://192.168.100.78/repEatApi/register_user.php'),
+        Uri.parse('http://192.168.0.11repEatApi/register_user.php'),
         body: {
           'name': widget.name,
           'email': widget.email,
@@ -100,7 +100,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     if (_resendCountdown > 0) return;
 
     final resend = await http.post(
-      Uri.parse('http://192.168.100.78/repEatApi/signup.php'),
+      Uri.parse('http://192.168.0.11/repEatApi/signup.php'),
       body: {
         'name': widget.name,
         'email': widget.email,

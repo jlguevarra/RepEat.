@@ -41,7 +41,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.100.78/repEatApi/get_workout_history.php?user_id=${widget.userId}'),
+        Uri.parse('http://192.168.0.11/repEatApi/get_workout_history.php?user_id=${widget.userId}'),
       );
 
       if (response.statusCode == 200) {
@@ -119,7 +119,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       if (_editingWorkoutId != null) {
         // Update existing note
         final response = await http.post(
-          Uri.parse('http://192.168.100.78/repEatApi/update_note.php'),
+          Uri.parse('http://192.168.0.11/repEatApi/update_note.php'),
           headers: {'Content-Type': 'application/json'},
           body: json.encode({
             'workout_id': _editingWorkoutId,
@@ -138,7 +138,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       } else {
         // Create new note
         final response = await http.post(
-          Uri.parse('http://192.168.100.78/repEatApi/save_note.php'),
+          Uri.parse('http://192.168.0.11repEatApi/save_note.php'),
           headers: {'Content-Type': 'application/json'},
           body: json.encode({
             'user_id': widget.userId,
@@ -174,7 +174,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.delete(
-        Uri.parse('http://192.168.100.78/repEatApi/delete_workout.php?workout_id=$workoutId'),
+        Uri.parse('http://192.168.0.11/repEatApi/delete_workout.php?workout_id=$workoutId'),
       );
 
       if (response.statusCode == 200) {
