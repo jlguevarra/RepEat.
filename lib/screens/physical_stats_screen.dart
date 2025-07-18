@@ -29,7 +29,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   String originalBodyType = '';
   bool originalHasInjury = false;
 
-  String selectedInjuryCategory = '';
+  String selectedInjuryCategory = 'None'; // Initialize with 'None'
   final List<String> injuryCategories = [
     "Knee Pain",
     "Back Pain",
@@ -111,20 +111,25 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         originalCurrentWeight = profile['current_weight'] ?? '';
         originalTargetWeight = profile['target_weight'] ?? '';
         originalHeight = profile['height'] ?? '';
-        originalInjuryDetails = profile['injury_details'] ?? '';
+        originalInjuryDetails = profile['injury_details'] ?? 'None';
         originalHasInjury = profile['has_injury'].toString() == '1';
         originalGoal = profile['goal'] ?? '';
         updatedGoal = originalGoal;
         originalBodyType = profile['body_type'] ?? '';
-        selectedInjuryCategory = originalInjuryDetails;
 
         currentWeightController.text = originalCurrentWeight;
         targetWeightController.text = originalTargetWeight;
         heightController.text = originalHeight;
         hasInjury = originalHasInjury;
 
-        if (hasInjury && selectedInjuryCategory.isEmpty) {
-          selectedInjuryCategory = injuryCategories.first;
+        if (hasInjury && originalInjuryDetails != 'None') {
+          if (injuryCategories.contains(originalInjuryDetails)) {
+            selectedInjuryCategory = originalInjuryDetails;
+          } else {
+            selectedInjuryCategory = injuryCategories.first;
+          }
+        } else {
+          selectedInjuryCategory = 'None';
         }
 
         bmiCategory = originalBodyType.isNotEmpty ? originalBodyType : 'Unknown';
@@ -158,10 +163,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     final currentWeight = double.tryParse(currentWeightController.text.trim()) ?? 0;
     final targetWeight = double.tryParse(targetWeightController.text.trim()) ?? 0;
 
-    if (hasInjury && selectedInjuryCategory.isEmpty) {
-      selectedInjuryCategory = injuryCategories.first;
-    }
-
     final goalLower = updatedGoal.toLowerCase();
     if (goalLower == 'muscle gain' || goalLower == 'weight loss') {
       if (currentWeight > targetWeight) {
@@ -180,7 +181,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           'target_weight': targetWeightController.text.trim(),
           'height': heightController.text.trim(),
           'has_injury': hasInjury ? '1' : '0',
-          'injury_details': hasInjury ? selectedInjuryCategory : '',
+          'injury_details': hasInjury ? selectedInjuryCategory : 'None',
           'goal': updatedGoal,
           'body_type': bmiCategory,
         },
@@ -197,7 +198,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           originalTargetWeight = targetWeightController.text.trim();
           originalHeight = heightController.text.trim();
           originalHasInjury = hasInjury;
-          originalInjuryDetails = hasInjury ? selectedInjuryCategory : '';
+          originalInjuryDetails = hasInjury ? selectedInjuryCategory : 'None';
           originalBodyType = bmiCategory;
           updatedGoal = updatedGoal;
           isEditing = false;
@@ -240,9 +241,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         targetWeightController.text = originalTargetWeight;
         heightController.text = originalHeight;
         hasInjury = originalHasInjury;
-        selectedInjuryCategory = originalInjuryDetails.isNotEmpty
-            ? originalInjuryDetails
-            : (hasInjury ? injuryCategories.first : '');
+        selectedInjuryCategory = originalHasInjury ? originalInjuryDetails : 'None';
         bmiCategory = originalBodyType;
         updatedGoal = originalGoal;
         isEditing = false;
@@ -282,10 +281,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Body Measurements',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-            ),
+            const Text('Body Measurements', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
             const SizedBox(height: 8),
             _textInput('Current Weight (kg)', currentWeightController),
             const SizedBox(height: 12),
@@ -300,16 +296,10 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                 color: Colors.deepPurple.withOpacity(0.1),
                 border: Border.all(color: Colors.deepPurple),
               ),
-              child: Text(
-                'BMI Category: $bmiCategory',
-                style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold),
-              ),
+              child: Text('BMI Category: $bmiCategory', style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold)),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Injury Information',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-            ),
+            const Text('Injury Information', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
             SwitchListTile(
               title: const Text('Do you have an injury?'),
               value: hasInjury,
@@ -318,22 +308,15 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                   ? (val) {
                 setState(() {
                   hasInjury = val;
-                  if (!hasInjury) {
-                    selectedInjuryCategory = '';
-                  } else if (selectedInjuryCategory.isEmpty) {
-                    selectedInjuryCategory = injuryCategories.first;
-                  }
+                  selectedInjuryCategory = val ? injuryCategories.first : 'None';
                 });
               }
                   : null,
             ),
-            if (hasInjury)
-              isEditing
-                  ? DropdownButtonFormField<String>(
-                value: selectedInjuryCategory,
-                items: injuryCategories
-                    .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                    .toList(),
+            if (hasInjury && isEditing)
+              DropdownButtonFormField<String>(
+                value: selectedInjuryCategory != 'None' ? selectedInjuryCategory : injuryCategories.first,
+                items: injuryCategories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
                 onChanged: (val) {
                   if (val != null) {
                     setState(() {
@@ -341,15 +324,13 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                     });
                   }
                 },
-                decoration: const InputDecoration(
-                  labelText: 'Injury Category',
-                  border: OutlineInputBorder(),
-                ),
-              )
-                  : Padding(
+                decoration: const InputDecoration(labelText: 'Injury Category', border: OutlineInputBorder()),
+              ),
+            if (!isEditing)
+              Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
-                  'Injury Details: ${originalInjuryDetails.isNotEmpty ? originalInjuryDetails : 'None'}',
+                  'Injury Details: ${hasInjury ? (originalInjuryDetails.isNotEmpty ? originalInjuryDetails : 'None') : 'None'}',
                   style: const TextStyle(fontSize: 16),
                 ),
               ),
@@ -362,11 +343,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
                 ),
                 child: isSaving
-                    ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                )
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Text('Save', style: TextStyle(fontSize: 16)),
               ),
             ),
@@ -386,9 +363,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         filled: true,
         fillColor: isEditing ? Colors.white : Colors.grey[200],
         contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
