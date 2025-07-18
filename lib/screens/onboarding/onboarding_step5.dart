@@ -100,7 +100,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
       "preferred_sets": widget.sets,
       "preferred_reps": widget.reps,
       "has_injury": widget.hasInjury ? 1 : 0,
-      "injury_details": widget.injuryDetails,
+      "injury_details": widget.hasInjury ? widget.injuryDetails : "None", // ✅ force "None" if no injury
       "diet_preference": _dietPreference ?? "",
       "allergies": _selectedAllergies.isEmpty ? "None" : _selectedAllergies.join(","),
     };
