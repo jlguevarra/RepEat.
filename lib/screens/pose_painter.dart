@@ -39,19 +39,19 @@ class PosePainter extends CustomPainter {
         }
       }
 
-      // Upper body connections
+      // Upper body
       drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
       drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow);
       drawLine(PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist);
       drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow);
       drawLine(PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist);
 
-      // Core connections
+      // Core
       drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip);
       drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip);
       drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.rightHip);
 
-      // Lower body connections
+      // Lower body
       drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee);
       drawLine(PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle);
       drawLine(PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee);
@@ -59,15 +59,15 @@ class PosePainter extends CustomPainter {
     }
   }
 
-  Offset _translate(PoseLandmark landmark, Size size) {
-    final scaleX = size.width / imageSize.height;
-    final scaleY = size.height / imageSize.width;
+  Offset _translate(PoseLandmark landmark, Size screenSize) {
+    final scaleX = screenSize.width / imageSize.width;
+    final scaleY = screenSize.height / imageSize.height;
 
-    double x = landmark.y * scaleX;
-    double y = landmark.x * scaleY;
+    double x = landmark.x * scaleX;
+    double y = landmark.y * scaleY;
 
     if (isFrontCamera) {
-      x = size.width - x;
+      x = screenSize.width - x;
     }
 
     return Offset(x, y);

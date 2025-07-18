@@ -147,7 +147,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   }
 
   Future<void> saveCameraWorkout() async {
-    final url = Uri.parse('http://192.168.100.78/repEatApi/camera_workout_screen.php');
+    final url = Uri.parse('http://192.168.0.11/repEatApi/camera_workout_screen.php');
 
     final data = {
       'user_id': widget.userId,
@@ -213,20 +213,30 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       ),
       body: Stack(
         children: [
-          Center(
-            child: AspectRatio(
-              aspectRatio: _cameraController!.value.aspectRatio,
-              child: CameraPreview(_cameraController!),
+          // ✅ Fullscreen camera preview
+          Positioned.fill(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: _cameraController!.value.previewSize!.height,
+                height: _cameraController!.value.previewSize!.width,
+                child: CameraPreview(_cameraController!),
+              ),
             ),
           ),
-          CustomPaint(
-            painter: PosePainter(
-              _poses,
-              imageSize: _imageSize!,
-              isFrontCamera: _isFrontCamera,
+
+          // ✅ Pose skeleton overlay
+          Positioned.fill(
+            child: CustomPaint(
+              painter: PosePainter(
+                _poses,
+                imageSize: _imageSize!,
+                isFrontCamera: _isFrontCamera,
+              ),
             ),
-            size: Size.infinite,
           ),
+
+          // ✅ Rep count UI
           Positioned(
             bottom: 60,
             left: 0,
