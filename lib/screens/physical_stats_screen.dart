@@ -29,7 +29,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   String originalBodyType = '';
   bool originalHasInjury = false;
 
-  String selectedInjuryCategory = 'None'; // Initialize with 'None'
+  String selectedInjuryCategory = 'None';
   final List<String> injuryCategories = [
     "Knee Pain",
     "Back Pain",
@@ -50,6 +50,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     super.initState();
     _loadData();
     currentWeightController.addListener(_onFieldChanged);
+    targetWeightController.addListener(_onFieldChanged); // Added listener for target weight
     heightController.addListener(_onFieldChanged);
   }
 
@@ -149,10 +150,11 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
   bool get hasChanges {
     return currentWeightController.text.trim() != originalCurrentWeight ||
-        targetWeightController.text.trim() != originalTargetWeight ||
+        targetWeightController.text.trim() != originalTargetWeight || // Fixed this line
         heightController.text.trim() != originalHeight ||
         hasInjury != originalHasInjury ||
-        (hasInjury && selectedInjuryCategory != originalInjuryDetails);
+        (hasInjury && selectedInjuryCategory != originalInjuryDetails) ||
+        updatedGoal != originalGoal;
   }
 
   Future<void> _saveData() async {
@@ -200,7 +202,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           originalHasInjury = hasInjury;
           originalInjuryDetails = hasInjury ? selectedInjuryCategory : 'None';
           originalBodyType = bmiCategory;
-          updatedGoal = updatedGoal;
+          originalGoal = updatedGoal; // Update originalGoal with the new value
           isEditing = false;
         });
       } else {
