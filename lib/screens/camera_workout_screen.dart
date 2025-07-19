@@ -35,11 +35,25 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   bool _isFrontCamera = true;
   bool _isInitialized = false;
 
+  int _repGoal = 10;
+  Stopwatch _stopwatch = Stopwatch();
+  late Timer _timer;
+  String _elapsedTime = "00:00";
+
   @override
   void initState() {
     super.initState();
     _initializeCamera();
     _poseDetector = PoseDetector(options: PoseDetectorOptions());
+    _startTimer();
+  }
+
+  @override
+  void dispose() {
+    _cameraController?.dispose();
+    _poseDetector.close();
+    _timer.cancel();
+    super.dispose();
   }
 
   Future<void> _initializeCamera() async {
@@ -69,6 +83,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
           _cameraController!.value.previewSize!.width,
         );
         _isInitialized = true;
+        _stopwatch.start();
       });
 
       _cameraController!.startImageStream(_processCameraImage);
@@ -80,6 +95,18 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         );
       }
     }
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          final duration = _stopwatch.elapsed;
+          _elapsedTime =
+          "${duration.inMinutes.toString().padLeft(2, '0')}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}";
+        });
+      }
+    });
   }
 
   Future<void> _processCameraImage(CameraImage image) async {
@@ -140,14 +167,21 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       }
 
       if (diff > 100 && _isDownPosition) {
-        setState(() => _repCount++);
-        _isDownPosition = false;
+        setState(() {
+          _repCount++;
+          _isDownPosition = false;
+        });
+
+        if (_repCount >= _repGoal) {
+          saveCameraWorkout(); // Auto-save when goal is hit
+          _stopwatch.stop();
+        }
       }
     }
   }
 
   Future<void> saveCameraWorkout() async {
-    final url = Uri.parse('http://192.168.100.78/repEatApi/camera_workout_screen.php');
+    final url = Uri.parse('http://192.168.0.11/repEatApi/camera_workout_screen.php');
 
     final data = {
       'user_id': widget.userId,
@@ -155,7 +189,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       'category': widget.category,
       'exercise_name': widget.exercise,
       'detected_reps': _repCount,
-      'duration_seconds': 0,
+      'duration_seconds': _stopwatch.elapsed.inSeconds,
       'accuracy_score': 0,
     };
 
@@ -185,11 +219,34 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _cameraController?.dispose();
-    _poseDetector.close();
-    super.dispose();
+  void _setRepGoalDialog() {
+    final controller = TextEditingController(text: _repGoal.toString());
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Set Rep Goal"),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: "Enter rep goal"),
+        ),
+        actions: [
+          TextButton(
+            child: const Text("Cancel"),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: const Text("Set"),
+            onPressed: () {
+              setState(() {
+                _repGoal = int.tryParse(controller.text) ?? 10;
+              });
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -206,7 +263,13 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         backgroundColor: Colors.deepPurple,
         actions: [
           IconButton(
+            icon: const Icon(Icons.flag),
+            tooltip: 'Set Rep Goal',
+            onPressed: _setRepGoalDialog,
+          ),
+          IconButton(
             icon: const Icon(Icons.save),
+            tooltip: 'Save Workout',
             onPressed: saveCameraWorkout,
           )
         ],
@@ -236,7 +299,26 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
             ),
           ),
 
-          // ✅ Rep count UI
+          // ✅ Timer and rep goal progress
+          Positioned(
+            top: 20,
+            left: 20,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '⏱ $_elapsedTime',
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                ),
+                Text(
+                  '🎯 $_repCount / $_repGoal reps',
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                ),
+              ],
+            ),
+          ),
+
+          // ✅ Rep count big UI
           Positioned(
             bottom: 60,
             left: 0,
