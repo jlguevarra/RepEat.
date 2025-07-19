@@ -172,7 +172,17 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
     try {
       final res = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode(data));
+
+      setState(() {
+        _repCount = 0;
+        _feedback = '';
+        _accuracyScore = 0;
+      });
+
       final result = jsonDecode(res.body);
+
+
+
       if (result['success']) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Workout Saved')));
       } else {
