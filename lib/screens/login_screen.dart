@@ -52,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setInt('user_id', userId);
         await prefs.setBool('is_onboarded', isOnboarded);
         await prefs.setBool('is_logged_in', true);
-        await prefs.setString('name', user['name']);
+        await prefs.setString('user_name', user['name']);
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Login successful')),

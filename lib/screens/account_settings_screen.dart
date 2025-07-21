@@ -12,12 +12,19 @@ class AccountSettingsScreen extends StatefulWidget {
 
 class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   final nameController = TextEditingController();
-  // Future enhancement: add controllers for password change if desired
+  final currentPasswordController = TextEditingController();
+  final newPasswordController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
 
   bool isLoading = true;
   bool isSaving = false;
+  bool isEditing = false;
+  bool obscureCurrentPassword = true;
+  bool obscureNewPassword = true;
+  bool obscureConfirmPassword = true;
 
   int? userId;
+  String originalName = '';
 
   @override
   void initState() {
@@ -39,13 +46,14 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
     try {
       final response = await http.get(Uri.parse(
-        'http://localhost/192.168.100.78get_profile.php?user_id=$userId',
+        'http://192.168.100.78/repEatApi/get_profile.php?user_id=$userId',
       ));
       final data = json.decode(response.body);
 
       if (data['success'] == true) {
         final profile = data['data'];
-        nameController.text = profile['name'] ?? '';
+        originalName = profile['name'] ?? '';
+        nameController.text = originalName;
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Failed to load account settings.')),
@@ -60,25 +68,91 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
+  bool get hasValidNameChanges {
+    return nameController.text.trim().isNotEmpty &&
+        nameController.text.trim() != originalName;
+  }
+
+  bool get hasPasswordChanges {
+    return currentPasswordController.text.isNotEmpty ||
+        newPasswordController.text.isNotEmpty ||
+        confirmPasswordController.text.isNotEmpty;
+  }
+
+  bool get isNewPasswordDifferent {
+    return newPasswordController.text.isNotEmpty &&
+        newPasswordController.text != currentPasswordController.text;
+  }
+
+  bool get hasValidPasswordChanges {
+    if (!hasPasswordChanges) return false;
+
+    return currentPasswordController.text.isNotEmpty &&
+        newPasswordController.text.isNotEmpty &&
+        confirmPasswordController.text.isNotEmpty &&
+        newPasswordController.text == confirmPasswordController.text &&
+        newPasswordController.text.length >= 8 &&
+        isNewPasswordDifferent;
+  }
+
+  bool get canSaveChanges {
+    // If editing name only
+    if (hasValidNameChanges && !hasPasswordChanges) return true;
+
+    // If editing password only
+    if (!hasValidNameChanges && hasValidPasswordChanges) return true;
+
+    // If editing both
+    if (hasValidNameChanges && hasValidPasswordChanges) return true;
+
+    return false;
+  }
+
   Future<void> _saveData() async {
     setState(() => isSaving = true);
 
     try {
+      final Map<String, dynamic> requestData = {
+        'user_id': userId,
+      };
+
+      // Only include name if it's changed
+      if (hasValidNameChanges) {
+        requestData['name'] = nameController.text.trim();
+      }
+
+      // Only include password fields if we're changing password
+      if (hasValidPasswordChanges) {
+        requestData['current_password'] = currentPasswordController.text.trim();
+        requestData['new_password'] = newPasswordController.text.trim();
+      }
+
       final response = await http.post(
-        Uri.parse('http://192.168.100.78/repEatApi/update_profile.php'),
-        body: {
-          'user_id': userId.toString(),
-          'name': nameController.text.trim(),
-        },
+        Uri.parse('http://192.168.100.78/repEatApi/update_account.php'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestData),
       );
 
       final data = json.decode(response.body);
 
       if (data['success'] == true) {
+        final prefs = await SharedPreferences.getInstance();
+        if (hasValidNameChanges) {
+          await prefs.setString('user_name', nameController.text.trim());
+          originalName = nameController.text.trim();
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Account updated.')),
+          SnackBar(content: Text(data['message'] ?? 'Account updated successfully.')),
         );
-        Navigator.pop(context);
+
+        // Clear password fields and exit edit mode
+        setState(() {
+          isEditing = false;
+          currentPasswordController.clear();
+          newPasswordController.clear();
+          confirmPasswordController.clear();
+        });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Failed to update account.')),
@@ -93,6 +167,28 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
+  Future<bool> _confirmDiscardChanges() async {
+    if (!hasValidNameChanges && !hasPasswordChanges) return true;
+
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved Changes'),
+        content: const Text('You have unsaved changes. Are you sure you want to discard them?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -105,54 +201,197 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       appBar: AppBar(
         title: const Text('Account Settings'),
         backgroundColor: Colors.deepPurple,
+        actions: [
+          IconButton(
+            icon: Icon(isEditing ? Icons.close : Icons.edit),
+            onPressed: () async {
+              if (isEditing && await _confirmDiscardChanges()) {
+                setState(() {
+                  isEditing = false;
+                  nameController.text = originalName;
+                  currentPasswordController.clear();
+                  newPasswordController.clear();
+                  confirmPasswordController.clear();
+                });
+              } else if (!isEditing) {
+                setState(() => isEditing = true);
+              }
+            },
+          ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Basic Info',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-            ),
-            const SizedBox(height: 8),
-            _textInput('Full Name', nameController),
-            const SizedBox(height: 30),
-
-            Center(
-              child: ElevatedButton(
-                onPressed: isSaving ? null : _saveData,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                ),
-                child: isSaving
-                    ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                )
-                    : const Text('Save', style: TextStyle(fontSize: 16)),
+      body: WillPopScope(
+        onWillPop: () async {
+          if (isEditing) return await _confirmDiscardChanges();
+          return true;
+        },
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Basic Information',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.deepPurple),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              _textInput('Full Name', nameController, isEditing),
+              const SizedBox(height: 24),
+
+              const Text(
+                'Password',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.deepPurple),
+              ),
+              const SizedBox(height: 8),
+              if (!isEditing)
+                _readOnlyPasswordField('Current Password'),
+              if (isEditing)
+                _passwordInput(
+                  'Current Password',
+                  currentPasswordController,
+                  obscureCurrentPassword,
+                      () => setState(() => obscureCurrentPassword = !obscureCurrentPassword),
+                ),
+              const SizedBox(height: 12),
+              if (!isEditing)
+                _readOnlyPasswordField('New Password'),
+              if (isEditing)
+                _passwordInput(
+                  'New Password',
+                  newPasswordController,
+                  obscureNewPassword,
+                      () => setState(() => obscureNewPassword = !obscureNewPassword),
+                ),
+              const SizedBox(height: 12),
+              if (!isEditing)
+                _readOnlyPasswordField('Confirm New Password'),
+              if (isEditing)
+                _passwordInput(
+                  'Confirm New Password',
+                  confirmPasswordController,
+                  obscureConfirmPassword,
+                      () => setState(() => obscureConfirmPassword = !obscureConfirmPassword),
+                ),
+
+              if (isEditing) ...[
+                if (newPasswordController.text.isNotEmpty && newPasswordController.text.length < 8)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Password must be at least 8 characters',
+                      style: TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+                if (newPasswordController.text.isNotEmpty &&
+                    confirmPasswordController.text.isNotEmpty &&
+                    newPasswordController.text != confirmPasswordController.text)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Passwords do not match',
+                      style: TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+                if (newPasswordController.text.isNotEmpty &&
+                    currentPasswordController.text.isNotEmpty &&
+                    !isNewPasswordDifferent)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text(
+                      'New password must be different from current password',
+                      style: TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+                const SizedBox(height: 16),
+              ],
+
+              const SizedBox(height: 30),
+              if (isEditing)
+                Center(
+                  child: ElevatedButton(
+                    onPressed: canSaveChanges && !isSaving ? _saveData : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      minimumSize: const Size(200, 50),
+                    ),
+                    child: isSaving
+                        ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                        : const Text('Save Changes', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _textInput(String label, TextEditingController controller) {
+  Widget _textInput(String label, TextEditingController controller, bool enabled) {
     return TextFormField(
       controller: controller,
+      enabled: enabled,
       decoration: InputDecoration(
         labelText: label,
         filled: true,
-        fillColor: Colors.white,
+        fillColor: enabled ? Colors.white : Colors.grey[200],
         contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
         ),
       ),
+      onChanged: (_) => setState(() {}),
+    );
+  }
+
+  Widget _passwordInput(
+      String label,
+      TextEditingController controller,
+      bool obscureText,
+      VoidCallback onToggleVisibility,
+      ) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      enabled: isEditing,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: isEditing ? Colors.white : Colors.grey[200],
+        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        suffixIcon: IconButton(
+          icon: Icon(
+            obscureText ? Icons.visibility : Icons.visibility_off,
+            color: Colors.grey,
+          ),
+          onPressed: onToggleVisibility,
+        ),
+      ),
+      onChanged: (_) => setState(() {}),
+    );
+  }
+
+  Widget _readOnlyPasswordField(String label) {
+    return TextFormField(
+      enabled: false,
+      obscureText: true,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: Colors.grey[200],
+        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        suffixIcon: const Icon(Icons.lock, color: Colors.grey),
+      ),
+      style: const TextStyle(color: Colors.black54),
     );
   }
 }

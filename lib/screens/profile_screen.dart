@@ -16,7 +16,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String fullName = '';
+  String fullName = 'User';
   bool isLoading = true;
 
   @override
@@ -27,10 +27,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
-    final storedName = prefs.getString('name');
-
     setState(() {
-      fullName = storedName ?? 'User';
+      fullName = prefs.getString('user_name') ?? 'User';
       isLoading = false;
     });
   }
@@ -100,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '$fullName',
+                      fullName,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -152,10 +150,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             context,
             icon: Icons.settings,
             title: 'Account Settings',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
-            ),
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+              );
+              _loadUserData(); // Always refresh when returning
+            },
           ),
 
           const SizedBox(height: 16),
