@@ -50,7 +50,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     super.initState();
     _loadData();
     currentWeightController.addListener(_onFieldChanged);
-    targetWeightController.addListener(_onFieldChanged); // Added listener for target weight
+    targetWeightController.addListener(_onFieldChanged);
     heightController.addListener(_onFieldChanged);
   }
 
@@ -150,7 +150,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
   bool get hasChanges {
     return currentWeightController.text.trim() != originalCurrentWeight ||
-        targetWeightController.text.trim() != originalTargetWeight || // Fixed this line
+        targetWeightController.text.trim() != originalTargetWeight ||
         heightController.text.trim() != originalHeight ||
         hasInjury != originalHasInjury ||
         (hasInjury && selectedInjuryCategory != originalInjuryDetails) ||
@@ -202,7 +202,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           originalHasInjury = hasInjury;
           originalInjuryDetails = hasInjury ? selectedInjuryCategory : 'None';
           originalBodyType = bmiCategory;
-          originalGoal = updatedGoal; // Update originalGoal with the new value
+          originalGoal = updatedGoal;
           isEditing = false;
         });
       } else {
@@ -337,18 +337,23 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                 ),
               ),
             const SizedBox(height: 30),
-            Center(
-              child: ElevatedButton(
-                onPressed: (!isEditing || !hasChanges || isSaving) ? null : _saveData,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+
+            // Only show save button when in edit mode
+            if (isEditing) ...[
+              Center(
+                child: ElevatedButton(
+                  onPressed: (!hasChanges || isSaving) ? null : _saveData,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                  ),
+                  child: isSaving
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Save', style: TextStyle(fontSize: 16)),
                 ),
-                child: isSaving
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('Save', style: TextStyle(fontSize: 16)),
               ),
-            ),
+              const SizedBox(height: 20),
+            ],
           ],
         ),
       ),
