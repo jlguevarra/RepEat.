@@ -159,7 +159,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   }
 
   Future<void> _saveWorkout() async {
-    final url = Uri.parse('http://192.168.0.11/repEatApi/camera_workout_screen.php');
+    final url = Uri.parse('http://192.168.100.78/repEatApi/camera_workout_screen.php');
     final data = {
       'user_id': widget.userId,
       'date': DateTime.now().toIso8601String().split('T')[0],
