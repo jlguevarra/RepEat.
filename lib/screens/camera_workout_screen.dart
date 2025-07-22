@@ -32,11 +32,13 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   int _preferredReps = 0;
   int _preferredSets = 0;
   int _currentSet = 1;
-  bool _isCurlingDown = false;
+  bool _isDownPosition = false;
   Size? _imageSize;
   List<Pose> _poses = [];
   bool _isFrontCamera = true;
   bool _isInitialized = false;
+  double? _prevWristX;
+  bool _dumbbellsReady = false;
 
   @override
   void initState() {
@@ -109,7 +111,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
       if (mounted) {
         setState(() => _poses = poses);
-        _detectBicepCurl(poses);
+        _countReps(poses);
       }
     } catch (e) {
       debugPrint('Pose detection error: $e');
@@ -142,37 +144,35 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     return buffer.toBytes();
   }
 
-  void _detectBicepCurl(List<Pose> poses) {
-    if (poses.isEmpty || _currentSet > _preferredSets) return;
+  void _countReps(List<Pose> poses) {
+    if (!_dumbbellsReady || poses.isEmpty || _currentSet > _preferredSets) return;
 
     final pose = poses.first;
-    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
-    final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
-    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
+    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final leftElbow = pose.landmarks[PoseLandmarkType.leftElbow];
+    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
 
-    if (rightShoulder == null || rightElbow == null || rightWrist == null) return;
+    if (leftShoulder == null || leftElbow == null || leftWrist == null) return;
 
-    final wristToElbow = (rightWrist.y - rightElbow.y).abs();
-    final elbowToShoulder = (rightElbow.y - rightShoulder.y).abs();
+    final elbowToWristY = (leftElbow.y - leftWrist.y);
+    final wristX = leftWrist.x;
+    final wristStabilityThreshold = 20.0;
+    _prevWristX ??= wristX;
+    final isStableWrist = (wristX - _prevWristX!).abs() < wristStabilityThreshold;
+    final distanceToShoulder = (leftWrist.y - leftShoulder.y).abs();
+    final isCurlingUp = elbowToWristY > 50;
+    final isCloseToShoulder = distanceToShoulder < 80;
 
-    // Heuristic: Only count if dumbbells are likely held
-    final holdingDumbbell = wristToElbow < 80;
-
-    if (!holdingDumbbell) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('❌ Please hold dumbbells to count reps.')),
-      );
-      return;
+    if (isCurlingUp && isStableWrist && isCloseToShoulder) {
+      if (!_isDownPosition) {
+        _isDownPosition = true;
+      }
     }
 
-    if (rightWrist.y > rightElbow.y + 40 && !_isCurlingDown) {
-      _isCurlingDown = true;
-    }
-
-    if (_isCurlingDown && rightWrist.y < rightShoulder.y + 40) {
+    if (_isDownPosition && elbowToWristY < 20) {
       setState(() {
         _repCount++;
-        _isCurlingDown = false;
+        _isDownPosition = false;
       });
 
       if (_repCount >= _preferredReps) {
@@ -192,11 +192,12 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         }
       }
     }
+
+    _prevWristX = wristX;
   }
 
   Future<void> saveCameraWorkout() async {
     final url = Uri.parse('http://192.168.0.11/repEatApi/camera_workout_screen.php');
-
     final data = {
       'user_id': widget.userId,
       'date': DateTime.now().toIso8601String().split('T')[0],
@@ -285,7 +286,20 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
             ),
           ),
           Positioned(
-            bottom: 60,
+            bottom: 100,
+            left: 10,
+            child: Row(
+              children: [
+                const Text('✔ Dumbbells Ready', style: TextStyle(color: Colors.white)),
+                Switch(
+                  value: _dumbbellsReady,
+                  onChanged: (val) => setState(() => _dumbbellsReady = val),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            bottom: 40,
             left: 0,
             right: 0,
             child: Center(
