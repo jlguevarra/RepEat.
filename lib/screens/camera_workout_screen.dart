@@ -32,7 +32,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   int _preferredReps = 0;
   int _preferredSets = 0;
   int _currentSet = 1;
-  bool _isDownPosition = false;
+  bool _isCurlingDown = false;
   Size? _imageSize;
   List<Pose> _poses = [];
   bool _isFrontCamera = true;
@@ -109,7 +109,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
       if (mounted) {
         setState(() => _poses = poses);
-        _countReps(poses);
+        _detectBicepCurl(poses);
       }
     } catch (e) {
       debugPrint('Pose detection error: $e');
@@ -142,41 +142,53 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     return buffer.toBytes();
   }
 
-  void _countReps(List<Pose> poses) {
+  void _detectBicepCurl(List<Pose> poses) {
     if (poses.isEmpty || _currentSet > _preferredSets) return;
 
     final pose = poses.first;
-    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
-    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
+    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
+    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
 
-    if (leftShoulder != null && leftHip != null) {
-      final diff = (leftShoulder.y - leftHip.y).abs();
+    if (rightShoulder == null || rightElbow == null || rightWrist == null) return;
 
-      if (diff < 50) {
-        _isDownPosition = true;
-      }
+    final wristToElbow = (rightWrist.y - rightElbow.y).abs();
+    final elbowToShoulder = (rightElbow.y - rightShoulder.y).abs();
 
-      if (diff > 100 && _isDownPosition) {
+    // Heuristic: Only count if dumbbells are likely held
+    final holdingDumbbell = wristToElbow < 80;
+
+    if (!holdingDumbbell) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('❌ Please hold dumbbells to count reps.')),
+      );
+      return;
+    }
+
+    if (rightWrist.y > rightElbow.y + 40 && !_isCurlingDown) {
+      _isCurlingDown = true;
+    }
+
+    if (_isCurlingDown && rightWrist.y < rightShoulder.y + 40) {
+      setState(() {
+        _repCount++;
+        _isCurlingDown = false;
+      });
+
+      if (_repCount >= _preferredReps) {
         setState(() {
-          _repCount++;
-          _isDownPosition = false;
+          _currentSet++;
+          _repCount = 0;
         });
 
-        if (_repCount >= _preferredReps) {
-          setState(() {
-            _currentSet++;
-            _repCount = 0;
-          });
-
-          if (_currentSet > _preferredSets) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('🎉 Workout Complete!')),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('✅ Set $_currentSet started')),
-            );
-          }
+        if (_currentSet > _preferredSets) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('🎉 Workout Complete!')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('✅ Set $_currentSet started')),
+          );
         }
       }
     }
