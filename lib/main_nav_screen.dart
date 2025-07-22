@@ -4,6 +4,7 @@ import 'screens/workout_screen.dart';
 import 'screens/meal_plan_screen.dart';
 import 'screens/profile_screen.dart';
 
+
 class MainNavScreen extends StatefulWidget {
   final int userId;
 
@@ -12,6 +13,7 @@ class MainNavScreen extends StatefulWidget {
   @override
   State<MainNavScreen> createState() => _MainNavScreenState();
 }
+
 
 class _MainNavScreenState extends State<MainNavScreen> {
   int _selectedIndex = 0;

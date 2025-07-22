@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -30,20 +29,43 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   late PoseDetector _poseDetector;
   bool _isBusy = false;
   int _repCount = 0;
-  bool _isDown = false;
+  int _preferredReps = 0;
+  int _preferredSets = 0;
+  int _currentSet = 1;
+  bool _isDownPosition = false;
   Size? _imageSize;
   List<Pose> _poses = [];
   bool _isFrontCamera = true;
   bool _isInitialized = false;
-  String _feedback = '';
-  double _accuracyScore = 0;
-  Stopwatch _stopwatch = Stopwatch();
 
   @override
   void initState() {
     super.initState();
-    _initializeCamera();
     _poseDetector = PoseDetector(options: PoseDetectorOptions());
+    _fetchUserGoals().then((_) => _initializeCamera());
+  }
+
+  Future<void> _fetchUserGoals() async {
+    final url = Uri.parse('http://192.168.0.11/repEatApi/get_user_onboarding.php');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': widget.userId}),
+      );
+
+      final result = jsonDecode(response.body);
+      if (result['success']) {
+        setState(() {
+          _preferredReps = int.tryParse(result['data']['preferred_reps'].toString()) ?? 10;
+          _preferredSets = int.tryParse(result['data']['preferred_sets'].toString()) ?? 3;
+        });
+      } else {
+        debugPrint('⚠️ ${result['message']}');
+      }
+    } catch (e) {
+      debugPrint('Fetch onboarding error: $e');
+    }
   }
 
   Future<void> _initializeCamera() async {
@@ -56,11 +78,17 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       orElse: () => cameras.first,
     );
 
-    _cameraController = CameraController(camera, ResolutionPreset.medium, enableAudio: false);
+    _isFrontCamera = camera.lensDirection == CameraLensDirection.front;
+
+    _cameraController = CameraController(
+      camera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
+
     await _cameraController!.initialize();
 
     setState(() {
-      _isFrontCamera = camera.lensDirection == CameraLensDirection.front;
       _imageSize = Size(
         _cameraController!.value.previewSize!.height,
         _cameraController!.value.previewSize!.width,
@@ -69,7 +97,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     });
 
     _cameraController!.startImageStream(_processCameraImage);
-    _stopwatch.start();
   }
 
   Future<void> _processCameraImage(CameraImage image) async {
@@ -77,28 +104,34 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     _isBusy = true;
 
     try {
-      final inputImage = InputImage.fromBytes(
-        bytes: _concatenatePlanes(image.planes),
-        metadata: InputImageMetadata(
-          size: Size(image.width.toDouble(), image.height.toDouble()),
-          rotation: _isFrontCamera ? InputImageRotation.rotation270deg : InputImageRotation.rotation90deg,
-          format: InputImageFormat.nv21,
-          bytesPerRow: image.planes[0].bytesPerRow,
-        ),
-      );
-
+      final inputImage = _getInputImage(image);
       final poses = await _poseDetector.processImage(inputImage);
+
       if (mounted) {
-        setState(() {
-          _poses = poses;
-        });
-        _analyzePushUpPose(poses);
+        setState(() => _poses = poses);
+        _countReps(poses);
       }
     } catch (e) {
       debugPrint('Pose detection error: $e');
     } finally {
       _isBusy = false;
     }
+  }
+
+  InputImage _getInputImage(CameraImage image) {
+    final rotation = _isFrontCamera
+        ? InputImageRotation.rotation270deg
+        : InputImageRotation.rotation90deg;
+
+    return InputImage.fromBytes(
+      bytes: _concatenatePlanes(image.planes),
+      metadata: InputImageMetadata(
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: rotation,
+        format: InputImageFormat.nv21,
+        bytesPerRow: image.planes[0].bytesPerRow,
+      ),
+    );
   }
 
   Uint8List _concatenatePlanes(List<Plane> planes) {
@@ -109,87 +142,86 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     return buffer.toBytes();
   }
 
-  void _analyzePushUpPose(List<Pose> poses) {
-    if (poses.isEmpty) return;
+  void _countReps(List<Pose> poses) {
+    if (poses.isEmpty || _currentSet > _preferredSets) return;
 
     final pose = poses.first;
     final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
-    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
-    final leftElbow = pose.landmarks[PoseLandmarkType.leftElbow];
-    final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
     final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
-    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
 
-    if ([leftShoulder, rightShoulder, leftElbow, rightElbow, leftHip, rightHip].any((l) => l == null)) {
-      _feedback = 'Ensure full body is visible';
-      return;
-    }
+    if (leftShoulder != null && leftHip != null) {
+      final diff = (leftShoulder.y - leftHip.y).abs();
 
-    final shoulderY = (leftShoulder!.y + rightShoulder!.y) / 2;
-    final hipY = (leftHip!.y + rightHip!.y) / 2;
-    final elbowAngle = _calculateAngle(leftShoulder, leftElbow!, leftHip);
-
-    // Check if form is correct
-    if (elbowAngle < 70) {
-      _feedback = 'Too low. Push up!';
-      _isDown = true;
-    } else if (elbowAngle > 160) {
-      if (_isDown) {
-        _repCount++;
-        _isDown = false;
+      if (diff < 50) {
+        _isDownPosition = true;
       }
-      _feedback = 'Good Form';
-    } else {
-      _feedback = 'Lower more';
+
+      if (diff > 100 && _isDownPosition) {
+        setState(() {
+          _repCount++;
+          _isDownPosition = false;
+        });
+
+        if (_repCount >= _preferredReps) {
+          setState(() {
+            _currentSet++;
+            _repCount = 0;
+          });
+
+          if (_currentSet > _preferredSets) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('🎉 Workout Complete!')),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('✅ Set $_currentSet started')),
+            );
+          }
+        }
+      }
     }
-
-    // Estimate accuracy
-    _accuracyScore = elbowAngle.clamp(70, 160) / 180;
   }
 
-  double _calculateAngle(PoseLandmark a, PoseLandmark b, PoseLandmark c) {
-    final ab = Offset(a.x - b.x, a.y - b.y);
-    final cb = Offset(c.x - b.x, c.y - b.y);
+  Future<void> saveCameraWorkout() async {
+    final url = Uri.parse('http://192.168.0.11/repEatApi/camera_workout_screen.php');
 
-    final dot = ab.dx * cb.dx + ab.dy * cb.dy;
-    final abMag = sqrt(ab.dx * ab.dx + ab.dy * ab.dy);
-    final cbMag = sqrt(cb.dx * cb.dx + cb.dy * cb.dy);
-    final cosine = dot / (abMag * cbMag);
-    return acos(cosine) * (180 / pi);
-  }
-
-  Future<void> _saveWorkout() async {
-    final url = Uri.parse('http://192.168.100.78/repEatApi/camera_workout_screen.php');
     final data = {
       'user_id': widget.userId,
       'date': DateTime.now().toIso8601String().split('T')[0],
       'category': widget.category,
       'exercise_name': widget.exercise,
       'detected_reps': _repCount,
-      'duration_seconds': _stopwatch.elapsed.inSeconds,
-      'accuracy_score': double.parse(_accuracyScore.toStringAsFixed(2)),
+      'duration_seconds': 0,
+      'accuracy_score': 0,
     };
 
     try {
-      final res = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode(data));
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(data),
+      );
 
-      setState(() {
-        _repCount = 0;
-        _feedback = '';
-        _accuracyScore = 0;
-      });
-
-      final result = jsonDecode(res.body);
-
-
-
+      final result = jsonDecode(response.body);
       if (result['success']) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Workout Saved')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✅ Workout saved')),
+          );
+          setState(() {
+            _repCount = 0;
+            _currentSet = 1;
+          });
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ ${result['message']}')));
+        throw Exception(result['message']);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: $e')),
+        );
+      }
     }
   }
 
@@ -197,22 +229,26 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   void dispose() {
     _cameraController?.dispose();
     _poseDetector.close();
-    _stopwatch.stop();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     if (!_isInitialized) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Push-Up Counter'),
+        title: const Text('Workout Rep Counter'),
         backgroundColor: Colors.deepPurple,
         actions: [
-          IconButton(icon: const Icon(Icons.save), onPressed: _saveWorkout)
+          IconButton(
+            icon: const Icon(Icons.save),
+            onPressed: saveCameraWorkout,
+          ),
         ],
       ),
       body: Stack(
@@ -229,38 +265,44 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
           ),
           Positioned.fill(
             child: CustomPaint(
-              painter: PosePainter(_poses, imageSize: _imageSize!, isFrontCamera: _isFrontCamera),
+              painter: PosePainter(
+                _poses,
+                imageSize: _imageSize!,
+                isFrontCamera: _isFrontCamera,
+              ),
             ),
           ),
           Positioned(
-            bottom: 80,
+            bottom: 60,
             left: 0,
             right: 0,
-            child: Column(
-              children: [
-                Text(
-                  '$_repCount',
-                  style: const TextStyle(fontSize: 80, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                const Text('Reps Counted', style: TextStyle(color: Colors.white)),
-                const SizedBox(height: 10),
-                Text(
-                  _feedback,
-                  style: const TextStyle(color: Colors.yellowAccent, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  'Accuracy: ${(_accuracyScore * 100).toStringAsFixed(1)}%',
-                  style: const TextStyle(color: Colors.white70),
-                )
-              ],
+            child: Center(
+              child: Column(
+                children: [
+                  Text(
+                    '$_repCount / $_preferredReps',
+                    style: const TextStyle(
+                      fontSize: 50,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Set $_currentSet / $_preferredSets',
+                    style: const TextStyle(fontSize: 20, color: Colors.white),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        onPressed: () => setState(() {
+          _repCount = 0;
+          _currentSet = 1;
+        }),
         backgroundColor: Colors.deepPurple,
-        onPressed: () => setState(() => _repCount = 0),
         child: const Icon(Icons.refresh),
       ),
     );
