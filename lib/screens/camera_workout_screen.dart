@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 import 'pose_painter.dart';
+import 'detectHammerCurls.dart';
+import 'detect_concentration_curls.dart';
 
 class CameraWorkoutScreen extends StatefulWidget {
   final int userId;
@@ -37,8 +40,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   List<Pose> _poses = [];
   bool _isFrontCamera = true;
   bool _isInitialized = false;
-  double? _prevWristX;
-  bool _dumbbellsReady = false;
 
   @override
   void initState() {
@@ -48,7 +49,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   }
 
   Future<void> _fetchUserGoals() async {
-    final url = Uri.parse('http://192.168.100.78/repEatApi/get_user_onboarding.php');
+    final url = Uri.parse('http://192.168.0.11/repEatApi/get_user_onboarding.php');
     try {
       final response = await http.post(
         url,
@@ -111,7 +112,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
       if (mounted) {
         setState(() => _poses = poses);
-        _countReps(poses);
+        _detectExerciseReps(poses);
       }
     } catch (e) {
       debugPrint('Pose detection error: $e');
@@ -144,60 +145,61 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     return buffer.toBytes();
   }
 
-  void _countReps(List<Pose> poses) {
-    if (!_dumbbellsReady || poses.isEmpty || _currentSet > _preferredSets) return;
+  void _detectExerciseReps(List<Pose> poses) {
+    if (poses.isEmpty || _currentSet > _preferredSets) return;
 
     final pose = poses.first;
-    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
-    final leftElbow = pose.landmarks[PoseLandmarkType.leftElbow];
-    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
+    bool previousDown = _isDownPosition;
 
-    if (leftShoulder == null || leftElbow == null || leftWrist == null) return;
-
-    final elbowToWristY = (leftElbow.y - leftWrist.y);
-    final wristX = leftWrist.x;
-    final wristStabilityThreshold = 20.0;
-    _prevWristX ??= wristX;
-    final isStableWrist = (wristX - _prevWristX!).abs() < wristStabilityThreshold;
-    final distanceToShoulder = (leftWrist.y - leftShoulder.y).abs();
-    final isCurlingUp = elbowToWristY > 50;
-    final isCloseToShoulder = distanceToShoulder < 80;
-
-    if (isCurlingUp && isStableWrist && isCloseToShoulder) {
-      if (!_isDownPosition) {
-        _isDownPosition = true;
-      }
+    switch (widget.exercise) {
+      case 'Hammer Curls':
+        _isDownPosition = isHammerCurlRep(
+          pose: pose,
+          isDownPosition: _isDownPosition,
+          onRepDetected: () {
+            setState(() => _repCount++);
+            _checkSetCompletion();
+          },
+        );
+        break;
+      case 'Concentration Curls':
+        _isDownPosition = isConcentrationCurlRep(
+          pose: pose,
+          isDownPosition: _isDownPosition,
+          onRepDetected: () {
+            setState(() => _repCount++);
+            _checkSetCompletion();
+          },
+        );
+        break;
+      default:
+        debugPrint('No logic defined for this exercise.');
+        break;
     }
+  }
 
-    if (_isDownPosition && elbowToWristY < 20) {
+  void _checkSetCompletion() {
+    if (_repCount >= _preferredReps) {
       setState(() {
-        _repCount++;
-        _isDownPosition = false;
+        _currentSet++;
+        _repCount = 0;
       });
 
-      if (_repCount >= _preferredReps) {
-        setState(() {
-          _currentSet++;
-          _repCount = 0;
-        });
-
-        if (_currentSet > _preferredSets) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('🎉 Workout Complete!')),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('✅ Set $_currentSet started')),
-          );
-        }
+      if (_currentSet > _preferredSets) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🎉 Workout Complete!')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('✅ Set $_currentSet started')),
+        );
       }
     }
-
-    _prevWristX = wristX;
   }
 
   Future<void> saveCameraWorkout() async {
-    final url = Uri.parse('http://192.168.100.78/repEatApi/camera_workout_screen.php');
+    final url = Uri.parse('http://192.168.0.11/repEatApi/camera_workout_screen.php');
+
     final data = {
       'user_id': widget.userId,
       'date': DateTime.now().toIso8601String().split('T')[0],
@@ -286,20 +288,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
             ),
           ),
           Positioned(
-            bottom: 100,
-            left: 10,
-            child: Row(
-              children: [
-                const Text('✔ Dumbbells Ready', style: TextStyle(color: Colors.white)),
-                Switch(
-                  value: _dumbbellsReady,
-                  onChanged: (val) => setState(() => _dumbbellsReady = val),
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            bottom: 40,
+            bottom: 60,
             left: 0,
             right: 0,
             child: Center(

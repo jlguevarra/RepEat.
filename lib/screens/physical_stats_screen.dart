@@ -127,7 +127,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
     try {
       final response = await http.get(Uri.parse(
-        'http://192.168.100.78/repEatApi/get_profile.php?user_id=$userId',
+        'http://192.168.0.11/repEatApi/get_profile.php?user_id=$userId',
       ));
       final data = json.decode(response.body);
 
@@ -200,7 +200,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.78/repEatApi/update_physical_stats.php'),
+        Uri.parse('http://192.168.0.11/repEatApi/update_physical_stats.php'),
         body: {
           'user_id': userId.toString(),
           'current_weight': currentWeightController.text.trim(),
