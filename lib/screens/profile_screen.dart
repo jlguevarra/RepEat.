@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'login_screen.dart';
@@ -18,6 +20,8 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   String fullName = 'User';
   bool isLoading = true;
+  bool isRefreshing = false;
+  String? errorMessage;
 
   @override
   void initState() {
@@ -26,11 +30,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUserData() async {
-    final prefs = await SharedPreferences.getInstance();
+    try {
+      // First try to get from API
+      final response = await http.get(
+        Uri.parse('http://192.168.100.78/repEatApi/get_profile.php?user_id=${widget.userId}'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          final name = data['data']['name'] ?? 'User';
+
+          // Update local cache
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('user_name', name);
+
+          setState(() {
+            fullName = name;
+            isLoading = false;
+            isRefreshing = false;
+            errorMessage = null;
+          });
+          return;
+        } else {
+          // If API returns but with success=false
+          final prefs = await SharedPreferences.getInstance();
+          setState(() {
+            fullName = prefs.getString('user_name') ?? 'User';
+            isLoading = false;
+            isRefreshing = false;
+            errorMessage = 'Using cached data - ${data['message'] ?? 'API returned error'}';
+          });
+          return;
+        }
+      }
+
+      // If API fails completely (network error or status code != 200)
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        fullName = prefs.getString('user_name') ?? 'User';
+        isLoading = false;
+        isRefreshing = false;
+        errorMessage = 'Using cached data - Network error';
+      });
+
+    } catch (e) {
+      // Fall back to local cache if both API and cache fail
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        fullName = prefs.getString('user_name') ?? 'User';
+        isLoading = false;
+        isRefreshing = false;
+        errorMessage = 'Using cached data - ${e.toString()}';
+      });
+
+      if (errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage!)),
+        );
+      }
+    }
+  }
+
+  Future<void> _refreshData() async {
     setState(() {
-      fullName = prefs.getString('user_name') ?? 'User';
-      isLoading = false;
+      isRefreshing = true;
+      errorMessage = null;
     });
+    await _loadUserData();
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -81,99 +148,114 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Profile'),
         backgroundColor: Colors.deepPurple,
         elevation: 0,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                radius: 30,
-                backgroundColor: Colors.deepPurple,
-                child: Icon(Icons.person, color: Colors.white, size: 30),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      fullName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                    const Text(
-                      'Manage your account and preferences',
-                      style: TextStyle(
-                        color: Colors.black54,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          const Divider(),
-
-          _buildProfileOption(
-            context,
-            icon: Icons.fitness_center,
-            title: 'Fitness Goals',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const FitnessGoalsScreen()),
+        actions: [
+          if (errorMessage != null)
+            IconButton(
+              icon: const Icon(Icons.warning, color: Colors.amber),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(errorMessage!)),
+                );
+              },
             ),
-          ),
-          _buildProfileOption(
-            context,
-            icon: Icons.restaurant_menu,
-            title: 'Diet Preference',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const DietPreferenceScreen()),
-            ),
-          ),
-          _buildProfileOption(
-            context,
-            icon: Icons.straighten,
-            title: 'Physical Stats',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PhysicalStatsScreen()),
-            ),
-          ),
-          _buildProfileOption(
-            context,
-            icon: Icons.settings,
-            title: 'Account Settings',
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
-              );
-              _loadUserData(); // Always refresh when returning
-            },
-          ),
-
-          const SizedBox(height: 16),
-          const Divider(),
-
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => _logout(context),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.deepPurple,
-              side: const BorderSide(color: Colors.deepPurple),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            icon: const Icon(Icons.logout),
-            label: const Text('Logout'),
-          ),
         ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          children: [
+            Row(
+              children: [
+                const CircleAvatar(
+                  radius: 30,
+                  backgroundColor: Colors.deepPurple,
+                  child: Icon(Icons.person, color: Colors.white, size: 30),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fullName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                      const Text(
+                        'Manage your account and preferences',
+                        style: TextStyle(
+                          color: Colors.black54,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const Divider(),
+
+            _buildProfileOption(
+              context,
+              icon: Icons.fitness_center,
+              title: 'Fitness Goals',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const FitnessGoalsScreen()),
+              ),
+            ),
+            _buildProfileOption(
+              context,
+              icon: Icons.restaurant_menu,
+              title: 'Diet Preference',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DietPreferenceScreen()),
+              ),
+            ),
+            _buildProfileOption(
+              context,
+              icon: Icons.straighten,
+              title: 'Physical Stats',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PhysicalStatsScreen()),
+              ),
+            ),
+            _buildProfileOption(
+              context,
+              icon: Icons.settings,
+              title: 'Account Settings',
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+                );
+                await _refreshData();
+              },
+            ),
+
+            const SizedBox(height: 16),
+            const Divider(),
+
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _logout(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.deepPurple,
+                side: const BorderSide(color: Colors.deepPurple),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              icon: const Icon(Icons.logout),
+              label: const Text('Logout'),
+            ),
+          ],
+        ),
       ),
     );
   }
