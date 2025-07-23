@@ -49,6 +49,30 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     });
   }
 
+  Future<bool> _onWillPop() async {
+    if (!isEditing || !hasChanges) return true;
+
+    final shouldPop = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved Changes'),
+        content: const Text('You have unsaved changes. Are you sure you want to leave?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+
+    return shouldPop ?? false;
+  }
+
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     userId = prefs.getInt('user_id');
@@ -207,115 +231,126 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Fitness Goals'),
-        backgroundColor: Colors.deepPurple,
-        actions: [
-          if (isEditing)
-            IconButton(
-              icon: const Icon(Icons.cancel),
-              onPressed: _handleCancel,
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () {
-                setState(() {
-                  isEditing = true;
-                });
-              },
-            ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Fitness Goal',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-            ),
-            const SizedBox(height: 8),
-            isEditing
-                ? DropdownButtonFormField<String>(
-              value: selectedGoal,
-              items: allowedGoals.map((goal) {
-                return DropdownMenuItem(
-                  value: goal,
-                  child: Text(goal),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) setState(() => selectedGoal = val);
-              },
-              decoration: _inputDecoration(),
-            )
-                : Text(selectedGoal!, style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 20),
-
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Preferred Sets',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: setsController,
-                        keyboardType: TextInputType.number,
-                        readOnly: !isEditing,
-                        decoration: _inputDecoration(),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Preferred Reps',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: repsController,
-                        keyboardType: TextInputType.number,
-                        readOnly: !isEditing,
-                        decoration: _inputDecoration(),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Fitness Goals'),
+          backgroundColor: Colors.deepPurple,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () async {
+              if (await _onWillPop()) {
+                if (context.mounted) Navigator.pop(context);
+              }
+            },
+          ),
+          actions: [
             if (isEditing)
-              Center(
-                child: ElevatedButton(
-                  onPressed: (!hasChanges || isSaving) ? null : _saveData,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                  ),
-                  child: isSaving
-                      ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                      : const Text('Save', style: TextStyle(fontSize: 16)),
-                ),
+              IconButton(
+                icon: const Icon(Icons.cancel),
+                onPressed: _handleCancel,
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.edit),
+                onPressed: () {
+                  setState(() {
+                    isEditing = true;
+                  });
+                },
               ),
           ],
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Fitness Goal',
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
+              ),
+              const SizedBox(height: 8),
+              isEditing
+                  ? DropdownButtonFormField<String>(
+                value: selectedGoal,
+                items: allowedGoals.map((goal) {
+                  return DropdownMenuItem(
+                    value: goal,
+                    child: Text(goal),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => selectedGoal = val);
+                },
+                decoration: _inputDecoration(),
+              )
+                  : Text(selectedGoal!, style: const TextStyle(fontSize: 16)),
+              const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Preferred Sets',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: setsController,
+                          keyboardType: TextInputType.number,
+                          readOnly: !isEditing,
+                          decoration: _inputDecoration(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Preferred Reps',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: repsController,
+                          keyboardType: TextInputType.number,
+                          readOnly: !isEditing,
+                          decoration: _inputDecoration(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 30),
+
+              if (isEditing)
+                Center(
+                  child: ElevatedButton(
+                    onPressed: (!hasChanges || isSaving) ? null : _saveData,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                    ),
+                    child: isSaving
+                        ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                        : const Text('Save', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

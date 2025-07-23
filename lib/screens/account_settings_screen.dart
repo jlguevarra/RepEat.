@@ -96,16 +96,14 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   }
 
   bool get canSaveChanges {
-    // If editing name only
     if (hasValidNameChanges && !hasPasswordChanges) return true;
-
-    // If editing password only
     if (!hasValidNameChanges && hasValidPasswordChanges) return true;
-
-    // If editing both
     if (hasValidNameChanges && hasValidPasswordChanges) return true;
-
     return false;
+  }
+
+  bool get hasUnsavedChanges {
+    return hasValidNameChanges || hasPasswordChanges;
   }
 
   Future<void> _saveData() async {
@@ -116,12 +114,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         'user_id': userId,
       };
 
-      // Only include name if it's changed
       if (hasValidNameChanges) {
         requestData['name'] = nameController.text.trim();
       }
 
-      // Only include password fields if we're changing password
       if (hasValidPasswordChanges) {
         requestData['current_password'] = currentPasswordController.text.trim();
         requestData['new_password'] = newPasswordController.text.trim();
@@ -146,7 +142,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           SnackBar(content: Text(data['message'] ?? 'Account updated successfully.')),
         );
 
-        // Clear password fields and exit edit mode
         setState(() {
           isEditing = false;
           currentPasswordController.clear();
@@ -168,25 +163,49 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   }
 
   Future<bool> _confirmDiscardChanges() async {
-    if (!hasValidNameChanges && !hasPasswordChanges) return true;
+    if (!hasUnsavedChanges) return true;
 
     return await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Unsaved Changes'),
-        content: const Text('You have unsaved changes. Are you sure you want to discard them?'),
+        title: const Text('Cancel Changes?'),
+        content: const Text('Any unsaved changes will be lost. Are you sure?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('No'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard'),
+            child: const Text('Yes'),
           ),
         ],
       ),
     ) ?? false;
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!isEditing || !hasUnsavedChanges) return true;
+
+    final shouldPop = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved Changes'),
+        content: const Text('You have unsaved changes. Are you sure you want to leave?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+
+    return shouldPop ?? false;
   }
 
   @override
@@ -197,35 +216,40 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Account Settings'),
-        backgroundColor: Colors.deepPurple,
-        actions: [
-          IconButton(
-            icon: Icon(isEditing ? Icons.close : Icons.edit),
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Account Settings'),
+          backgroundColor: Colors.deepPurple,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
             onPressed: () async {
-              if (isEditing && await _confirmDiscardChanges()) {
-                setState(() {
-                  isEditing = false;
-                  nameController.text = originalName;
-                  currentPasswordController.clear();
-                  newPasswordController.clear();
-                  confirmPasswordController.clear();
-                });
-              } else if (!isEditing) {
-                setState(() => isEditing = true);
+              if (await _onWillPop()) {
+                if (context.mounted) Navigator.pop(context);
               }
             },
           ),
-        ],
-      ),
-      body: WillPopScope(
-        onWillPop: () async {
-          if (isEditing) return await _confirmDiscardChanges();
-          return true;
-        },
-        child: SingleChildScrollView(
+          actions: [
+            IconButton(
+              icon: Icon(isEditing ? Icons.close : Icons.edit),
+              onPressed: () async {
+                if (isEditing && await _confirmDiscardChanges()) {
+                  setState(() {
+                    isEditing = false;
+                    nameController.text = originalName;
+                    currentPasswordController.clear();
+                    newPasswordController.clear();
+                    confirmPasswordController.clear();
+                  });
+                } else if (!isEditing) {
+                  setState(() => isEditing = true);
+                }
+              },
+            ),
+          ],
+        ),
+        body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

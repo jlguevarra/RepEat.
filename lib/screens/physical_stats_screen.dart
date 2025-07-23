@@ -54,6 +54,30 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     heightController.addListener(_onFieldChanged);
   }
 
+  Future<bool> _onWillPop() async {
+    if (!isEditing || !hasChanges) return true;
+
+    final shouldPop = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved Changes'),
+        content: const Text('You have unsaved changes. Are you sure you want to leave?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+
+    return shouldPop ?? false;
+  }
+
   void _onFieldChanged() {
     if (isEditing) {
       _updateBMI();
@@ -259,102 +283,117 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Physical Stats'),
-        backgroundColor: Colors.deepPurple,
-        actions: [
-          IconButton(
-            icon: Icon(isEditing ? Icons.close : Icons.edit),
-            onPressed: () {
-              if (isEditing) {
-                _confirmCancel();
-              } else {
-                setState(() {
-                  isEditing = true;
-                });
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Physical Stats'),
+          backgroundColor: Colors.deepPurple,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () async {
+              if (await _onWillPop()) {
+                if (context.mounted) Navigator.pop(context);
               }
             },
           ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Body Measurements', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
-            const SizedBox(height: 8),
-            _textInput('Current Weight (kg)', currentWeightController),
-            const SizedBox(height: 12),
-            _textInput('Target Weight (kg)', targetWeightController),
-            const SizedBox(height: 12),
-            _textInput('Height (cm)', heightController),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.deepPurple.withOpacity(0.1),
-                border: Border.all(color: Colors.deepPurple),
-              ),
-              child: Text('BMI Category: $bmiCategory', style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold)),
+          actions: [
+            IconButton(
+              icon: Icon(isEditing ? Icons.close : Icons.edit),
+              onPressed: () {
+                if (isEditing) {
+                  _confirmCancel();
+                } else {
+                  setState(() {
+                    isEditing = true;
+                  });
+                }
+              },
             ),
-            const SizedBox(height: 20),
-            const Text('Injury Information', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
-            SwitchListTile(
-              title: const Text('Do you have an injury?'),
-              value: hasInjury,
-              activeColor: Colors.deepPurple,
-              onChanged: isEditing
-                  ? (val) {
-                setState(() {
-                  hasInjury = val;
-                  selectedInjuryCategory = val ? injuryCategories.first : 'None';
-                });
-              }
-                  : null,
-            ),
-            if (hasInjury && isEditing)
-              DropdownButtonFormField<String>(
-                value: selectedInjuryCategory != 'None' ? selectedInjuryCategory : injuryCategories.first,
-                items: injuryCategories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      selectedInjuryCategory = val;
-                    });
-                  }
-                },
-                decoration: const InputDecoration(labelText: 'Injury Category', border: OutlineInputBorder()),
-              ),
-            if (!isEditing)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'Injury Details: ${hasInjury ? (originalInjuryDetails.isNotEmpty ? originalInjuryDetails : 'None') : 'None'}',
-                  style: const TextStyle(fontSize: 16),
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Body Measurements', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+              const SizedBox(height: 8),
+              _textInput('Current Weight (kg)', currentWeightController),
+              const SizedBox(height: 12),
+              _textInput('Target Weight (kg)', targetWeightController),
+              const SizedBox(height: 12),
+              _textInput('Height (cm)', heightController),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.deepPurple.withOpacity(0.1),
+                  border: Border.all(color: Colors.deepPurple),
                 ),
-              ),
-            const SizedBox(height: 30),
-
-            // Only show save button when in edit mode
-            if (isEditing) ...[
-              Center(
-                child: ElevatedButton(
-                  onPressed: (!hasChanges || isSaving) ? null : _saveData,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                  ),
-                  child: isSaving
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Save', style: TextStyle(fontSize: 16)),
-                ),
+                child: Text('BMI Category: $bmiCategory', style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 20),
+              const Text('Injury Information', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+              SwitchListTile(
+                title: const Text('Do you have an injury?'),
+                value: hasInjury,
+                activeColor: Colors.deepPurple,
+                onChanged: isEditing
+                    ? (val) {
+                  setState(() {
+                    hasInjury = val;
+                    selectedInjuryCategory = val ? injuryCategories.first : 'None';
+                  });
+                }
+                    : null,
+              ),
+              if (hasInjury && isEditing)
+                DropdownButtonFormField<String>(
+                  value: selectedInjuryCategory != 'None' ? selectedInjuryCategory : injuryCategories.first,
+                  items: injuryCategories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        selectedInjuryCategory = val;
+                      });
+                    }
+                  },
+                  decoration: const InputDecoration(labelText: 'Injury Category', border: OutlineInputBorder()),
+                ),
+              if (!isEditing)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Injury Details: ${hasInjury ? (originalInjuryDetails.isNotEmpty ? originalInjuryDetails : 'None') : 'None'}',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
+              const SizedBox(height: 30),
+
+              // Only show save button when in edit mode
+              if (isEditing) ...[
+                Center(
+                  child: ElevatedButton(
+                    onPressed: (!hasChanges || isSaving) ? null : _saveData,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                    ),
+                    child: isSaving
+                        ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                        : const Text('Save', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
