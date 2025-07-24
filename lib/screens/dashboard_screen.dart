@@ -238,7 +238,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => CalendarScreen(userId: widget.userId),
+                      builder: (_) => GymPlannerScreen (userId: widget.userId),
                     ),
                   );
                 },

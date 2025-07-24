@@ -4,36 +4,75 @@ import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-class CalendarScreen extends StatefulWidget {
+class GymPlannerScreen extends StatefulWidget {
   final int userId;
 
-  const CalendarScreen({super.key, required this.userId});
+  const GymPlannerScreen({super.key, required this.userId});
 
   @override
-  State<CalendarScreen> createState() => _CalendarScreenState();
+  State<GymPlannerScreen> createState() => _GymPlannerScreenState();
 }
 
-class _CalendarScreenState extends State<CalendarScreen> {
+class _GymPlannerScreenState extends State<GymPlannerScreen> {
   late DateTime _focusedDay;
   DateTime? _selectedDay;
-  Map<DateTime, List<WorkoutNote>> _workouts = {};
+  Map<DateTime, List<GymExercise>> _workouts = {};
   bool _isLoading = false;
-  CalendarFormat _calendarFormat = CalendarFormat.month;
-  final TextEditingController _noteController = TextEditingController();
-  bool _showNoteInput = false;
+  CalendarFormat _calendarFormat = CalendarFormat.week;
+  final TextEditingController _setsController = TextEditingController();
+  final TextEditingController _repsController = TextEditingController();
+  bool _showExerciseForm = false;
   int? _editingWorkoutId;
+  String _formMode = 'add';
+  String? _selectedMuscleGroup;
+  String? _selectedExercise;
+  int _selectedSets = 3;
+  int _selectedReps = 10;
+
+  final Map<String, List<Map<String, String>>> _exercises = {
+    'Biceps': [
+      {'name': 'Dumbbell Curls'},
+      {'name': 'Hammer Curls'},
+      {'name': 'Concentration Curls'},
+    ],
+    'Triceps': [
+      {'name': 'Tricep Kickbacks'},
+      {'name': 'Overhead Extensions'},
+    ],
+    'Shoulders': [
+      {'name': 'Shoulder Press'},
+      {'name': 'Lateral Raise'},
+      {'name': 'Front Raise'},
+    ],
+    'Chest': [
+      {'name': 'Dumbbell Bench Press'},
+      {'name': 'Dumbbell Fly'},
+    ],
+    'Back': [
+      {'name': 'Dumbbell Rows'},
+      {'name': 'Reverse Fly'},
+    ],
+    'Legs': [
+      {'name': 'Goblet Squats'},
+      {'name': 'Dumbbell Lunges'},
+      {'name': 'Dumbbell Deadlifts'},
+    ],
+  };
 
   @override
   void initState() {
     super.initState();
     _focusedDay = DateTime.now();
     _selectedDay = DateTime.now();
+    _setsController.text = '3';
+    _repsController.text = '10';
     _fetchWorkouts();
   }
 
   @override
   void dispose() {
-    _noteController.dispose();
+    _setsController.dispose();
+    _repsController.dispose();
     super.dispose();
   }
 
@@ -41,31 +80,31 @@ class _CalendarScreenState extends State<CalendarScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.0.11/repEatApi/get_workout_history.php?user_id=${widget.userId}'),
+        Uri.parse('http://192.168.0.11/gymPlannerApi/get_workouts.php?user_id=${widget.userId}'),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success']) {
-          final Map<DateTime, List<WorkoutNote>> newWorkouts = {};
+          final Map<DateTime, List<GymExercise>> newWorkouts = {};
           for (var workout in data['data']) {
             final date = DateTime.parse(workout['date']);
-            final note = WorkoutNote(
+            final exercise = GymExercise(
               workoutId: workout['workout_id'],
               userId: workout['user_id'],
               date: date,
-              category: workout['category'],
+              muscleGroup: workout['muscle_group'],
               exerciseName: workout['exercise_name'],
               sets: workout['sets'],
               reps: workout['reps'],
-              note: workout['note'],
+              isCompleted: workout['is_completed'] == 1,
             );
 
             final normalizedDate = DateTime(date.year, date.month, date.day);
             if (newWorkouts.containsKey(normalizedDate)) {
-              newWorkouts[normalizedDate]!.add(note);
+              newWorkouts[normalizedDate]!.add(exercise);
             } else {
-              newWorkouts[normalizedDate] = [note];
+              newWorkouts[normalizedDate] = [exercise];
             }
           }
 
@@ -73,121 +112,173 @@ class _CalendarScreenState extends State<CalendarScreen> {
         }
       }
     } catch (e) {
-      _showErrorSnackbar('Failed to load workouts: $e');
+      _showSnackbar('Failed to load workouts: $e', isError: true);
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  void _showErrorSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-
-  void _showSuccessSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
-
-  void _toggleNoteInput({WorkoutNote? workout}) {
+  void _toggleExerciseForm({GymExercise? workout}) {
     setState(() {
-      _showNoteInput = !_showNoteInput;
+      _showExerciseForm = !_showExerciseForm;
       _editingWorkoutId = workout?.workoutId;
-      _noteController.text = workout?.note ?? '';
+      _formMode = workout == null ? 'add' : 'edit';
+
+      if (workout != null) {
+        _selectedMuscleGroup = workout.muscleGroup;
+        _selectedExercise = workout.exerciseName;
+        _setsController.text = workout.sets.toString();
+        _repsController.text = workout.reps.toString();
+      } else {
+        _selectedMuscleGroup = null;
+        _selectedExercise = null;
+        _setsController.text = '3';
+        _repsController.text = '10';
+      }
     });
   }
 
-  Future<void> _saveNote() async {
-    if (_selectedDay == null || _noteController.text.isEmpty) return;
+  Future<void> _saveWorkout() async {
+    if (_selectedDay == null ||
+        _selectedMuscleGroup == null ||
+        _selectedExercise == null) return;
 
     setState(() => _isLoading = true);
     try {
-      final normalizedDate = DateTime(
-        _selectedDay!.year,
-        _selectedDay!.month,
-        _selectedDay!.day,
-      );
+      final workoutData = {
+        if (_editingWorkoutId != null) 'workout_id': _editingWorkoutId,
+        'user_id': widget.userId,
+        'date': DateFormat('yyyy-MM-dd').format(_selectedDay!),
+        'muscle_group': _selectedMuscleGroup,
+        'exercise_name': _selectedExercise,
+        'sets': int.parse(_setsController.text),
+        'reps': int.parse(_repsController.text),
+        'is_completed': false,
+      };
 
-      if (_editingWorkoutId != null) {
-        // Update existing note
-        final response = await http.post(
-          Uri.parse('http://192.168.0.11/repEatApi/update_note.php'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({
-            'workout_id': _editingWorkoutId,
-            'note': _noteController.text,
-          }),
-        );
+      final endpoint = _formMode == 'add'
+          ? 'http://192.168.0.11/gymPlannerApi/save_workout.php'
+          : 'http://192.168.0.11/gymPlannerApi/update_workout.php';
 
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          if (data['success']) {
-            await _fetchWorkouts();
-            _showSuccessSnackbar('Note updated successfully!');
-            _toggleNoteInput();
-          }
-        }
-      } else {
-        // Create new note
-        final response = await http.post(
-          Uri.parse('http://192.168.0.11/repEatApi/save_note.php'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({
-            'user_id': widget.userId,
-            'date': DateFormat('yyyy-MM-dd').format(_selectedDay!),
-            'category': 'General',
-            'exercise_name': 'Workout Note',
-            'sets': 0,
-            'reps': 0,
-            'note': _noteController.text,
-          }),
-        );
-
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          if (data['success']) {
-            await _fetchWorkouts();
-            _showSuccessSnackbar('Note saved successfully!');
-            _toggleNoteInput();
-          }
-        }
-      }
-    } catch (e) {
-      _showErrorSnackbar('Error saving note: $e');
-    } finally {
-      setState(() {
-        _isLoading = false;
-        _editingWorkoutId = null;
-      });
-    }
-  }
-
-  Future<void> _deleteWorkout(int workoutId) async {
-    setState(() => _isLoading = true);
-    try {
-      final response = await http.delete(
-        Uri.parse('http://192.168.0.11/repEatApi/delete_workout.php?workout_id=$workoutId'),
+      final response = await http.post(
+        Uri.parse(endpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(workoutData),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success']) {
           await _fetchWorkouts();
-          _showSuccessSnackbar('Workout deleted successfully!');
+          _showSnackbar('Workout ${_formMode == 'add' ? 'added' : 'updated'} successfully!');
+          _toggleExerciseForm();
+        } else {
+          _showSnackbar(data['message'], isError: true);
         }
       }
     } catch (e) {
-      _showErrorSnackbar('Error deleting workout: $e');
+      _showSnackbar('Error saving workout: $e', isError: true);
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleWorkoutCompletion(int workoutId, bool isCompleted) async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await http.post(
+        Uri.parse('http://192.168.0.11/gymPlannerApi/toggle_workout_completion.php'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'workout_id': workoutId,
+          'is_completed': isCompleted ? 0 : 1,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (!data['success']) {
+          _showSnackbar(data['message'], isError: true);
+        }
+        await _fetchWorkouts();
+      }
+    } catch (e) {
+      _showSnackbar('Error updating workout: $e', isError: true);
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteWorkout(int workoutId) async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await http.post(
+        Uri.parse('http://192.168.0.11/gymPlannerApi/delete_workout.php'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'workout_id': workoutId}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success']) {
+          await _fetchWorkouts();
+          _showSnackbar('Workout deleted successfully!');
+        } else {
+          _showSnackbar(data['message'], isError: true);
+        }
+      }
+    } catch (e) {
+      _showSnackbar('Error deleting workout: $e', isError: true);
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showSnackbar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Color _getMuscleGroupColor(String muscleGroup) {
+    switch (muscleGroup) {
+      case 'Biceps':
+        return Colors.blue.shade100;
+      case 'Triceps':
+        return Colors.green.shade100;
+      case 'Shoulders':
+        return Colors.purple.shade100;
+      case 'Chest':
+        return Colors.orange.shade100;
+      case 'Back':
+        return Colors.yellow.shade100;
+      case 'Legs':
+        return Colors.red.shade100;
+      default:
+        return Colors.grey.shade100;
+    }
+  }
+
+  IconData _getMuscleGroupIcon(String muscleGroup) {
+    switch (muscleGroup) {
+      case 'Biceps':
+        return Icons.fitness_center;
+      case 'Triceps':
+        return Icons.accessibility;
+      case 'Shoulders':
+        return Icons.arrow_upward;
+      case 'Chest':
+        return Icons.people;
+      case 'Back':
+        return Icons.arrow_back;
+      case 'Legs':
+        return Icons.directions_walk;
+      default:
+        return Icons.sports_gymnastics;
     }
   }
 
@@ -195,7 +286,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Workout Calendar'),
+        title: const Text('Gym Workout Planner', style: TextStyle(fontSize: 18)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -204,22 +295,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TableCalendar(
-              firstDay: DateTime.utc(2020, 1, 1),
-              lastDay: DateTime.utc(2030, 12, 31),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _toggleExerciseForm(),
+        child: const Icon(Icons.add),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+        children: [
+          Card(
+            margin: const EdgeInsets.all(8),
+            elevation: 2,
+            child: TableCalendar(
+              firstDay: DateTime.now().subtract(const Duration(days: 365)),
+              lastDay: DateTime.now().add(const Duration(days: 365)),
               focusedDay: _focusedDay,
               selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
               onDaySelected: (selectedDay, focusedDay) {
                 setState(() {
                   _selectedDay = selectedDay;
                   _focusedDay = focusedDay;
-                  _showNoteInput = false;
-                  _editingWorkoutId = null;
+                  _showExerciseForm = false;
                 });
               },
               onPageChanged: (focusedDay) => _focusedDay = focusedDay,
@@ -231,115 +327,130 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   color: Theme.of(context).primaryColor,
                   shape: BoxShape.circle,
                 ),
-                markersAlignment: Alignment.bottomRight,
-                markerSize: 8,
-                markerMargin: const EdgeInsets.only(bottom: 4, right: 4),
+                todayDecoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.3),
+                  shape: BoxShape.circle,
+                ),
+                selectedDecoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor,
+                  shape: BoxShape.circle,
+                ),
               ),
-              headerStyle: const HeaderStyle(
-                formatButtonVisible: true,
+              headerStyle: HeaderStyle(
+                formatButtonVisible: false,
                 titleCentered: true,
               ),
             ),
+          ),
+          if (_showExerciseForm) _buildExerciseForm(),
+          Expanded(
+            child: _buildWorkoutList(),
+          ),
+        ],
+      ),
+    );
+  }
 
-            if (_selectedDay != null) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.note_add),
-                        label: const Text('Add Note'),
-                        onPressed: () => _toggleNoteInput(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.deepPurple,
-                          minimumSize: const Size(double.infinity, 50),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  DateFormat.yMMMMd().format(_selectedDay!),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-
-            if (_showNoteInput && _selectedDay != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Card(
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        Text(
-                          _editingWorkoutId != null ? 'Edit Note' : 'Add Note',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _noteController,
-                          maxLines: 3,
-                          decoration: const InputDecoration(
-                            hintText: 'Write your workout notes here...',
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.all(12),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed: _toggleNoteInput,
-                              child: const Text('Cancel'),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton(
-                              onPressed: _saveNote,
-                              child: const Text('Save'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                'Workouts:',
-                style: Theme.of(context).textTheme.titleMedium,
+  Widget _buildExerciseForm() {
+    return Card(
+      margin: const EdgeInsets.all(8),
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '${_formMode == 'add' ? 'Add New' : 'Edit'} Workout',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _selectedMuscleGroup,
+              items: _exercises.keys.map((muscleGroup) {
+                return DropdownMenuItem<String>(
+                  value: muscleGroup,
+                  child: Text(muscleGroup),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedMuscleGroup = value;
+                  _selectedExercise = null;
+                });
+              },
+              decoration: const InputDecoration(
+                labelText: 'Muscle Group',
+                border: OutlineInputBorder(),
               ),
             ),
-
-            // ✅ Constrain workout list height
-            SizedBox(
-              height: 400, // Adjust height as needed
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildWorkoutList(),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _selectedExercise,
+              items: _selectedMuscleGroup != null
+                  ? _exercises[_selectedMuscleGroup]!.map((exercise) {
+                return DropdownMenuItem<String>(
+                  value: exercise['name'],
+                  child: Text(exercise['name']!),
+                );
+              }).toList()
+                  : null,
+              onChanged: (value) => setState(() => _selectedExercise = value),
+              decoration: const InputDecoration(
+                labelText: 'Exercise',
+                border: OutlineInputBorder(),
+              ),
+              disabledHint: const Text('Select muscle group first'),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _setsController,
+                    decoration: const InputDecoration(
+                      labelText: 'Sets',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextField(
+                    controller: _repsController,
+                    decoration: const InputDecoration(
+                      labelText: 'Reps',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _toggleExerciseForm,
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _saveWorkout,
+                    child: Text(_formMode == 'add' ? 'Add' : 'Update'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
   }
-
 
   Widget _buildWorkoutList() {
     if (_selectedDay == null) {
@@ -351,19 +462,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
       _selectedDay!.month,
       _selectedDay!.day,
     );
+    final dayWorkouts = _workouts[normalizedDate] ?? [];
 
-    final workouts = _workouts[normalizedDate] ?? [];
-
-    if (workouts.isEmpty) {
+    if (dayWorkouts.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.fitness_center, size: 48, color: Colors.grey),
+            Icon(Icons.fitness_center, size: 64, color: Colors.grey.shade400),
             const SizedBox(height: 16),
             Text(
-              'No workouts for ${DateFormat.yMMMMd().format(_selectedDay!)}',
-              style: Theme.of(context).textTheme.titleMedium,
+              'No workouts for this day',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () => _toggleExerciseForm(),
+              child: const Text('Add Workout'),
             ),
           ],
         ),
@@ -371,92 +486,42 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     return ListView.builder(
-      itemCount: workouts.length,
+      padding: const EdgeInsets.all(8),
+      itemCount: dayWorkouts.length,
       itemBuilder: (context, index) {
-        final workout = workouts[index];
-        return Dismissible(
-          key: Key(workout.workoutId.toString()),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            color: Colors.red,
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            child: const Icon(Icons.delete, color: Colors.white),
-          ),
-          confirmDismiss: (direction) async {
-            return await showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Delete Workout'),
-                content: const Text('Are you sure you want to delete this workout?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('Cancel'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    child: const Text('Delete'),
-                  ),
-                ],
+        final workout = dayWorkouts[index];
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          color: _getMuscleGroupColor(workout.muscleGroup),
+          child: ListTile(
+            leading: Icon(_getMuscleGroupIcon(workout.muscleGroup)),
+            title: Text(
+              workout.exerciseName,
+              style: TextStyle(
+                decoration: workout.isCompleted ? TextDecoration.lineThrough : null,
+                fontWeight: FontWeight.bold,
               ),
-            );
-          },
-          onDismissed: (direction) => _deleteWorkout(workout.workoutId),
-          child: Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: InkWell(
-              onTap: () => _toggleNoteInput(workout: workout),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          workout.exerciseName,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          workout.category,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${workout.sets} sets × ${workout.reps} reps',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    if (workout.note != null && workout.note!.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          workout.note!,
-                          style: const TextStyle(fontSize: 15),
-                        ),
-                      ),
-                    ],
-                  ],
+            ),
+            subtitle: Text('${workout.sets} sets × ${workout.reps} reps'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    workout.isCompleted ? Icons.check_box : Icons.check_box_outline_blank,
+                    color: workout.isCompleted ? Colors.green : null,
+                  ),
+                  onPressed: () => _toggleWorkoutCompletion(workout.workoutId, workout.isCompleted),
                 ),
-              ),
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () => _toggleExerciseForm(workout: workout),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => _deleteWorkout(workout.workoutId),
+                ),
+              ],
             ),
           ),
         );
@@ -465,24 +530,24 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 }
 
-class WorkoutNote {
+class GymExercise {
   final int workoutId;
   final int userId;
   final DateTime date;
-  final String category;
+  final String muscleGroup;
   final String exerciseName;
   final int sets;
   final int reps;
-  final String? note;
+  final bool isCompleted;
 
-  WorkoutNote({
+  GymExercise({
     required this.workoutId,
     required this.userId,
     required this.date,
-    required this.category,
+    required this.muscleGroup,
     required this.exerciseName,
     required this.sets,
     required this.reps,
-    this.note,
+    required this.isCompleted,
   });
 }
