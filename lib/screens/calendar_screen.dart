@@ -57,6 +57,16 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
       {'name': 'Dumbbell Lunges'},
       {'name': 'Dumbbell Deadlifts'},
     ],
+    'Core': [
+      {'name': 'Plank'},
+      {'name': 'Sit-ups'},
+      {'name': 'Russian Twists'},
+    ],
+    'Cardio': [
+      {'name': 'Jumping Jacks'},
+      {'name': 'Running'},
+      {'name': 'Cycling'},
+    ],
   };
 
   @override
@@ -75,49 +85,43 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     _repsController.dispose();
     super.dispose();
   }
-
   Future<void> _fetchWorkouts() async {
     setState(() => _isLoading = true);
+
     try {
-      final response = await http.get(
-        Uri.parse('http://192.168.100.78/gymPlannerApi/get_workouts.php?user_id=${widget.userId}'),
-      );
+      final url = Uri.parse('http://192.168.0.11/repEatApi/get_workouts.php?user_id=${widget.userId}');
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success']) {
-          final Map<DateTime, List<GymExercise>> newWorkouts = {};
-          for (var workout in data['data']) {
-            final date = DateTime.parse(workout['date']);
-            final exercise = GymExercise(
-              workoutId: workout['workout_id'],
-              userId: workout['user_id'],
-              date: date,
-              muscleGroup: workout['muscle_group'],
-              exerciseName: workout['exercise_name'],
-              sets: workout['sets'],
-              reps: workout['reps'],
-              isCompleted: workout['is_completed'] == 1,
-            );
+        final decoded = json.decode(response.body) as Map<String, dynamic>;
 
-            final normalizedDate = DateTime(date.year, date.month, date.day);
-            if (newWorkouts.containsKey(normalizedDate)) {
-              newWorkouts[normalizedDate]!.add(exercise);
-            } else {
-              newWorkouts[normalizedDate] = [exercise];
+        if (decoded['success'] == true) {
+          final Map<DateTime, List<GymExercise>> newWorkouts = {};
+
+          for (var workout in decoded['data'] ?? []) {
+            try {
+              final exercise = GymExercise.fromJson(workout);
+              final normalizedDate = DateTime(exercise.date.year, exercise.date.month, exercise.date.day);
+              newWorkouts[normalizedDate] = [...newWorkouts[normalizedDate] ?? [], exercise];
+            } catch (e) {
+              debugPrint('Error parsing workout: $e');
             }
           }
 
           setState(() => _workouts = newWorkouts);
+        } else {
+          throw Exception(decoded['message'] ?? 'Failed to load workouts');
         }
+      } else {
+        throw Exception('HTTP ${response.statusCode}');
       }
     } catch (e) {
-      _showSnackbar('Failed to load workouts: $e', isError: true);
+      _showSnackbar('Failed to load workouts: ${e.toString()}', isError: true);
+      debugPrint('Error: $e');
     } finally {
       setState(() => _isLoading = false);
     }
   }
-
   void _toggleExerciseForm({GymExercise? workout}) {
     setState(() {
       _showExerciseForm = !_showExerciseForm;
@@ -139,9 +143,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
   }
 
   Future<void> _saveWorkout() async {
-    if (_selectedDay == null ||
-        _selectedMuscleGroup == null ||
-        _selectedExercise == null) return;
+    if (_selectedDay == null || _selectedMuscleGroup == null || _selectedExercise == null) return;
 
     setState(() => _isLoading = true);
     try {
@@ -153,12 +155,12 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
         'exercise_name': _selectedExercise,
         'sets': int.parse(_setsController.text),
         'reps': int.parse(_repsController.text),
-        'is_completed': false,
+        'note': '', // Add note field if needed
       };
 
       final endpoint = _formMode == 'add'
-          ? 'http://192.168.100.78/gymPlannerApi/save_workout.php'
-          : 'http://192.168.100.78/gymPlannerApi/update_workout.php';
+          ? 'http://192.168.0.11/repEatApi/save_workout.php'
+          : 'http://192.168.0.11/repEatApi/update_workout.php';
 
       final response = await http.post(
         Uri.parse(endpoint),
@@ -173,11 +175,14 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
           _showSnackbar('Workout ${_formMode == 'add' ? 'added' : 'updated'} successfully!');
           _toggleExerciseForm();
         } else {
-          _showSnackbar(data['message'], isError: true);
+          _showSnackbar(data['message'] ?? 'Operation failed', isError: true);
         }
+      } else {
+        throw Exception('HTTP ${response.statusCode}');
       }
     } catch (e) {
-      _showSnackbar('Error saving workout: $e', isError: true);
+      _showSnackbar('Error saving workout: ${e.toString()}', isError: true);
+      debugPrint('Error saving workout: $e');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -187,23 +192,26 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.78/gymPlannerApi/toggle_workout_completion.php'),
+        Uri.parse('http://192.168.0.11/repEatApi/toggle_workout_completion.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'workout_id': workoutId,
-          'is_completed': isCompleted ? 0 : 1,
+          'status': isCompleted ? 'planned' : 'completed',
         }),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (!data['success']) {
-          _showSnackbar(data['message'], isError: true);
+        if (data['success'] != true) {
+          _showSnackbar(data['message'] ?? 'Failed to update status', isError: true);
         }
         await _fetchWorkouts();
+      } else {
+        throw Exception('HTTP ${response.statusCode}');
       }
     } catch (e) {
-      _showSnackbar('Error updating workout: $e', isError: true);
+      _showSnackbar('Error updating workout: ${e.toString()}', isError: true);
+      debugPrint('Error toggling completion: $e');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -213,7 +221,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.78/gymPlannerApi/delete_workout.php'),
+        Uri.parse('http://192.168.0.11/repEatApi/delete_workout.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'workout_id': workoutId}),
       );
@@ -258,6 +266,10 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
         return Colors.yellow.shade100;
       case 'Legs':
         return Colors.red.shade100;
+      case 'Core':
+        return Colors.teal.shade100;
+      case 'Cardio':
+        return Colors.indigo.shade100;
       default:
         return Colors.grey.shade100;
     }
@@ -277,6 +289,10 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
         return Icons.arrow_back;
       case 'Legs':
         return Icons.directions_walk;
+      case 'Core':
+        return Icons.self_improvement;
+      case 'Cardio':
+        return Icons.directions_run;
       default:
         return Icons.sports_gymnastics;
     }
@@ -319,9 +335,11 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
                 });
               },
               onPageChanged: (focusedDay) => _focusedDay = focusedDay,
-              eventLoader: (day) => _workouts[DateTime(day.year, day.month, day.day)] ?? [],
+              eventLoader: (day) =>
+              _workouts[DateTime(day.year, day.month, day.day)] ?? [],
               calendarFormat: _calendarFormat,
-              onFormatChanged: (format) => setState(() => _calendarFormat = format),
+              onFormatChanged: (format) =>
+                  setState(() => _calendarFormat = format),
               calendarStyle: CalendarStyle(
                 markerDecoration: BoxDecoration(
                   color: Theme.of(context).primaryColor,
@@ -539,6 +557,8 @@ class GymExercise {
   final int sets;
   final int reps;
   final bool isCompleted;
+  final String note;
+  final String createdAt;
 
   GymExercise({
     required this.workoutId,
@@ -549,5 +569,22 @@ class GymExercise {
     required this.sets,
     required this.reps,
     required this.isCompleted,
+    required this.note,
+    required this.createdAt,
   });
+
+  factory GymExercise.fromJson(Map<String, dynamic> json) {
+    return GymExercise(
+      workoutId: json['workout_id'] as int,
+      userId: json['user_id'] as int,
+      date: DateTime.parse(json['date']),
+      muscleGroup: json['muscle_group'] as String,
+      exerciseName: json['exercise_name'] as String,
+      sets: json['sets'] as int,
+      reps: json['reps'] as int,
+      isCompleted: (json['status'] as String).toLowerCase() == 'completed',
+      note: json['note'] as String? ?? '',
+      createdAt: json['created_at'] as String,
+    );
+  }
 }
