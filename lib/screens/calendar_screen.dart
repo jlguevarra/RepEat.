@@ -80,7 +80,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.0.11/gymPlannerApi/get_workouts.php?user_id=${widget.userId}'),
+        Uri.parse('http://192.168.100.78/gymPlannerApi/get_workouts.php?user_id=${widget.userId}'),
       );
 
       if (response.statusCode == 200) {
@@ -157,8 +157,8 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
       };
 
       final endpoint = _formMode == 'add'
-          ? 'http://192.168.0.11/gymPlannerApi/save_workout.php'
-          : 'http://192.168.0.11/gymPlannerApi/update_workout.php';
+          ? 'http://192.168.100.78/gymPlannerApi/save_workout.php'
+          : 'http://192.168.100.78/gymPlannerApi/update_workout.php';
 
       final response = await http.post(
         Uri.parse(endpoint),
@@ -187,7 +187,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.11/gymPlannerApi/toggle_workout_completion.php'),
+        Uri.parse('http://192.168.100.78/gymPlannerApi/toggle_workout_completion.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'workout_id': workoutId,
@@ -213,7 +213,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.11/gymPlannerApi/delete_workout.php'),
+        Uri.parse('http://192.168.100.78/gymPlannerApi/delete_workout.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'workout_id': workoutId}),
       );
