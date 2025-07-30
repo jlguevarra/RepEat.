@@ -2,11 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'recipe_details_screen.dart'; // Add this import
+import 'recipe_details_screen.dart'; // Keep this import
 
 class MealPlanScreen extends StatefulWidget {
   final int userId;
-
   const MealPlanScreen({super.key, required this.userId});
 
   @override
@@ -26,36 +25,62 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   @override
   void initState() {
     super.initState();
-    fetchUserData();
+    // Fetch user data AND previously saved meal plan
+    initializeMealPlan();
   }
 
-  Future<void> fetchUserData() async {
+  // Step 1: Load user data and last saved meal plan
+  Future<void> initializeMealPlan() async {
     setState(() {
       isLoading = true;
       apiError = null;
     });
 
     try {
-      final url = Uri.parse(
-          'http://192.168.100.78/repEatApi/get_profile.php?user_id=${widget.userId}');
-      final response = await http.get(url);
-
-      if (response.statusCode == 200) {
-        final jsonData = jsonDecode(response.body);
+      // First, fetch user data
+      final userUrl = Uri.parse(
+        'http://192.168.100.78/repEatApi/get_profile.php?user_id=${widget.userId}',
+      );
+      final userResponse = await http.get(userUrl);
+      if (userResponse.statusCode == 200) {
+        final jsonData = jsonDecode(userResponse.body);
         if (jsonData['success'] == true) {
           setState(() {
             userData = jsonData['data'];
           });
         } else {
-          throw Exception("No data found: ${jsonData['message']}");
+          throw Exception("No user  ${jsonData['message']}");
         }
       } else {
-        throw Exception("Server error: ${response.statusCode}");
+        throw Exception("User fetch failed: ${userResponse.statusCode}");
       }
+
+      // Then, fetch the last saved meal plan
+      final mealPlanUrl = Uri.parse(
+        'http://192.168.100.78/repEatApi/get_saved_meal_plan.php?user_id=${widget.userId}',
+      );
+      final mealResponse = await http.get(mealPlanUrl);
+      if (mealResponse.statusCode == 200) {
+        final mealData = jsonDecode(mealResponse.body);
+        if (mealData['success'] == true && mealData['data'] != null) {
+          final savedPlan = jsonDecode(mealData['data']['meal_plan']); // Parse JSON string
+          setState(() {
+            mealPlan = savedPlan;
+            // Restore settings used to generate it
+            timeFrame = mealData['data']['time_frame'] ?? 'day';
+            if (mealData['data']['start_date'] != null) {
+              selectedDate = DateFormat('yyyy-MM-dd').parse(mealData['data']['start_date']);
+            }
+          });
+        }
+      }
+      // If no saved plan, just continue with mealPlan = null
     } catch (e) {
-      setState(() {
-        apiError = e.toString();
-      });
+      if (mounted) {
+        setState(() {
+          apiError = e.toString();
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -65,6 +90,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     }
   }
 
+  // Step 2: Generate new meal plan using Spoonacular
   Future<void> generateMealPlan() async {
     if (userData == null) return;
 
@@ -88,12 +114,10 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         'apiKey': 'f9cc3b3cd30e4007bf4da738d79d9680',
       };
 
-      // For weekly plans, add date parameter
       if (timeFrame == 'week') {
         queryParams['startDate'] = DateFormat('yyyy-MM-dd').format(selectedDate);
       }
 
-      // Remove empty parameters
       queryParams.removeWhere((key, value) => value.isEmpty);
 
       final url = Uri.https(
@@ -103,14 +127,16 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       );
 
       final response = await http.get(url);
-
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);
-        if (mounted) {
-          setState(() {
-            mealPlan = jsonData;
-          });
-        }
+
+        // Save to local state
+        setState(() {
+          mealPlan = jsonData;
+        });
+
+        // Save to server database
+        await _saveMealPlanToServer(jsonData);
       } else {
         throw Exception("API error: ${response.statusCode}\n${response.body}");
       }
@@ -124,6 +150,30 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           isGeneratingMeal = false;
         });
       }
+    }
+  }
+
+  // Step 3: Save generated meal plan to your server
+  Future<void> _saveMealPlanToServer(dynamic mealPlanData) async {
+    try {
+      final url = Uri.parse('http://192.168.100.78/repEatApi/save_meal_plan.php');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': widget.userId,
+          'time_frame': timeFrame,
+          'start_date': timeFrame == 'week' ? DateFormat('yyyy-MM-dd').format(selectedDate) : null,
+          'meal_plan': jsonEncode(mealPlanData), // Store as JSON string
+        }),
+      );
+
+      final result = jsonDecode(response.body);
+      if (result['success'] != true) {
+        debugPrint("Failed to save meal plan: ${result['message']}");
+      }
+    } catch (e) {
+      debugPrint("Error saving meal plan: $e");
     }
   }
 
@@ -279,7 +329,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     if (mealPlan == null || mealPlan!['nutrients'] == null) {
       return const SizedBox();
     }
-
     final nutrients = mealPlan!['nutrients'];
     return Card(
       elevation: 3,
@@ -344,7 +393,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           ElevatedButton(
             onPressed: () {
               if (mealPlan == null) {
-                fetchUserData();
+                initializeMealPlan(); // Retry both user and meal plan
               } else {
                 generateMealPlan();
               }
@@ -409,7 +458,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Meal Plan Controls
+            // Controls
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -450,6 +499,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
             ),
             const SizedBox(height: 16),
 
+            // Generate Button
             Center(
               child: FilledButton.icon(
                 onPressed: isGeneratingMeal ? null : generateMealPlan,
@@ -479,7 +529,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Generated Meal Plan
+            // Display Meal Plan if exists
             if (mealPlan != null) ...[
               Text(
                 timeFrame == 'day'
@@ -497,7 +547,14 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                 }).toList(),
               const SizedBox(height: 16),
               _buildNutritionInfo(),
-            ],
+            ] else
+              const Center(
+                child: Text(
+                  "No meal plan generated yet. Tap 'Generate' to get started!",
+                  style: TextStyle(color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+              ),
           ],
         ),
       ),
