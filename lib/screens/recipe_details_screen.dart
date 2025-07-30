@@ -7,11 +7,13 @@ import 'package:flutter_html/flutter_html.dart';
 class RecipeDetailsScreen extends StatefulWidget {
   final int recipeId;
   final String recipeTitle;
+  final int userId; // Added userId to interact with backend
 
   const RecipeDetailsScreen({
     super.key,
     required this.recipeId,
     required this.recipeTitle,
+    required this.userId,
   });
 
   @override
@@ -28,7 +30,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   void initState() {
     super.initState();
     _fetchRecipeDetails();
-    _checkIfFavorite();
+    _checkIfFavorite(); // Check if this recipe is already favorited
   }
 
   Future<void> _fetchRecipeDetails() async {
@@ -50,8 +52,9 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
         setState(() {
-          recipeDetails = jsonDecode(response.body);
+          recipeDetails = data;
         });
       } else {
         throw Exception('Failed to load recipe details: ${response.statusCode}');
@@ -69,26 +72,88 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     }
   }
 
+  /// Check if the current recipe is already in user's favorites
   Future<void> _checkIfFavorite() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (mounted) {
-      setState(() {
-        isFavorite = false;
-      });
+    try {
+      final url = Uri.parse(
+        'http://192.168.100.78/repEatApi/get_favorites.php?user_id=${widget.userId}',
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          final List favorites = data['data'];
+          final bool found = favorites.any((f) => f['recipe_id'] == widget.recipeId);
+
+          if (mounted) {
+            setState(() {
+              isFavorite = found;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Check favorite error: $e");
     }
   }
 
+  /// Toggle favorite status (add or remove)
   Future<void> _toggleFavorite() async {
-    setState(() {
-      isFavorite = !isFavorite;
-    });
+    final String imageUrl = recipeDetails?['image'] ?? '';
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isFavorite ? 'Added to favorites' : 'Removed from favorites'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+    try {
+      if (isFavorite) {
+        // Remove from favorites
+        final url = Uri.parse('http://192.168.100.78/repEatApi/remove_favorite.php');
+        final response = await http.delete(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'user_id': widget.userId,
+            'recipe_id': widget.recipeId,
+          }),
+        );
+
+        final result = jsonDecode(response.body);
+        if (result['success'] == true) {
+          setState(() {
+            isFavorite = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Removed from favorites')),
+          );
+        }
+      } else {
+        // Add to favorites
+        final url = Uri.parse('http://192.168.100.78/repEatApi/add_favorite.php');
+        final response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'user_id': widget.userId,
+            'recipe_id': widget.recipeId,
+            'recipe_title': widget.recipeTitle,
+            'recipe_image': imageUrl,
+          }),
+        );
+
+        final result = jsonDecode(response.body);
+        if (result['success'] == true) {
+          setState(() {
+            isFavorite = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Added to favorites')),
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    }
   }
 
   Widget _buildInfoRow(IconData icon, String text) {
@@ -110,7 +175,9 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   }
 
   Widget _buildNutritionFact(String label, dynamic value, String unit) {
-    final String valueStr = value is num ? value.toStringAsFixed(value is int ? 0 : 1) : '0';
+    final String valueStr = value is num
+        ? value.toStringAsFixed(value is int ? 0 : 1)
+        : '0';
 
     return SizedBox(
       width: 80,
@@ -152,6 +219,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
               color: isFavorite ? Colors.red : Colors.white,
             ),
             onPressed: _toggleFavorite,
+            tooltip: isFavorite ? 'Remove from favorites' : 'Add to favorites',
           ),
         ],
       ),
@@ -160,10 +228,11 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
           : errorMessage != null
           ? Center(child: Text(errorMessage!))
           : SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Recipe Image
             if (recipeDetails?['image'] != null)
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
@@ -176,11 +245,11 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
               ),
             const SizedBox(height: 16),
 
-            // Basic Info
+            // Recipe Information Card
             Card(
               elevation: 2,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(12.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -205,12 +274,12 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                     if (recipeDetails?['healthScore'] != null)
                       _buildInfoRow(
                         Icons.health_and_safety,
-                        'Health score: ${recipeDetails!['healthScore']}/100',
+                        'Health Score: ${recipeDetails!['healthScore']}/100',
                       ),
                     if (recipeDetails?['dishTypes'] != null &&
                         recipeDetails!['dishTypes'].isNotEmpty)
                       _buildInfoRow(
-                        Icons.restaurant,
+                        Icons.restaurant_menu,
                         'Type: ${recipeDetails!['dishTypes'].join(', ')}',
                       ),
                   ],
@@ -223,7 +292,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             Card(
               elevation: 2,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(12.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -246,7 +315,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  ingredient['original']?.toString() ?? 'No ingredient info',
+                                  ingredient['original']?.toString() ?? 'No info',
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -264,7 +333,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             Card(
               elevation: 2,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(12.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -299,11 +368,9 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                             children: [
                               Text(
                                 'Step ${step['number']}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
-                              Text(step['step'] ?? 'No step description'),
+                              Text(step['step'] ?? 'No description'),
                               if (step['ingredients'] != null &&
                                   step['ingredients'].isNotEmpty)
                                 Padding(
@@ -311,9 +378,9 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                                   child: Wrap(
                                     spacing: 4,
                                     children: step['ingredients']
-                                        .map<Widget>((ingredient) {
+                                        .map<Widget>((ing) {
                                       return Chip(
-                                        label: Text(ingredient['name']?.toString() ?? 'Unknown'),
+                                        label: Text(ing['name']?.toString() ?? 'Unknown'),
                                         visualDensity: VisualDensity.compact,
                                       );
                                     }).toList(),
@@ -336,7 +403,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
               Card(
                 elevation: 2,
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(12.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -402,8 +469,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                                 ),
                                 Text(
                                   '${nutrient['amount']?.toStringAsFixed(nutrient['amount'] is int ? 0 : 1) ?? '0'} ${nutrient['unit']}',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold),
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
                                 ),
                               ],
                             ),

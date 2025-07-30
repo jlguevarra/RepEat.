@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'recipe_details_screen.dart'; // Keep this import
+import 'recipe_details_screen.dart';
+import 'favorites_screen.dart'; // Update path if needed
 
 class MealPlanScreen extends StatefulWidget {
   final int userId;
@@ -25,11 +26,10 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   @override
   void initState() {
     super.initState();
-    // Fetch user data AND previously saved meal plan
     initializeMealPlan();
   }
 
-  // Step 1: Load user data and last saved meal plan
+  // Step 1: Load user data AND previously saved meal plan
   Future<void> initializeMealPlan() async {
     setState(() {
       isLoading = true;
@@ -37,7 +37,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     });
 
     try {
-      // First, fetch user data
+      // Fetch user profile
       final userUrl = Uri.parse(
         'http://192.168.100.78/repEatApi/get_profile.php?user_id=${widget.userId}',
       );
@@ -49,13 +49,13 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
             userData = jsonData['data'];
           });
         } else {
-          throw Exception("No user  ${jsonData['message']}");
+          throw Exception("No user data: ${jsonData['message']}");
         }
       } else {
         throw Exception("User fetch failed: ${userResponse.statusCode}");
       }
 
-      // Then, fetch the last saved meal plan
+      // Fetch saved meal plan
       final mealPlanUrl = Uri.parse(
         'http://192.168.100.78/repEatApi/get_saved_meal_plan.php?user_id=${widget.userId}',
       );
@@ -63,10 +63,9 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       if (mealResponse.statusCode == 200) {
         final mealData = jsonDecode(mealResponse.body);
         if (mealData['success'] == true && mealData['data'] != null) {
-          final savedPlan = jsonDecode(mealData['data']['meal_plan']); // Parse JSON string
+          final savedPlan = jsonDecode(mealData['data']['meal_plan']);
           setState(() {
             mealPlan = savedPlan;
-            // Restore settings used to generate it
             timeFrame = mealData['data']['time_frame'] ?? 'day';
             if (mealData['data']['start_date'] != null) {
               selectedDate = DateFormat('yyyy-MM-dd').parse(mealData['data']['start_date']);
@@ -74,7 +73,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           });
         }
       }
-      // If no saved plan, just continue with mealPlan = null
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -90,7 +88,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     }
   }
 
-  // Step 2: Generate new meal plan using Spoonacular
+  // Step 2: Generate new meal plan using Spoonacular API
   Future<void> generateMealPlan() async {
     if (userData == null) return;
 
@@ -100,12 +98,10 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     });
 
     try {
-      // Extract user preferences
       String diet = userData!['diet_preference'] ?? '';
       String goal = userData!['goal'] ?? '';
       String allergies = userData!['allergies'] ?? '';
 
-      // Prepare API parameters
       Map<String, String> queryParams = {
         'timeFrame': timeFrame,
         'targetCalories': mapGoalToCalories(goal).toString(),
@@ -114,10 +110,19 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         'apiKey': 'f9cc3b3cd30e4007bf4da738d79d9680',
       };
 
+      // Add startDate only for weekly, with safety
       if (timeFrame == 'week') {
-        queryParams['startDate'] = DateFormat('yyyy-MM-dd').format(selectedDate);
+        try {
+          queryParams['startDate'] = DateFormat('yyyy-MM-dd').format(selectedDate);
+        } catch (e) {
+          setState(() {
+            apiError = "Invalid date selected.";
+          });
+          return;
+        }
       }
 
+      // Remove empty values
       queryParams.removeWhere((key, value) => value.isEmpty);
 
       final url = Uri.https(
@@ -129,13 +134,9 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);
-
-        // Save to local state
         setState(() {
           mealPlan = jsonData;
         });
-
-        // Save to server database
         await _saveMealPlanToServer(jsonData);
       } else {
         throw Exception("API error: ${response.statusCode}\n${response.body}");
@@ -153,7 +154,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     }
   }
 
-  // Step 3: Save generated meal plan to your server
+  // Step 3: Save generated meal plan to server
   Future<void> _saveMealPlanToServer(dynamic mealPlanData) async {
     try {
       final url = Uri.parse('http://192.168.100.78/repEatApi/save_meal_plan.php');
@@ -163,8 +164,10 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         body: jsonEncode({
           'user_id': widget.userId,
           'time_frame': timeFrame,
-          'start_date': timeFrame == 'week' ? DateFormat('yyyy-MM-dd').format(selectedDate) : null,
-          'meal_plan': jsonEncode(mealPlanData), // Store as JSON string
+          'start_date': timeFrame == 'week'
+              ? DateFormat('yyyy-MM-dd').format(selectedDate)
+              : null,
+          'meal_plan': jsonEncode(mealPlanData),
         }),
       );
 
@@ -177,32 +180,35 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     }
   }
 
+  // ✅ Corrected: Map diet to Spoonacular format
   String mapDietToSpoonacular(String diet) {
-    const dietMap = {
+    final String normalized = diet.toLowerCase().replaceAll('-', ' ').trim();
+    const Map<String, String> dietMap = {
+      'none': '',
       'vegetarian': 'vegetarian',
       'vegan': 'vegan',
       'keto': 'ketogenic',
-      'gluten-free': 'gluten free',
       'paleo': 'paleo',
       'mediterranean': 'mediterranean',
-      'low carb': 'low carb',
-      'dairy free': 'dairy free',
+      'low carb': 'low-carb',
+      'high protein': 'high-protein',
     };
-    return dietMap[diet.toLowerCase()] ?? '';
+    return dietMap[normalized] ?? '';
   }
 
+  // ✅ Corrected: Map goal to calories
   int mapGoalToCalories(String goal) {
-    const goalMap = {
+    final String normalized = goal.toLowerCase().trim();
+    const Map<String, int> goalMap = {
       'weight loss': 1500,
-      'extreme weight loss': 1200,
-      'moderate weight loss': 1800,
       'muscle gain': 2500,
-      'extreme muscle gain': 3000,
-      'maintain weight': 2000,
+      'endurance': 2200,
+      'general fitness': 2000,
     };
-    return goalMap[goal.toLowerCase()] ?? 2000;
+    return goalMap[normalized] ?? 2000;
   }
 
+  // Date picker
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -217,6 +223,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     }
   }
 
+  // Build meal card (❤️ removed)
   Widget buildMealCard(String mealType, dynamic mealData) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0),
@@ -300,6 +307,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                     builder: (context) => RecipeDetailsScreen(
                       recipeId: mealData['id'],
                       recipeTitle: mealData['title'],
+                      userId: widget.userId,
                     ),
                   ),
                 );
@@ -312,6 +320,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
   }
 
+  // Get meal icon
   IconData _getMealIcon(String mealType) {
     if (mealType.toLowerCase().contains('breakfast')) {
       return Icons.breakfast_dining;
@@ -325,10 +334,10 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     return Icons.restaurant;
   }
 
+  // Nutrition summary
   Widget _buildNutritionInfo() {
-    if (mealPlan == null || mealPlan!['nutrients'] == null) {
-      return const SizedBox();
-    }
+    if (mealPlan == null || mealPlan!['nutrients'] == null) return const SizedBox();
+
     final nutrients = mealPlan!['nutrients'];
     return Card(
       elevation: 3,
@@ -393,7 +402,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           ElevatedButton(
             onPressed: () {
               if (mealPlan == null) {
-                initializeMealPlan(); // Retry both user and meal plan
+                initializeMealPlan();
               } else {
                 generateMealPlan();
               }
@@ -405,6 +414,26 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
   }
 
+  // ✅ Extract meals correctly for both daily and weekly plans
+  List<dynamic> _extractMealsFromMealPlan() {
+    if (mealPlan == null) return [];
+
+    if (timeFrame == 'day') {
+      return List.from(mealPlan!['meals'] ?? []);
+    } else {
+      final List<dynamic> allMeals = [];
+      final weekData = mealPlan!['week'];
+      if (weekData == null) return [];
+
+      weekData.values.forEach((day) {
+        final List meals = day['meals'] ?? [];
+        allMeals.addAll(meals);
+      });
+
+      return allMeals;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -412,11 +441,25 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         title: const Text("Meal Plan"),
         backgroundColor: Colors.deepPurple,
         actions: [
+          // ❤️ Favorites Button (Top Right)
+          IconButton(
+            icon: const Icon(Icons.favorite_border, size: 28),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => FavoritesScreen(userId: widget.userId),
+                ),
+              );
+            },
+            tooltip: 'My Favorites',
+          ),
+          // 🔁 Regenerate Button
           if (mealPlan != null)
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh, size: 28),
               onPressed: isGeneratingMeal ? null : generateMealPlan,
-              tooltip: 'Regenerate',
+              tooltip: 'Regenerate Meal Plan',
             ),
         ],
       ),
@@ -431,7 +474,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // User Preferences Card
+            // User Preferences
             Card(
               elevation: 2,
               child: Padding(
@@ -529,25 +572,28 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Display Meal Plan if exists
-            if (mealPlan != null) ...[
-              Text(
-                timeFrame == 'day'
-                    ? "Your Daily Meal Plan"
-                    : "Your Weekly Meal Plan (Starting ${DateFormat('MMM d').format(selectedDate)})",
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 10),
-              if (mealPlan!['meals'] != null)
-                ...mealPlan!['meals'].map<Widget>((meal) {
-                  return buildMealCard(meal['title'], meal);
-                }).toList(),
-              const SizedBox(height: 16),
-              _buildNutritionInfo(),
-            ] else
+            // Display Meal Plan
+            if (mealPlan != null)
+              Column(
+                children: [
+                  Text(
+                    timeFrame == 'day'
+                        ? "Your Daily Meal Plan"
+                        : "Your Weekly Meal Plan (Starting ${DateFormat('MMM d').format(selectedDate)})",
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ..._extractMealsFromMealPlan().map<Widget>((meal) {
+                    return buildMealCard(meal['title'], meal);
+                  }).toList(),
+                  const SizedBox(height: 16),
+                  _buildNutritionInfo(),
+                ],
+              )
+            else
               const Center(
                 child: Text(
                   "No meal plan generated yet. Tap 'Generate' to get started!",
