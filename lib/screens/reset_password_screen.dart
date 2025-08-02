@@ -19,12 +19,46 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _passwordCtrl = TextEditingController();
   final TextEditingController _confirmCtrl = TextEditingController();
-  bool _obscure = true;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
   bool _isLoading = false;
+
+  // Custom Snackbar method
+  void _showCustomSnackBar(String message, bool isSuccess) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isSuccess ? Icons.check_circle : Icons.error,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isSuccess ? Colors.green.shade700 : Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 
   Future<void> _resetPassword() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
     final apiUrl = 'http://192.168.100.78/repEatApi/reset_password.php';
@@ -41,20 +75,23 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-              (route) => false,
-        );
-      }
+        _showCustomSnackBar('Password reset successfully!', true);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(data['message'] ?? 'Error')),
-      );
+        // Add small delay to show success message
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+            );
+          }
+        });
+      } else {
+        _showCustomSnackBar(data['message'] ?? 'Failed to reset password', false);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      _showCustomSnackBar('Network error: ${e.toString()}', false);
     } finally {
       setState(() => _isLoading = false);
     }
@@ -70,81 +107,191 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.deepPurple.shade800,
+      backgroundColor: Colors.deepPurple.shade50,
       appBar: AppBar(
-        title: const Text('Reset Password'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: Colors.deepPurple.shade800),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Header Section
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.lock_outline,
+                      size: 50,
+                      color: Colors.deepPurple.shade800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 30),
+
+                // Title
+                Text(
+                  "Reset Your Password",
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple.shade900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Subtitle
+                Text(
+                  "Create a new strong password for your account",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 40),
+
+                // New Password Field
                 TextFormField(
                   controller: _passwordCtrl,
-                  obscureText: _obscure,
-                  style: const TextStyle(color: Colors.white),
+                  obscureText: _obscurePassword,
+                  style: const TextStyle(color: Colors.black87),
                   decoration: InputDecoration(
                     labelText: 'New Password',
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscure ? Icons.visibility : Icons.visibility_off,
-                        color: Colors.white70,
-                      ),
-                      onPressed: () => setState(() => _obscure = !_obscure),
+                    labelStyle: TextStyle(color: Colors.deepPurple.shade700),
+                    hintText: 'Enter new password',
+                    hintStyle: TextStyle(color: Colors.grey[400]),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
                     ),
-                    labelStyle: const TextStyle(color: Colors.white70),
                     enabledBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: Colors.white54),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.deepPurple.shade200),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: Colors.white),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
+                    ),
+                    prefixIcon: Icon(
+                      Icons.lock_outline,
+                      color: Colors.deepPurple.shade700,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: Colors.grey[600],
+                      ),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                   validator: (value) {
-                    if (value == null || value.length < 8) return 'Password must be at least 8 characters';
+                    if (value == null || value.isEmpty) {
+                      return 'Password is required';
+                    }
+                    if (value.length < 8) {
+                      return 'Password must be at least 8 characters';
+                    }
+                    // Note: The complex regex validation has also been removed from here
+                    // as it was tied to the requirements box.
+                    // If you want to keep basic length validation, leave the line above.
+                    // If you want no password requirements in the validator either, remove it.
+                    // Keeping minimum length check as it's common and was in the original simple validator.
                     return null;
                   },
                 ),
                 const SizedBox(height: 20),
+
+                // Confirm Password Field
                 TextFormField(
                   controller: _confirmCtrl,
-                  obscureText: _obscure,
-                  style: const TextStyle(color: Colors.white),
+                  obscureText: _obscureConfirm,
+                  style: const TextStyle(color: Colors.black87),
                   decoration: InputDecoration(
                     labelText: 'Confirm Password',
-                    labelStyle: const TextStyle(color: Colors.white70),
+                    labelStyle: TextStyle(color: Colors.deepPurple.shade700),
+                    hintText: 'Confirm your password',
+                    hintStyle: TextStyle(color: Colors.grey[400]),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                     enabledBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: Colors.white54),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.deepPurple.shade200),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: Colors.white),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
+                    ),
+                    prefixIcon: Icon(
+                      Icons.lock_outline,
+                      color: Colors.deepPurple.shade700,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirm
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: Colors.grey[600],
+                      ),
+                      onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                     ),
                   ),
                   validator: (value) {
-                    if (value != _passwordCtrl.text) return 'Passwords do not match';
+                    if (value == null || value.isEmpty) {
+                      return 'Please confirm your password';
+                    }
+                    if (value != _passwordCtrl.text) {
+                      return 'Passwords do not match';
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 30),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _resetPassword,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.deepPurple,
-                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
+
+                // Reset Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _resetPassword,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple.shade800,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
+                      'Reset Password',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator()
-                      : const Text('Reset Password'),
-                )
+                ),
               ],
             ),
           ),

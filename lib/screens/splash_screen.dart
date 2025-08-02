@@ -15,6 +15,7 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
@@ -22,7 +23,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1500),
     );
 
     _fadeAnimation = CurvedAnimation(
@@ -30,9 +31,13 @@ class _SplashScreenState extends State<SplashScreen>
       curve: Curves.easeInOut,
     );
 
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+    );
+
     _controller.forward();
 
-    Future.delayed(const Duration(milliseconds: 1500), _navigateNext);
+    Future.delayed(const Duration(milliseconds: 2000), _navigateNext);
   }
 
   Future<void> _navigateNext() async {
@@ -43,26 +48,20 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
+    Widget nextScreen;
     if (!isLoggedIn) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+      nextScreen = const LoginScreen();
     } else if (!isOnboarded && userId != null) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => OnboardingStep1(userId: userId)),
-      );
+      nextScreen = OnboardingStep1(userId: userId);
     } else if (userId != null) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => MainNavScreen(userId: userId), // Pass userId here
-        ),
-      );
+      nextScreen = MainNavScreen(userId: userId);
     } else {
-      // If somehow we're logged in but don't have a user ID, go to login
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+      nextScreen = const LoginScreen();
     }
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => nextScreen),
+    );
   }
 
   @override
@@ -74,46 +73,72 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.deepPurple,
-      body: Center(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                ),
-                padding: const EdgeInsets.all(20),
-                child: Image.asset(
-                  'assets/images/rep_eat_logo.png',
-                  width: 100,
-                  height: 100,
-                  fit: BoxFit.contain,
-                ),
+      backgroundColor: Colors.deepPurple.shade700,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Center(
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, child) {
+                  return Opacity(
+                    opacity: _fadeAnimation.value,
+                    child: Transform.scale(
+                      scale: _scaleAnimation.value,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 15,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.all(24),
+                            child: Image.asset(
+                              'assets/images/rep_eat_logo.png',
+                              width: constraints.maxWidth * 0.25,
+                              height: constraints.maxWidth * 0.25,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          const SizedBox(height: 30),
+                          const Text(
+                            'RepEat',
+                            style: TextStyle(
+                              fontSize: 40,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Smart Fitness & Nutrition',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w300,
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+                          const CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
-              const SizedBox(height: 30),
-              const Text(
-                'RepEat',
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Smart Fitness & Nutrition',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.white70,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
