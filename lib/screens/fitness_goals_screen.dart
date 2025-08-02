@@ -13,34 +13,28 @@ class FitnessGoalsScreen extends StatefulWidget {
 class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
   final setsController = TextEditingController();
   final repsController = TextEditingController();
-
   String? selectedGoal;
   String? originalGoal;
   String? originalSets;
   String? originalReps;
-
   bool isLoading = true;
   bool isSaving = false;
   bool isEditing = false;
-
   int? userId;
   double currentWeight = 0;
   double targetWeight = 0;
-
   final allGoals = [
     'Muscle Gain',
     'Weight Loss',
     'Endurance',
     'General Fitness',
   ];
-
   List<String> allowedGoals = [];
 
   @override
   void initState() {
     super.initState();
     _loadData();
-
     setsController.addListener(() {
       if (isEditing) setState(() {});
     });
@@ -49,9 +43,43 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     });
   }
 
+  // Custom Snackbar method - Improved Design
+  void _showCustomSnackBar(String message, bool isSuccess) {
+    if (!mounted) return; // Guard against state changes if widget is disposed
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isSuccess ? Icons.check_circle : Icons.error,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isSuccess ? Colors.green.shade700 : Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   Future<bool> _onWillPop() async {
     if (!isEditing || !hasChanges) return true;
-
     final shouldPop = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -69,66 +97,51 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
         ],
       ),
     );
-
     return shouldPop ?? false;
   }
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     userId = prefs.getInt('user_id');
-
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User ID not found. Please log in again.')),
-      );
-      Navigator.pop(context);
+      _showCustomSnackBar('User ID not found. Please log in again.', false); // Updated SnackBar
+      if (mounted) Navigator.pop(context);
       return;
     }
-
     currentWeight = double.tryParse(prefs.getString('current_weight') ?? '') ?? 0;
     targetWeight = double.tryParse(prefs.getString('target_weight') ?? '') ?? 0;
-
     try {
       final response = await http.get(Uri.parse(
         'http://192.168.100.78/repEatApi/get_profile.php?user_id=$userId',
       ));
       final data = json.decode(response.body);
-
       if (data['success'] == true) {
         final profile = data['data'];
-
         if (currentWeight == 0) {
           currentWeight = double.tryParse(profile['current_weight'] ?? '0') ?? 0;
         }
         if (targetWeight == 0) {
           targetWeight = double.tryParse(profile['target_weight'] ?? '0') ?? 0;
         }
-
         _determineAllowedGoals();
-
         originalGoal = profile['goal'] ?? allowedGoals.first;
         selectedGoal = originalGoal;
-
         if (!allowedGoals.contains(selectedGoal)) {
           selectedGoal = allowedGoals.first;
         }
-
         originalSets = profile['preferred_sets'] ?? '';
         originalReps = profile['preferred_reps'] ?? '';
-
         setsController.text = originalSets!;
         repsController.text = originalReps!;
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Failed to load goals.')),
-        );
+        _showCustomSnackBar(data['message'] ?? 'Failed to load goals.', false); // Updated SnackBar
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      _showCustomSnackBar('Error loading goals: $e', false); // Updated SnackBar
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) { // Check if mounted before setState
+        setState(() => isLoading = false);
+      }
     }
   }
 
@@ -149,8 +162,12 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
   }
 
   Future<void> _saveData() async {
-    setState(() => isSaving = true);
+    if (setsController.text.trim().isEmpty || repsController.text.trim().isEmpty) {
+      _showCustomSnackBar('Sets and Reps cannot be empty.', false); // Updated SnackBar
+      return;
+    }
 
+    setState(() => isSaving = true);
     try {
       final response = await http.post(
         Uri.parse('http://192.168.100.78/repEatApi/update_fitness_goals.php'),
@@ -161,31 +178,26 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
           'reps': repsController.text.trim(),
         },
       );
-
       final data = json.decode(response.body);
-
       if (data['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Goals updated.')),
-        );
-
-        setState(() {
-          originalGoal = selectedGoal;
-          originalSets = setsController.text.trim();
-          originalReps = repsController.text.trim();
-          isEditing = false;
-        });
+        _showCustomSnackBar(data['message'] ?? 'Goals updated successfully!', true); // Updated SnackBar
+        if (mounted) { // Check if mounted before setState
+          setState(() {
+            originalGoal = selectedGoal;
+            originalSets = setsController.text.trim();
+            originalReps = repsController.text.trim();
+            isEditing = false;
+          });
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Failed to update goals.')),
-        );
+        _showCustomSnackBar(data['message'] ?? 'Failed to update goals.', false); // Updated SnackBar
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      _showCustomSnackBar('Network error. Please try again.', false); // Updated SnackBar
     } finally {
-      setState(() => isSaving = false);
+      if (mounted) { // Check if mounted before setState
+        setState(() => isSaving = false);
+      }
     }
   }
 
@@ -194,7 +206,6 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       setState(() => isEditing = false);
       return;
     }
-
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -212,8 +223,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
         ],
       ),
     );
-
-    if (result == true) {
+    if (result == true && mounted) {
       setState(() {
         selectedGoal = originalGoal;
         setsController.text = originalSets!;
@@ -227,16 +237,36 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: Colors.deepPurple, // Match app bar color
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Loading Fitness Goals...',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
+        backgroundColor: Colors.deepPurple.shade50, // Softer background - Improved Design
         appBar: AppBar(
           title: const Text('Fitness Goals'),
           backgroundColor: Colors.deepPurple,
+          foregroundColor: Colors.white,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () async {
@@ -250,6 +280,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
               IconButton(
                 icon: const Icon(Icons.cancel),
                 onPressed: _handleCancel,
+                tooltip: 'Cancel',
               )
             else
               IconButton(
@@ -259,111 +290,288 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                     isEditing = true;
                   });
                 },
+                tooltip: 'Edit',
               ),
           ],
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Fitness Goal',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-              ),
-              const SizedBox(height: 8),
-              isEditing
-                  ? DropdownButtonFormField<String>(
-                value: selectedGoal,
-                items: allowedGoals.map((goal) {
-                  return DropdownMenuItem(
-                    value: goal,
-                    child: Text(goal),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) setState(() => selectedGoal = val);
-                },
-                decoration: _inputDecoration(),
-              )
-                  : Text(selectedGoal!, style: const TextStyle(fontSize: 16)),
-              const SizedBox(height: 20),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Preferred Sets',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: setsController,
-                          keyboardType: TextInputType.number,
-                          readOnly: !isEditing,
-                          decoration: _inputDecoration(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Preferred Reps',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: repsController,
-                          keyboardType: TextInputType.number,
-                          readOnly: !isEditing,
-                          decoration: _inputDecoration(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 30),
-
-              if (isEditing)
+        body: SafeArea( // Improved Design
+          child: SingleChildScrollView( // Improved Design
+            padding: const EdgeInsets.all(16), // Improved Design
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start, // Improved Design
+              children: [
+                // Header Section - Improved Design
                 Center(
-                  child: ElevatedButton(
-                    onPressed: (!hasChanges || isSaving) ? null : _saveData,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.shade100,
+                      shape: BoxShape.circle,
                     ),
-                    child: isSaving
-                        ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                        : const Text('Save', style: TextStyle(fontSize: 16)),
+                    child: Icon(
+                      Icons.fitness_center,
+                      size: 40,
+                      color: Colors.deepPurple.shade800,
+                    ),
                   ),
                 ),
-            ],
+                const SizedBox(height: 20),
+                const Text(
+                  'Your Fitness Goals',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Set your workout preferences and objectives',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 30),
+
+                // Fitness Goal Section - Improved Design (Card)
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.flag_outlined,
+                              color: Colors.deepPurple.shade700,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Fitness Goal',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.deepPurple,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        isEditing
+                            ? DropdownButtonFormField<String>(
+                          value: selectedGoal,
+                          items: allowedGoals.map((goal) {
+                            return DropdownMenuItem(
+                              value: goal,
+                              child: Text(goal),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => selectedGoal = val);
+                          },
+                          decoration: _inputDecoration(), // Improved Design
+                          validator: (value) =>
+                          value == null || value.isEmpty ? 'Please select a goal' : null,
+                        )
+                            : Text(
+                          selectedGoal ?? 'No goal set',
+                          style: const TextStyle(fontSize: 16, color: Colors.black87),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Sets & Reps Section - Improved Design (Card)
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.settings_outlined,
+                              color: Colors.deepPurple.shade700,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Workout Preferences',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.deepPurple,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Preferred Sets',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.deepPurple,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextFormField(
+                                    controller: setsController,
+                                    keyboardType: TextInputType.number,
+                                    readOnly: !isEditing,
+                                    style: const TextStyle(color: Colors.black87),
+                                    decoration: _inputDecoration().copyWith( // Improved Design
+                                      hintText: isEditing ? 'e.g., 3' : null,
+                                    ),
+                                    validator: (value) {
+                                      if (isEditing && (value == null || value.isEmpty)) {
+                                        return 'Required';
+                                      }
+                                      if (isEditing &&
+                                          (int.tryParse(value!) == null || int.parse(value) <= 0)) {
+                                        return 'Enter a valid number';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Preferred Reps',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.deepPurple,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextFormField(
+                                    controller: repsController,
+                                    keyboardType: TextInputType.number,
+                                    readOnly: !isEditing,
+                                    style: const TextStyle(color: Colors.black87),
+                                    decoration: _inputDecoration().copyWith( // Improved Design
+                                      hintText: isEditing ? 'e.g., 12' : null,
+                                    ),
+                                    validator: (value) {
+                                      if (isEditing && (value == null || value.isEmpty)) {
+                                        return 'Required';
+                                      }
+                                      if (isEditing &&
+                                          (int.tryParse(value!) == null || int.parse(value) <= 0)) {
+                                        return 'Enter a valid number';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                // Save Button (only visible when editing) - Improved Design
+                if (isEditing)
+                  Center(
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: (!hasChanges || isSaving) ? null : _saveData,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple.shade800,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: isSaving
+                            ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                            : const Text(
+                          'Save Changes',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  // Improved Input Decoration - Better Design Consistency
   InputDecoration _inputDecoration() {
     return InputDecoration(
       filled: true,
       fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.deepPurple.shade200),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    setsController.removeListener(() {});
+    repsController.removeListener(() {});
+    setsController.dispose();
+    repsController.dispose();
+    super.dispose();
   }
 }
