@@ -122,7 +122,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
     setState(() => _isSubmitting = true);
 
-    final url = Uri.parse("http://192.168.100.78/repEatApi/save_onboarding.php");
+    final url = Uri.parse("http://192.168.0.11/repEatApi/save_onboarding.php");
 
     final data = {
       "user_id": widget.userId.toString(), // Ensure it's a string

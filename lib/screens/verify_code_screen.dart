@@ -52,46 +52,12 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
     });
   }
 
-  // Custom Snackbar method
-  void _showCustomSnackBar(String message, bool isSuccess) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isSuccess ? Icons.check_circle : Icons.error,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: isSuccess ? Colors.green.shade700 : Colors.red.shade700,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        margin: const EdgeInsets.all(20),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
   Future<void> _verifyCode() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
-    final apiUrl = 'http://192.168.100.78/repEatApi/verify_code.php';
+    final apiUrl = 'http://192.168.0.11/repEatApi/verify_code.php'; // Replace with your LAN IP
 
     try {
       final response = await http.post(
@@ -104,34 +70,35 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
-        _showCustomSnackBar(data['message'] ?? 'Code verified successfully!', true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? 'Code verified')),
+        );
 
-        // Add small delay to show success message
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ResetPasswordScreen(
-                  email: widget.email,
-                  code: _codeCtrl.text.trim(),
-                ),
-              ),
-            );
-          }
-        });
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ResetPasswordScreen(
+              email: widget.email,
+              code: _codeCtrl.text.trim(), // ✅ Pass the code here
+            ),
+          ),
+        );
       } else {
-        _showCustomSnackBar(data['message'] ?? 'Invalid verification code', false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? 'Invalid code')),
+        );
       }
     } catch (e) {
-      _showCustomSnackBar('Network error: ${e.toString()}', false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
   Future<void> _resendCode() async {
-    final resendUrl = 'http://192.168.100.78/repEatApi/forgot_password.php';
+    final resendUrl = 'http://192.168.0.11/repEatApi/forgot_password.php'; // Replace with your LAN IP
 
     try {
       final response = await http.post(
@@ -141,202 +108,105 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
-        _showCustomSnackBar(data['message'] ?? 'Verification code resent!', true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? 'Code resent')),
+        );
         startTimer();
       } else {
-        _showCustomSnackBar(data['message'] ?? 'Failed to resend code', false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? 'Failed to resend')),
+        );
       }
     } catch (e) {
-      _showCustomSnackBar('Failed to resend: ${e.toString()}', false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to resend: ${e.toString()}')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.deepPurple.shade50,
+      backgroundColor: Colors.deepPurple.shade800,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
+        title: const Text('Verify Code'),
+        centerTitle: true,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: Colors.deepPurple.shade800),
-          onPressed: () => Navigator.pop(context),
-        ),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Padding(
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Section
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.deepPurple.shade100,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.sms_outlined,
-                      size: 50,
-                      color: Colors.deepPurple.shade800,
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 30),
-
-                // Title
                 Text(
-                  "Verify Your Email",
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple.shade900,
-                  ),
+                  "A verification code was sent to:",
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
                 ),
-                const SizedBox(height: 10),
-
-                // Subtitle
-                Text(
-                  "We've sent a 6-digit code to",
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 8),
                 Text(
                   widget.email,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.deepPurple.shade800,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 30),
-
-                // OTP Input Field
+                const SizedBox(height: 24),
                 TextFormField(
                   controller: _codeCtrl,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(6),
-                  ],
-                  style: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 24,
-                    letterSpacing: 8,
-                  ),
-                  textAlign: TextAlign.center,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Allow numbers only
+                  style: const TextStyle(color: Colors.white),
+                  maxLength: 6,
                   decoration: InputDecoration(
-                    hintText: '------',
-                    hintStyle: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 24,
-                      letterSpacing: 8,
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
+                    labelText: '6-digit Code',
+                    labelStyle: const TextStyle(color: Colors.white70),
+                    counterStyle: const TextStyle(color: Colors.white38),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.deepPurple.shade200),
+                      borderSide: const BorderSide(color: Colors.white70),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
+                      borderSide: const BorderSide(color: Colors.white),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    counterText: '',
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Verification code is required';
-                    }
-                    if (value.length != 6) {
-                      return 'Code must be 6 digits';
+                    if (value == null || value.length != 6) {
+                      return 'Enter a valid 6-digit code';
                     }
                     return null;
                   },
                 ),
-                const SizedBox(height: 10),
 
-                // Character counter
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    '${_codeCtrl.text.length}/6',
-                    style: TextStyle(
-                      color: _codeCtrl.text.length == 6
-                          ? Colors.green
-                          : Colors.grey[600],
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 30),
-
-                // Verify Button
                 SizedBox(
                   width: double.infinity,
-                  height: 55,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _verifyCode,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple.shade800,
-                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.deepPurple,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      elevation: 2,
                     ),
                     child: _isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                      'Verify Code',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                        ? const CircularProgressIndicator()
+                        : const Text('Verify Code', style: TextStyle(fontSize: 16)),
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // Resend Code Section
-                Center(
-                  child: Column(
-                    children: [
-                      Text(
-                        "Didn't receive the code?",
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: _canResend ? _resendCode : null,
-                        child: Text(
-                          _canResend
-                              ? 'Resend Code'
-                              : 'Resend in $_secondsLeft sec',
-                          style: TextStyle(
-                            color: _canResend
-                                ? Colors.deepPurple.shade700
-                                : Colors.grey[500],
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
+                TextButton(
+                  onPressed: _canResend ? _resendCode : null,
+                  child: Text(
+                    _canResend
+                        ? 'Resend Code'
+                        : 'Resend in $_secondsLeft sec',
+                    style: const TextStyle(color: Colors.white),
                   ),
                 ),
               ],

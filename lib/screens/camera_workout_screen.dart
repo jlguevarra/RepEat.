@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
@@ -10,6 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'pose_painter.dart';
 import 'detectHammerCurls.dart';
 import 'detect_concentration_curls.dart';
+import 'detect_dumbbell_curls.dart';
 
 class CameraWorkoutScreen extends StatefulWidget {
   final int userId;
@@ -40,6 +42,8 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   List<Pose> _poses = [];
   bool _isFrontCamera = true;
   bool _isInitialized = false;
+  bool _showDumbbellWarning = false;
+  DateTime? _lastRepTime;
 
   @override
   void initState() {
@@ -49,7 +53,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   }
 
   Future<void> _fetchUserGoals() async {
-    final url = Uri.parse('http://192.168.100.78repEatApi/get_user_onboarding.php');
+    final url = Uri.parse('http://192.168.0.11/repEatApi/get_user_onboarding.php');
     try {
       final response = await http.post(
         url,
@@ -111,7 +115,12 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       final poses = await _poseDetector.processImage(inputImage);
 
       if (mounted) {
-        setState(() => _poses = poses);
+        setState(() {
+          _poses = poses;
+          if (widget.exercise == 'Dumbbell Curls') {
+            _showDumbbellWarning = poses.isNotEmpty && !_isHoldingDumbbell(poses.first);
+          }
+        });
         _detectExerciseReps(poses);
       }
     } catch (e) {
@@ -149,33 +158,52 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     if (poses.isEmpty || _currentSet > _preferredSets) return;
 
     final pose = poses.first;
-    bool previousDown = _isDownPosition;
 
     switch (widget.exercise) {
       case 'Hammer Curls':
         _isDownPosition = isHammerCurlRep(
           pose: pose,
           isDownPosition: _isDownPosition,
-          onRepDetected: () {
-            setState(() => _repCount++);
-            _checkSetCompletion();
-          },
+          onRepDetected: _onRepDetected,
         );
         break;
       case 'Concentration Curls':
         _isDownPosition = isConcentrationCurlRep(
           pose: pose,
           isDownPosition: _isDownPosition,
-          onRepDetected: () {
-            setState(() => _repCount++);
-            _checkSetCompletion();
-          },
+          onRepDetected: _onRepDetected,
+        );
+        break;
+      case 'Dumbbell Curls':
+        _isDownPosition = isDumbbellCurlRep(
+          pose: pose,
+          isDownPosition: _isDownPosition,
+          onRepDetected: _onRepDetected,
         );
         break;
       default:
-        debugPrint('No logic defined for this exercise.');
+        debugPrint('No logic defined for this exercise: ${widget.exercise}');
         break;
     }
+  }
+
+  void _onRepDetected() {
+    final now = DateTime.now();
+    if (_lastRepTime != null && now.difference(_lastRepTime!).inMilliseconds < 500) {
+      return;
+    }
+    _lastRepTime = now;
+
+    setState(() => _repCount++);
+    _checkSetCompletion();
+  }
+
+  bool _isHoldingDumbbell(Pose pose) {
+    final wrist = pose.landmarks[PoseLandmarkType.rightWrist];
+    final hip = pose.landmarks[PoseLandmarkType.rightHip];
+
+    if (wrist == null || hip == null) return false;
+    return wrist.y < hip.y;
   }
 
   void _checkSetCompletion() {
@@ -189,6 +217,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('🎉 Workout Complete!')),
         );
+        saveCameraWorkout();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('✅ Set $_currentSet started')),
@@ -198,7 +227,16 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   }
 
   Future<void> saveCameraWorkout() async {
-    final url = Uri.parse('http://192.168.100.78/repEatApi/camera_workout_screen.php');
+    final url = Uri.parse('http://192.168.0.11/repEatApi/camera_workout_screen.php');
+
+    final duration = _lastRepTime != null
+        ? _repCount * 2 // Approx 2 seconds per rep
+        : 0;
+
+    double accuracyScore = 0.9;
+    if (widget.exercise == 'Dumbbell Curls' && _poses.isNotEmpty) {
+      accuracyScore = _isHoldingDumbbell(_poses.first) ? 0.95 : 0.6;
+    }
 
     final data = {
       'user_id': widget.userId,
@@ -206,8 +244,8 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       'category': widget.category,
       'exercise_name': widget.exercise,
       'detected_reps': _repCount,
-      'duration_seconds': 0,
-      'accuracy_score': 0,
+      'duration_seconds': duration,
+      'accuracy_score': accuracyScore,
     };
 
     try {
@@ -215,28 +253,25 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(data),
-      );
+      ).timeout(const Duration(seconds: 5));
 
       final result = jsonDecode(response.body);
       if (result['success']) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('✅ Workout saved')),
+            const SnackBar(content: Text('✅ Workout saved successfully!')),
           );
-          setState(() {
-            _repCount = 0;
-            _currentSet = 1;
-          });
         }
       } else {
-        throw Exception(result['message']);
+        throw Exception(result['message'] ?? 'Failed to save workout');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error: $e')),
+          SnackBar(content: Text('❌ Error saving workout: $e')),
         );
       }
+      debugPrint('Error saving workout: $e');
     }
   }
 
@@ -257,7 +292,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Workout Rep Counter'),
+        title: Text('${widget.exercise} Rep Counter'),
         backgroundColor: Colors.deepPurple,
         actions: [
           IconButton(
@@ -287,6 +322,25 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
               ),
             ),
           ),
+          if (_showDumbbellWarning)
+            Positioned(
+              top: 20,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.red.withOpacity(0.7),
+                child: const Text(
+                  'Hold dumbbells properly to count reps',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
           Positioned(
             bottom: 60,
             left: 0,
@@ -300,11 +354,28 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
                       fontSize: 50,
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
+                      shadows: [
+                        Shadow(
+                          blurRadius: 10,
+                          color: Colors.black,
+                          offset: Offset(2, 2),
+                        ),
+                      ],
                     ),
                   ),
                   Text(
                     'Set $_currentSet / $_preferredSets',
-                    style: const TextStyle(fontSize: 20, color: Colors.white),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      color: Colors.white,
+                      shadows: [
+                        Shadow(
+                          blurRadius: 5,
+                          color: Colors.black,
+                          offset: Offset(1, 1),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -316,6 +387,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         onPressed: () => setState(() {
           _repCount = 0;
           _currentSet = 1;
+          _lastRepTime = null;
         }),
         backgroundColor: Colors.deepPurple,
         child: const Icon(Icons.refresh),
