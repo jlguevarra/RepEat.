@@ -12,6 +12,7 @@ import 'pose_painter.dart';
 import 'detectHammerCurls.dart';
 import 'detect_concentration_curls.dart';
 import 'detect_dumbbell_curls.dart';
+import 'exercise_guide_data.dart';
 
 class CameraWorkoutScreen extends StatefulWidget {
   final int userId;
@@ -49,7 +50,74 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   void initState() {
     super.initState();
     _poseDetector = PoseDetector(options: PoseDetectorOptions());
-    _fetchUserGoals().then((_) => _initializeCamera());
+    _showExerciseGuide().then((_) => _fetchUserGoals().then((_) => _initializeCamera()));
+  }
+
+  Future<void> _showExerciseGuide() async {
+    // 1. Check if guide exists
+    final guide = exerciseGuides[widget.exercise];
+    if (guide == null) {
+      debugPrint('No guide found for exercise: ${widget.exercise}');
+      return;
+    }
+
+    // 2. Add slight delay to ensure context is available
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // 3. Show the dialog with error handling
+    try {
+      await showDialog(
+        context: context,
+        barrierDismissible: false, // Prevent dismissing by tapping outside
+        builder: (BuildContext context) {
+          return AlertDialog(
+              title: Text(guide.name),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildGuideImage(guide.imageAsset),
+                    const SizedBox(height: 12),
+                    Text(
+                      guide.description,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+              TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+          child: const Text('START', style: TextStyle(fontSize: 18)),
+          ),
+          ]);
+        },
+      );
+    } catch (e) {
+      debugPrint('Error showing guide: $e');
+    }
+  }
+
+  Widget _buildGuideImage(String assetPath) {
+    try {
+      return Image.asset(
+        assetPath,
+        height: 150,
+        errorBuilder: (ctx, error, stackTrace) => _buildErrorPlaceholder(),
+      );
+    } catch (e) {
+      return _buildErrorPlaceholder();
+    }
+  }
+
+  Widget _buildErrorPlaceholder() {
+    return Container(
+      height: 150,
+      color: Colors.grey[300],
+      child: const Center(
+        child: Icon(Icons.error_outline, color: Colors.red),
+      ),
+    );
   }
 
   Future<void> _fetchUserGoals() async {
