@@ -111,7 +111,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     final prefs = await SharedPreferences.getInstance();
     userId = prefs.getInt('user_id');
     if (userId == null) {
-      _showCustomSnackBar('User ID not found. Please log in again.', false); // Updated SnackBar
+      _showCustomSnackBar('User ID not found. Please log in again.', false);
       if (mounted) Navigator.pop(context);
       return;
     }
@@ -132,7 +132,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         final bodyType = profile['body_type'] ?? 'Unknown';
         final goal = profile['goal'] ?? 'General Fitness';
 
-        if (mounted) { // Check if mounted before setState
+        if (mounted) {
           setState(() {
             currentWeightController.text = currentWeight;
             targetWeightController.text = targetWeight;
@@ -153,11 +153,11 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           });
         }
       } else {
-        _showCustomSnackBar(data['message'] ?? 'Failed to load stats.', false); // Updated SnackBar
+        _showCustomSnackBar(data['message'] ?? 'Failed to load stats.', false);
         if (mounted) setState(() => isLoading = false);
       }
     } catch (e) {
-      _showCustomSnackBar('Error loading stats: ${e.toString()}', false); // Updated SnackBar
+      _showCustomSnackBar('Error loading stats: ${e.toString()}', false);
       if (mounted) setState(() => isLoading = false);
     }
   }
@@ -202,31 +202,63 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       category = 'Obese';
     }
 
-    if (mounted) { // Check if mounted before setState
+    if (mounted) {
       setState(() => bmiCategory = category);
     }
   }
 
   Future<void> _saveData() async {
+    // Validate all fields first
     if (currentWeightController.text.trim().isEmpty ||
         targetWeightController.text.trim().isEmpty ||
         heightController.text.trim().isEmpty) {
-      _showCustomSnackBar('All fields are required.', false); // Updated SnackBar
+      _showCustomSnackBar('All fields are required.', false);
       return;
     }
 
-    // Validate numeric inputs
+    // Validate numeric inputs with realistic ranges
     final currentWeight = double.tryParse(currentWeightController.text.trim());
     final targetWeight = double.tryParse(targetWeightController.text.trim());
     final height = double.tryParse(heightController.text.trim());
 
     if (currentWeight == null || targetWeight == null || height == null) {
-      _showCustomSnackBar('Please enter valid numbers for weight and height.', false); // Updated SnackBar
+      _showCustomSnackBar('Please enter valid numbers for weight and height.', false);
       return;
     }
 
-    if (currentWeight <= 0 || targetWeight <= 0 || height <= 0) {
-      _showCustomSnackBar('Weight and height must be greater than zero.', false); // Updated SnackBar
+    // Realistic validation for weight (minimum 10kg, maximum 500kg)
+    if (currentWeight < 10 || currentWeight > 500) {
+      _showCustomSnackBar('Current weight must be between 10kg and 500kg.', false);
+      return;
+    }
+
+    // Realistic validation for target weight (minimum 10kg, maximum 500kg)
+    if (targetWeight < 10 || targetWeight > 500) {
+      _showCustomSnackBar('Target weight must be between 10kg and 500kg.', false);
+      return;
+    }
+
+    // Realistic validation for height (minimum 50cm, maximum 300cm)
+    if (height < 50 || height > 300) {
+      _showCustomSnackBar('Height must be between 50cm and 300cm.', false);
+      return;
+    }
+
+    // Ensure target weight is reasonable compared to current weight
+    if (targetWeight < 10) {
+      _showCustomSnackBar('Target weight must be at least 10kg.', false);
+      return;
+    }
+
+    // Ensure target weight is not significantly lower than current weight
+    if (targetWeight < currentWeight * 0.7) {
+      _showCustomSnackBar('Target weight cannot be less than 70% of current weight.', false);
+      return;
+    }
+
+    // Ensure target weight is not significantly higher than current weight
+    if (targetWeight > currentWeight * 1.5) {
+      _showCustomSnackBar('Target weight cannot be more than 150% of current weight.', false);
       return;
     }
 
@@ -252,8 +284,8 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
       final data = json.decode(response.body);
       if (data['success'] == true) {
-        _showCustomSnackBar(data['message'] ?? 'Physical stats updated successfully!', true); // Updated SnackBar
-        if (mounted) { // Check if mounted before setState
+        _showCustomSnackBar(data['message'] ?? 'Physical stats updated successfully!', true);
+        if (mounted) {
           setState(() {
             originalCurrentWeight = currentWeightController.text.trim();
             originalTargetWeight = targetWeightController.text.trim();
@@ -266,12 +298,12 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           });
         }
       } else {
-        _showCustomSnackBar(data['message'] ?? 'Failed to update stats.', false); // Updated SnackBar
+        _showCustomSnackBar(data['message'] ?? 'Failed to update stats.', false);
       }
     } catch (e) {
-      _showCustomSnackBar('Network error. Please try again.', false); // Updated SnackBar
+      _showCustomSnackBar('Network error. Please try again.', false);
     } finally {
-      if (mounted) { // Check if mounted before setState
+      if (mounted) {
         setState(() => isSaving = false);
       }
     }
@@ -319,7 +351,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(
-        backgroundColor: Colors.deepPurple, // Match app bar color
+        backgroundColor: Colors.deepPurple,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -344,7 +376,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: Colors.deepPurple.shade50, // Softer background - Improved Design
+        backgroundColor: Colors.deepPurple.shade50,
         appBar: AppBar(
           title: const Text('Physical Stats'),
           backgroundColor: Colors.deepPurple,
@@ -376,13 +408,13 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
               ),
           ],
         ),
-        body: SafeArea( // Improved Design
-          child: SingleChildScrollView( // Improved Design
-            padding: const EdgeInsets.all(16), // Improved Design
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start, // Improved Design
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Section - Improved Design
+                // Header Section
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -466,7 +498,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                     readOnly: !isEditing,
                                     style: const TextStyle(color: Colors.black87),
-                                    decoration: _inputDecoration().copyWith( // Improved Design
+                                    decoration: _inputDecoration().copyWith(
                                       hintText: isEditing ? 'e.g., 70' : null,
                                     ),
                                     onChanged: (value) {
@@ -504,9 +536,16 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                     readOnly: !isEditing,
                                     style: const TextStyle(color: Colors.black87),
-                                    decoration: _inputDecoration().copyWith( // Improved Design
+                                    decoration: _inputDecoration().copyWith(
                                       hintText: isEditing ? 'e.g., 75' : null,
                                     ),
+                                    onChanged: (value) {
+                                      if (isEditing) {
+                                        _calculateBMI();
+                                        // Force rebuild to update save button state
+                                        if (mounted) setState(() {});
+                                      }
+                                    },
                                     validator: (value) {
                                       if (isEditing && (value == null || value.isEmpty)) {
                                         return 'Required';
@@ -578,7 +617,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                     readOnly: !isEditing,
                                     style: const TextStyle(color: Colors.black87),
-                                    decoration: _inputDecoration().copyWith( // Improved Design
+                                    decoration: _inputDecoration().copyWith(
                                       hintText: isEditing ? 'e.g., 175' : null,
                                     ),
                                     onChanged: (value) {
@@ -614,15 +653,16 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                                     decoration: BoxDecoration(
-                                      color: Colors.grey.shade100, // Changed from Colors.grey[100]
+                                      color: _getBMIColor(bmiCategory),
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.grey.shade300), // Changed from Colors.grey[300]
+                                      border: Border.all(color: Colors.grey.shade300),
                                     ),
                                     child: Text(
                                       bmiCategory,
                                       style: const TextStyle(
                                         fontSize: 16,
-                                        color: Colors.black87,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ),
@@ -695,8 +735,8 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                           ),
                           activeColor: Colors.deepPurple.shade700,
                           activeTrackColor: Colors.deepPurple.shade200,
-                          inactiveThumbColor: Colors.grey.shade400, // Changed from Colors.grey[400]
-                          inactiveTrackColor: Colors.grey.shade300, // Changed from Colors.grey[300]
+                          inactiveThumbColor: Colors.grey.shade400,
+                          inactiveTrackColor: Colors.grey.shade300,
                           value: hasInjury,
                           onChanged: isEditing
                               ? (val) {
@@ -707,7 +747,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                               }
                             });
                           }
-                              : null, // Disable if not editing
+                              : null,
                         ),
                         if (hasInjury && isEditing) ...[
                           const SizedBox(height: 12),
@@ -725,8 +765,8 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                 setState(() => selectedInjuryCategory = val);
                               }
                             }
-                                : null, // Disable if not editing
-                            decoration: _inputDecoration(), // Improved Design
+                                : null,
+                            decoration: _inputDecoration(),
                             validator: (value) =>
                             hasInjury && (value == null || value.isEmpty)
                                 ? 'Please select an injury'
@@ -749,7 +789,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
                 const SizedBox(height: 30),
 
-                // Save Button (only visible when editing) - Improved Design
+                // Save Button (only visible when editing)
                 if (isEditing)
                   Center(
                     child: SizedBox(
@@ -792,7 +832,23 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     );
   }
 
-  // Improved Input Decoration - Better Design Consistency
+  // Get color based on BMI category
+  Color _getBMIColor(String category) {
+    switch (category) {
+      case 'Underweight':
+        return Colors.blue.shade700;
+      case 'Normal':
+        return Colors.green.shade700;
+      case 'Overweight':
+        return Colors.orange.shade700;
+      case 'Obese':
+        return Colors.red.shade700;
+      default:
+        return Colors.grey.shade500;
+    }
+  }
+
+  // Improved Input Decoration
   InputDecoration _inputDecoration() {
     return InputDecoration(
       filled: true,
