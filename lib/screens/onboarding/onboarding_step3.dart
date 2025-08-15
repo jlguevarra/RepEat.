@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'onboarding_step4.dart';
+import 'onboarding_step4.dart'; // Make sure this path is correct
 
 class OnboardingStep3 extends StatefulWidget {
   final int userId;
@@ -23,16 +23,16 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
   final TextEditingController _heightController = TextEditingController();
   final TextEditingController _currentWeightController = TextEditingController();
   final TextEditingController _targetWeightController = TextEditingController();
-  final TextEditingController _setsController = TextEditingController(text: "3");
-  final TextEditingController _repsController = TextEditingController(text: "12");
 
   String? _selectedGoal;
-  final List<String> _goals = [
+  // 1. Removed 'Endurance' and 'General Fitness'
+  final List<String> _allGoals = [
     'Muscle Gain',
     'Weight Loss',
-    'Endurance',
-    'General Fitness',
+    // 'Endurance', // Removed
+    // 'General Fitness', // Removed
   ];
+  late List<String> _allowedGoals; // Declare as late, initialize in initState
 
   String? _bmiCategory;
 
@@ -66,11 +66,10 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
         ),
         margin: const EdgeInsets.all(20),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 5),
       ),
     );
   }
-
 
   void _updateBMICategory() {
     final height = double.tryParse(_heightController.text);
@@ -100,12 +99,73 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
     }
   }
 
+  // 4. Determine allowed goals based on current and target weight
+  // Note: This now only updates _allowedGoals, not _selectedGoal automatically.
+  void _updateAllowedGoals() {
+    final currentStr = _currentWeightController.text;
+    final targetStr = _targetWeightController.text;
+
+    // Only proceed if both fields have content
+    if (currentStr.isEmpty || targetStr.isEmpty) {
+      // If either is empty, reset to allow both goals
+      setState(() {
+        _allowedGoals = List.from(_allGoals);
+        // Do not auto-select or clear selection here
+        // Keep current selection if it's still valid
+        if (_selectedGoal != null && !_allowedGoals.contains(_selectedGoal)) {
+          _selectedGoal = null; // Clear if no longer valid
+        }
+      });
+      return;
+    }
+
+    final current = double.tryParse(currentStr);
+    final target = double.tryParse(targetStr);
+
+    // Only proceed if both are valid numbers
+    if (current == null || target == null) {
+      return;
+    }
+
+    setState(() {
+      if (current > target) {
+        // Suggest Weight Loss by limiting options (but don't auto-select)
+        _allowedGoals = ['Weight Loss'];
+        // Clear selection only if it's no longer valid
+        if (_selectedGoal != null && !_allowedGoals.contains(_selectedGoal)) {
+          _selectedGoal = null;
+        }
+      } else if (current < target) {
+        // Suggest Muscle Gain by limiting options (but don't auto-select)
+        _allowedGoals = ['Muscle Gain'];
+        // Clear selection only if it's no longer valid
+        if (_selectedGoal != null && !_allowedGoals.contains(_selectedGoal)) {
+          _selectedGoal = null;
+        }
+      } else {
+        // Current == Target, allow both (validation will prevent saving)
+        _allowedGoals = List.from(_allGoals);
+        // Clear selection only if it's no longer valid (shouldn't happen here)
+        if (_selectedGoal != null && !_allowedGoals.contains(_selectedGoal)) {
+          _selectedGoal = null;
+        }
+      }
+    });
+  }
+
   void _nextStep() {
     if (_formKey.currentState!.validate()) {
+      // Final check to ensure goal is selected if weights are different
+      if (_selectedGoal == null) {
+        // This case should ideally be caught by validation, but double-check
+        _showCustomSnackBar('Please select a fitness goal.', false);
+        return;
+      }
+
       String bodyType = _bmiCategory ?? 'Unknown';
 
-      // Navigate to next step
-      if (mounted) { // Check if widget is still mounted before navigation
+      // Navigate to next step (removed sets and reps)
+      if (mounted) {
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -117,9 +177,8 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
               bodyType: bodyType,
               currentWeight: _currentWeightController.text,
               targetWeight: _targetWeightController.text,
-              goal: _selectedGoal!,
-              sets: _setsController.text,
-              reps: _repsController.text,
+              goal: _selectedGoal!, // Guaranteed by validation
+              // Removed sets and reps as they are auto-determined by the system
             ),
           ),
         );
@@ -136,22 +195,56 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
     return null;
   }
 
+  // 3. Validate for unreasonable target weight (shorter message)
+  String? _validateTargetWeight(String? value) {
+    final baseValidation = _validateNumber(value, 'Target weight', min: 30, max: 300);
+    if (baseValidation != null) return baseValidation;
+
+    final currentStr = _currentWeightController.text;
+    if (currentStr.isEmpty) return null; // Let current weight validation handle this
+
+    final current = double.tryParse(currentStr);
+    final target = double.tryParse(value ?? '');
+
+    if (current == null || target == null) return 'Invalid weight values';
+
+    if (target == current) {
+      return 'Target must be different';
+    }
+
+    // 3. Check for unreasonable weight loss/gain (shorter message)
+    final double percentageDifference = ((target - current).abs() / current) * 100;
+    const double unreasonableThresholdPercent = 40.0;
+
+    if (percentageDifference > unreasonableThresholdPercent) {
+      return 'Change is too extreme';
+    }
+
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
     _heightController.addListener(_updateBMICategory);
     _currentWeightController.addListener(_updateBMICategory);
+    // 4. Add listeners for weight fields to trigger goal updates
+    _currentWeightController.addListener(_updateAllowedGoals);
+    _targetWeightController.addListener(_updateAllowedGoals);
+    // Initialize allowed goals
+    _allowedGoals = List.from(_allGoals);
   }
 
   @override
   void dispose() {
-    _heightController.removeListener(_updateBMICategory); // Explicitly remove listeners
+    _heightController.removeListener(_updateBMICategory);
     _currentWeightController.removeListener(_updateBMICategory);
+    // 4. Remove listeners for goal updates
+    _currentWeightController.removeListener(_updateAllowedGoals);
+    _targetWeightController.removeListener(_updateAllowedGoals);
     _heightController.dispose();
     _currentWeightController.dispose();
     _targetWeightController.dispose();
-    _setsController.dispose();
-    _repsController.dispose();
     super.dispose();
   }
 
@@ -307,28 +400,7 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                       color: Colors.deepPurple.shade700,
                     ),
                   ),
-                  validator: (value) {
-                    final baseValidation = _validateNumber(value, 'Target weight', min: 30, max: 300);
-                    if (baseValidation != null) return baseValidation;
-
-                    final current = double.tryParse(_currentWeightController.text);
-                    final target = double.tryParse(value ?? '');
-                    if (current == null || target == null) return 'Invalid weight values';
-
-                    if (target == current) {
-                      return 'Target weight must be different from current weight';
-                    }
-
-                    if (_selectedGoal == 'Weight Loss' && target > current) {
-                      return 'Target must be less than current (Weight Loss)';
-                    }
-
-                    if (_selectedGoal == 'Muscle Gain' && target < current) {
-                      return 'Target must be more than current (Muscle Gain)';
-                    }
-
-                    return null;
-                  },
+                  validator: _validateTargetWeight, // 3. Use the new validator
                 ),
                 const SizedBox(height: 10),
 
@@ -350,7 +422,7 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'BMI Category: $_bmiCategory',
+                          'BMI: $_bmiCategory',
                           style: TextStyle(
                             color: Colors.deepPurple.shade800,
                             fontWeight: FontWeight.w600,
@@ -362,8 +434,8 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                 ],
                 const SizedBox(height: 20),
 
-                // Fitness Goal Dropdown
-                DropdownButtonFormField<String>(
+                // Fitness Goal Dropdown (4. Uses _allowedGoals, user can always select)
+                DropdownButtonFormField<String?>(
                   decoration: InputDecoration(
                     labelText: 'Fitness Goal',
                     labelStyle: TextStyle(color: Colors.deepPurple.shade700),
@@ -387,84 +459,15 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                     ),
                   ),
                   value: _selectedGoal,
-                  items: _goals.map((goal) => DropdownMenuItem(value: goal, child: Text(goal))).toList(),
+                  items: _allowedGoals.map((goal) => DropdownMenuItem(value: goal, child: Text(goal))).toList(),
                   onChanged: (value) {
+                    // Always allow user to change the selection
                     setState(() => _selectedGoal = value);
                   },
                   validator: (value) => value == null ? 'Please select a goal' : null,
                 ),
-                const SizedBox(height: 20),
+                // 1. Removed Sets and Reps Row
 
-                // Sets and Reps Row
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _setsController,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.black87),
-                        decoration: InputDecoration(
-                          labelText: 'Preferred Sets',
-                          labelStyle: TextStyle(color: Colors.deepPurple.shade700),
-                          hintText: 'e.g., 3',
-                          hintStyle: TextStyle(color: Colors.grey[400]),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.deepPurple.shade200),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.exposure, // Icon for sets
-                            color: Colors.deepPurple.shade700,
-                          ),
-                        ),
-                        validator: (value) => _validateNumber(value, 'Sets', min: 1, max: 10),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _repsController,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.black87),
-                        decoration: InputDecoration(
-                          labelText: 'Reps per Set',
-                          labelStyle: TextStyle(color: Colors.deepPurple.shade700),
-                          hintText: 'e.g., 12',
-                          hintStyle: TextStyle(color: Colors.grey[400]),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.deepPurple.shade200),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.repeat, // Icon for reps
-                            color: Colors.deepPurple.shade700,
-                          ),
-                        ),
-                        validator: (value) => _validateNumber(value, 'Reps', min: 1, max: 100),
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 40), // Space before button
 
                 // Next Button

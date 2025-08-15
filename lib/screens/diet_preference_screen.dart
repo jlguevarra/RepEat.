@@ -54,6 +54,41 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     _loadProfile();
   }
 
+  // Custom Snackbar method - Improved Design
+  void _showCustomSnackBar(String message, bool isSuccess) {
+    if (!mounted) return; // Guard against state changes if widget is disposed
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isSuccess ? Icons.check_circle : Icons.error,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isSuccess ? Colors.green.shade700 : Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   Future<bool> _onWillPop() async {
     if (!isEditing || !_hasChanges()) return true;
 
@@ -83,11 +118,8 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     userId = prefs.getInt('user_id');
 
     if (userId == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User ID not found. Please log in again.')),
-      );
-      Navigator.pop(context);
+      _showCustomSnackBar('User ID not found. Please log in again.', false); // Updated SnackBar
+      if (mounted) Navigator.pop(context);
       return;
     }
 
@@ -108,26 +140,23 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
         )
             : {};
 
-        setState(() {
-          selectedDiet = dietOptions.contains(diet) ? diet : 'None';
-          originalDiet = selectedDiet;
-          selectedAllergies = Set.from(allergiesSet);
-          originalAllergies = Set.from(allergiesSet);
-        });
+        if (mounted) { // Check if mounted before setState
+          setState(() {
+            selectedDiet = dietOptions.contains(diet) ? diet : 'None';
+            originalDiet = selectedDiet;
+            selectedAllergies = Set.from(allergiesSet);
+            originalAllergies = Set.from(allergiesSet);
+          });
+        }
       } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Failed to load profile.')),
-        );
+        _showCustomSnackBar(data['message'] ?? 'Failed to load profile.', false); // Updated SnackBar
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading profile: $e')),
-      );
+      _showCustomSnackBar('Error loading profile: $e', false); // Updated SnackBar
     } finally {
-      if (!mounted) return;
-      setState(() => isLoading = false);
+      if (mounted) { // Check if mounted before setState
+        setState(() => isLoading = false);
+      }
     }
   }
 
@@ -151,25 +180,23 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
       final result = json.decode(response.body);
 
       if (result['success'] == true) {
-        setState(() {
-          isEditing = false;
-          originalDiet = selectedDiet;
-          originalAllergies = Set.from(selectedAllergies);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['message'] ?? 'Preferences updated.')),
-        );
+        if (mounted) { // Check if mounted before setState
+          setState(() {
+            isEditing = false;
+            originalDiet = selectedDiet;
+            originalAllergies = Set.from(selectedAllergies);
+          });
+        }
+        _showCustomSnackBar(result['message'] ?? 'Preferences updated.', true); // Updated SnackBar
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['message'] ?? 'Failed to update preferences.')),
-        );
+        _showCustomSnackBar(result['message'] ?? 'Failed to update preferences.', false); // Updated SnackBar
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      _showCustomSnackBar('Error: $e', false); // Updated SnackBar
     } finally {
-      setState(() => isSaving = false);
+      if (mounted) { // Check if mounted before setState
+        setState(() => isSaving = false);
+      }
     }
   }
 
@@ -199,7 +226,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
       ),
     );
 
-    if (confirm == true) {
+    if (confirm == true && mounted) {
       setState(() {
         selectedDiet = originalDiet;
         selectedAllergies = Set.from(originalAllergies);
@@ -212,16 +239,36 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: Colors.deepPurple, // Match app bar color
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Loading Diet Preferences...',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
+        backgroundColor: Colors.deepPurple.shade50, // Softer background - Improved Design
         appBar: AppBar(
           title: const Text('Diet & Allergies'),
           backgroundColor: Colors.deepPurple,
+          foregroundColor: Colors.white,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () async {
@@ -233,117 +280,266 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
           actions: [
             if (isEditing)
               IconButton(
-                icon: const Icon(Icons.close),
+                icon: const Icon(Icons.cancel),
                 tooltip: 'Cancel',
                 onPressed: _cancelEditing,
-              ),
-            if (!isEditing)
+              )
+            else
               IconButton(
                 icon: const Icon(Icons.edit),
                 onPressed: () => setState(() => isEditing = true),
+                tooltip: 'Edit',
               ),
           ],
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: ListView(
-            children: [
-              const Text(
-                'Diet Preference',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-              ),
-              const SizedBox(height: 8),
-              isEditing
-                  ? DropdownButtonFormField<String>(
-                value: selectedDiet,
-                items: dietOptions.map((diet) {
-                  return DropdownMenuItem(
-                    value: diet,
-                    child: Text(diet),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() => selectedDiet = val);
-                  }
-                },
-                decoration: _inputDecoration(),
-              )
-                  : Text(selectedDiet, style: const TextStyle(fontSize: 16)),
-
-              const SizedBox(height: 24),
-              const Text(
-                'Allergies',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-              ),
-              const SizedBox(height: 8),
-              isEditing
-                  ? Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: allergyOptions.map((allergy) {
-                  final isSelected = selectedAllergies.contains(allergy);
-                  return FilterChip(
-                    label: Text(allergy),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() {
-                        if (selected) {
-                          if (allergy == 'None') {
-                            selectedAllergies.clear();
-                            selectedAllergies.add('None');
-                          } else {
-                            selectedAllergies.remove('None');
-                            selectedAllergies.add(allergy);
-                          }
-                        } else {
-                          selectedAllergies.remove(allergy);
-                        }
-                      });
-                    },
-                    selectedColor: Colors.deepPurple.shade100,
-                    checkmarkColor: Colors.deepPurple,
-                  );
-                }).toList(),
-              )
-                  : Text(
-                selectedAllergies.isEmpty
-                    ? "None"
-                    : selectedAllergies.join(', '),
-                style: const TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 32),
-              if (isEditing)
+        body: SafeArea( // Improved Design
+          child: SingleChildScrollView( // Improved Design
+            padding: const EdgeInsets.all(16), // Improved Design
+            child: Column( // Changed from ListView to Column inside SingleChildScrollView
+              crossAxisAlignment: CrossAxisAlignment.start, // Improved Design
+              children: [
+                // Header Section - Improved Design
                 Center(
-                  child: ElevatedButton(
-                    onPressed: _hasChanges() && !isSaving ? _saveProfile : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.shade100,
+                      shape: BoxShape.circle,
                     ),
-                    child: isSaving
-                        ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                        : const Text('Save', style: TextStyle(fontSize: 16)),
+                    child: Icon(
+                      Icons.restaurant,
+                      size: 40,
+                      color: Colors.deepPurple.shade800,
+                    ),
                   ),
                 ),
-            ],
+                const SizedBox(height: 20),
+                const Text(
+                  'Dietary Preferences',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Manage your dietary needs and restrictions',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 30),
+
+                // Diet Preference Section - Improved Design (Card)
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.fastfood_outlined,
+                              color: Colors.deepPurple.shade700,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Diet Preference',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.deepPurple,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        isEditing
+                            ? DropdownButtonFormField<String>(
+                          value: selectedDiet,
+                          items: dietOptions.map((diet) {
+                            return DropdownMenuItem(
+                              value: diet,
+                              child: Text(diet),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => selectedDiet = val);
+                            }
+                          },
+                          decoration: _inputDecoration(), // Improved Design
+                        )
+                            : Text(
+                          selectedDiet,
+                          style: const TextStyle(fontSize: 16, color: Colors.black87),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Allergies Section - Improved Design (Card)
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.warning_amber_outlined,
+                              color: Colors.deepPurple.shade700,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Allergies',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.deepPurple,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (isEditing) ...[
+                          // Improved Allergy Selection using Wrap and FilterChip
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: allergyOptions.map((allergy) {
+                              final isSelected = selectedAllergies.contains(allergy);
+                              return FilterChip(
+                                label: Text(allergy),
+                                selected: isSelected,
+                                onSelected: (selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      if (allergy == 'None') {
+                                        selectedAllergies.clear();
+                                        selectedAllergies.add('None');
+                                      } else {
+                                        selectedAllergies.remove('None');
+                                        selectedAllergies.add(allergy);
+                                      }
+                                    } else {
+                                      selectedAllergies.remove(allergy);
+                                    }
+                                  });
+                                },
+                                selectedColor: Colors.deepPurple.shade100,
+                                checkmarkColor: Colors.deepPurple,
+                                labelStyle: TextStyle(
+                                  color: isSelected
+                                      ? Colors.deepPurple.shade800
+                                      : Colors.grey.shade700,
+                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                ),
+                                backgroundColor: Colors.grey.shade100,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                  side: BorderSide(
+                                    color: isSelected
+                                        ? Colors.deepPurple.shade300
+                                        : Colors.grey.shade300,
+                                    width: 1,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ] else ...[
+                          // Improved Read-Only Display
+                          Text(
+                            selectedAllergies.isEmpty || (selectedAllergies.length == 1 && selectedAllergies.contains('None'))
+                                ? "No allergies selected"
+                                : selectedAllergies.join(', '),
+                            style: const TextStyle(fontSize: 16, color: Colors.black87),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                // Save Button (only visible when editing) - Improved Design
+                if (isEditing)
+                  Center(
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _hasChanges() && !isSaving ? _saveProfile : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple.shade800,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: isSaving
+                            ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                            : const Text(
+                          'Save Changes',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  // Improved Input Decoration - Better Design Consistency
   InputDecoration _inputDecoration() {
     return InputDecoration(
       filled: true,
       fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.deepPurple.shade200),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
       ),
     );
   }

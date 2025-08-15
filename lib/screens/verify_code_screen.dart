@@ -35,6 +35,41 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
     super.dispose();
   }
 
+  // Custom Snackbar method - Improved Design
+  void _showCustomSnackBar(String message, bool isSuccess) {
+    if (!mounted) return; // Guard against state changes if widget is disposed
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isSuccess ? Icons.check_circle : Icons.error,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isSuccess ? Colors.green.shade700 : Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   void startTimer() {
     setState(() {
       _secondsLeft = 60;
@@ -70,30 +105,31 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Code verified')),
-        );
+        _showCustomSnackBar(data['message'] ?? 'Code verified successfully!', true); // Updated SnackBar
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ResetPasswordScreen(
-              email: widget.email,
-              code: _codeCtrl.text.trim(), // ✅ Pass the code here
-            ),
-          ),
-        );
+        // Add small delay to show success message
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ResetPasswordScreen(
+                  email: widget.email,
+                  code: _codeCtrl.text.trim(), // ✅ Pass the code here
+                ),
+              ),
+            );
+          }
+        });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Invalid code')),
-        );
+        _showCustomSnackBar(data['message'] ?? 'Invalid verification code', false); // Updated SnackBar
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      _showCustomSnackBar('Network error: ${e.toString()}', false); // Updated SnackBar
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) { // Check if mounted before setState
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -108,105 +144,202 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Code resent')),
-        );
+        _showCustomSnackBar(data['message'] ?? 'Verification code resent!', true); // Updated SnackBar
         startTimer();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'Failed to resend')),
-        );
+        _showCustomSnackBar(data['message'] ?? 'Failed to resend code', false); // Updated SnackBar
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to resend: ${e.toString()}')),
-      );
+      _showCustomSnackBar('Failed to resend: ${e.toString()}', false); // Updated SnackBar
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.deepPurple.shade800,
+      backgroundColor: Colors.deepPurple.shade50, // Softer background - Improved Design
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: const Text('Verify Code'),
-        centerTitle: true,
         elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: Colors.deepPurple.shade800), // Updated color
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+      body: SafeArea( // Improved Design
+        child: SingleChildScrollView( // Allow scrolling if needed
+          padding: const EdgeInsets.all(24), // Improved Design
           child: Form(
             key: _formKey,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start, // Improved Design
               children: [
-                const SizedBox(height: 30),
-                Text(
-                  "A verification code was sent to:",
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-                Text(
-                  widget.email,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                // Header Section - Improved Design
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.sms_outlined,
+                      size: 50,
+                      color: Colors.deepPurple.shade800,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 30),
+
+                // Title - Improved Design
+                Text(
+                  "Verify Your Email",
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple.shade900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Subtitle - Improved Design
+                Text(
+                  "We've sent a 6-digit code to",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.email,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.deepPurple.shade800,
+                  ),
+                ),
+                const SizedBox(height: 30),
+
+                // OTP Input Field - Improved Design
                 TextFormField(
                   controller: _codeCtrl,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Allow numbers only
-                  style: const TextStyle(color: Colors.white),
-                  maxLength: 6,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(6),
+                  ],
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 24,
+                    letterSpacing: 8,
+                  ),
+                  textAlign: TextAlign.center,
                   decoration: InputDecoration(
-                    labelText: '6-digit Code',
-                    labelStyle: const TextStyle(color: Colors.white70),
-                    counterStyle: const TextStyle(color: Colors.white38),
+                    hintText: '------',
+                    hintStyle: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 24,
+                      letterSpacing: 8,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                     enabledBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: Colors.white70),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.deepPurple.shade200),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: Colors.white),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
                     ),
+                    counterText: '',
                   ),
                   validator: (value) {
-                    if (value == null || value.length != 6) {
-                      return 'Enter a valid 6-digit code';
+                    if (value == null || value.isEmpty) {
+                      return 'Verification code is required';
+                    }
+                    if (value.length != 6) {
+                      return 'Code must be 6 digits';
                     }
                     return null;
                   },
                 ),
+                const SizedBox(height: 10),
 
+                // Character counter - Improved Design
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '${_codeCtrl.text.length}/6',
+                    style: TextStyle(
+                      color: _codeCtrl.text.length == 6
+                          ? Colors.green
+                          : Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 30),
+
+                // Verify Button - Improved Design
                 SizedBox(
                   width: double.infinity,
+                  height: 55,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _verifyCode,
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.deepPurple,
+                      backgroundColor: Colors.deepPurple.shade800,
+                      foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                       ),
+                      elevation: 2,
                     ),
                     child: _isLoading
-                        ? const CircularProgressIndicator()
-                        : const Text('Verify Code', style: TextStyle(fontSize: 16)),
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
+                      'Verify Code',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
-                TextButton(
-                  onPressed: _canResend ? _resendCode : null,
-                  child: Text(
-                    _canResend
-                        ? 'Resend Code'
-                        : 'Resend in $_secondsLeft sec',
-                    style: const TextStyle(color: Colors.white),
+
+                // Resend Code Section - Improved Design
+                Center(
+                  child: Column(
+                    children: [
+                      Text(
+                        "Didn't receive the code?",
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: _canResend ? _resendCode : null,
+                        child: Text(
+                          _canResend
+                              ? 'Resend Code'
+                              : 'Resend in $_secondsLeft sec',
+                          style: TextStyle(
+                            color: _canResend
+                                ? Colors.deepPurple.shade700
+                                : Colors.grey[500],
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

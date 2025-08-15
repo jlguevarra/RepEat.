@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'onboarding_step5.dart';
+import 'onboarding_step5.dart'; // Make sure this path is correct
 
 class OnboardingStep4 extends StatefulWidget {
   final int userId;
@@ -10,8 +10,7 @@ class OnboardingStep4 extends StatefulWidget {
   final String currentWeight;
   final String targetWeight;
   final String goal;
-  final String sets;
-  final String reps;
+  // 1. Removed sets and reps parameters
 
   const OnboardingStep4({
     super.key,
@@ -23,8 +22,7 @@ class OnboardingStep4 extends StatefulWidget {
     required this.currentWeight,
     required this.targetWeight,
     required this.goal,
-    required this.sets,
-    required this.reps,
+    // 1. Removed sets and reps from constructor
   });
 
   @override
@@ -87,7 +85,7 @@ class _OnboardingStep4State extends State<OnboardingStep4> {
       return;
     }
 
-    // Navigate to next step
+    // Navigate to next step (removed sets and reps)
     if (mounted) { // Check if widget is still mounted before navigation
       Navigator.push(
         context,
@@ -101,8 +99,7 @@ class _OnboardingStep4State extends State<OnboardingStep4> {
             currentWeight: widget.currentWeight,
             targetWeight: widget.targetWeight,
             goal: widget.goal,
-            sets: widget.sets,
-            reps: widget.reps,
+            // Removed sets and reps as they are auto-determined by the system
             hasInjury: hasInjury,
             injuryDetails: hasInjury ? selectedInjury! : "",
           ),
