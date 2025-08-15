@@ -93,7 +93,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
 
     try {
       final response = await http.get(Uri.parse(
-        'http://192.168.0.11/repEatApi/get_profile.php?user_id=$userId',
+        'http://192.168.100.79/repEatApi/get_profile.php?user_id=$userId',
       ));
       final data = json.decode(response.body);
 
@@ -140,7 +140,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.11/repEatApi/update_diet_allergies.php'),
+        Uri.parse('http://192.168.100.79/repEatApi/update_diet_allergies.php'),
         body: {
           'user_id': userId.toString(),
           'diet_preference': selectedDiet,
