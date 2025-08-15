@@ -37,7 +37,7 @@ class OnboardingStep5 extends StatefulWidget {
 class _OnboardingStep5State extends State<OnboardingStep5> {
   final _formKey = GlobalKey<FormState>();
   String? _dietPreference;
-  Set<String> _selectedAllergies = {"None"}; // Start with "None" selected by default
+  Set<String> _selectedAllergies = {}; // Start with an empty set to show prompt
 
   bool _isSubmitting = false;
   bool _allergyError = false; // Tracks if an error message should be shown
@@ -55,7 +55,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
   // Allergy options including "None"
   final List<String> allergyOptions = [
-    "None",
+    "None", // Explicit "None" option
     "Peanuts",
     "Tree Nuts",
     "Milk", // This will be locked/auto-managed if Dairy Free is selected
@@ -68,8 +68,10 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
   // Flag to track if Milk was auto-added due to Dairy Free
   bool _milkAutoAdded = false;
+  // Flag to track if None was auto-disabled due to Dairy Free
+  bool _noneAutoDisabled = false;
 
-  // Custom Snackbar method
+  // Custom Snackbar method - Improved Design
   void _showCustomSnackBar(String message, bool isSuccess) {
     if (!mounted) return; // Guard against state changes if widget is disposed
     ScaffoldMessenger.of(context).showSnackBar(
@@ -141,18 +143,23 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
   // Method to handle auto-allergies like Dairy Free -> Milk (Locked/Auto-Manage)
   // And handle deselection when diet changes
-  // Allow manual "Milk" selection for other diets
+  // Also disable "None" when Dairy Free is selected
   void _evaluateAutoAllergies() {
     setState(() {
       if (_dietPreference == "Dairy Free") {
-        // If Dairy Free is selected, ensure "Milk" is included.
+        // If Dairy Free is selected, ensure "Milk" is included and "None" is disabled.
         if (!_selectedAllergies.contains("Milk")) {
           // If Milk is not already selected, add it automatically.
           _selectedAllergies.remove("None"); // Remove "None" if present
           _selectedAllergies.add("Milk");
           _milkAutoAdded = true; // Mark it as auto-added
+        } else if (!_milkAutoAdded) {
+          // If Milk was already selected but not marked as auto-added,
+          // it means the user selected it themselves. Keep the flag as false.
+          // (This case is handled by the logic in _showAllergySelector/_evaluateAutoAllergies when selecting)
         }
         // If Milk is already selected (alone or with others), do nothing special.
+        _noneAutoDisabled = true; // Disable "None" when Dairy Free is selected
         _allergyError = false; // Clear error state when auto-changing
       } else {
         // If diet is changed from Dairy Free to something else
@@ -168,15 +175,10 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
         // If Milk was selected by the user (not auto-added), leave it.
         // If "None" is selected, leave it.
         // If other items are selected, leave them.
+        _noneAutoDisabled = false; // Enable "None" when Dairy Free is deselected
         _allergyError = false; // Clear error state
       }
     });
-  }
-
-  Future<bool> _onWillPop() async {
-    // Handle unsaved changes logic here if needed
-    // For now, just allow popping
-    return true;
   }
 
   Future<void> _submitData() async {
@@ -186,19 +188,23 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
     // Scenario 1: User explicitly selected "None" -> Valid (shows "No Allergies")
     // Scenario 2: User selected specific allergies -> Valid
     // Scenario 3: User selected "None" AND other allergies -> Invalid
-    // Scenario 4: User selected nothing (initial state {"None"}) -> Valid (shows "No Allergies")
+    // Scenario 4: User selected nothing (initial state {}) -> Invalid (Prompt to select)
 
     bool isValidSelection = true;
     String errorMessage = "";
 
     // Check if user made any selections
-    if (_selectedAllergies.contains("None")) {
+    if (_selectedAllergies.isEmpty) {
+      // Scenario 4: Nothing selected (initial prompt state)
+      isValidSelection = false;
+      errorMessage = "Please select 'None' if you have no allergies, or select specific allergies.";
+    } else if (_selectedAllergies.contains("None")) {
       if (_selectedAllergies.length > 1) {
         // Scenario 3: "None" mixed with others
         isValidSelection = false;
         errorMessage = "Cannot select 'None' with other allergies.";
       } else {
-        // Scenario 1 or 4: Only "None" selected -> Valid (do nothing)
+        // Scenario 1: Only "None" selected -> Valid (do nothing)
         // Display will be "No Allergies"
       }
     } else {
@@ -300,7 +306,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
         Set<String> tempSelection = Set.from(_selectedAllergies);
         // Determine if "Milk" should be locked and if "None" should be disabled
         final bool isMilkLocked = _dietPreference == "Dairy Free";
-        final bool isNoneDisabled = isMilkLocked; // Disable "None" when "Dairy Free" is selected
+        final bool isNoneDisabled = _dietPreference == "Dairy Free"; // Disable "None" when Dairy Free is selected
 
         return StatefulBuilder(
           builder: (context, dialogStateSetter) { // State setter for the dialog
@@ -325,7 +331,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                         return IgnorePointer(
                           ignoring: isDisabled, // Disable interaction if locked or disabled
                           child: Opacity(
-                            opacity: isDisabled ? 0.4 : 1.0, // Visually indicate it's locked/disabled
+                            opacity: isDisabled ? 0.6 : 1.0, // Visually indicate it's locked/disabled
                             child: CheckboxListTile(
                               title: Row(
                                 children: [
@@ -348,7 +354,8 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                                       tempSelection.clear();
                                       tempSelection.add("None");
                                       // If user explicitly selects "None", it wasn't auto-added
-                                      _milkAutoAdded = false;
+                                      _milkAutoAdded = false; // Reset milk flag
+                                      _noneAutoDisabled = false; // Reset none disabled flag
                                     } else {
                                       // Selecting a specific allergy
                                       tempSelection.remove("None"); // Remove "None"
@@ -362,12 +369,12 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                                     // Deselecting an item (only if not locked/disabled)
                                     if (!isDisabled) {
                                       tempSelection.remove(allergy);
+                                      // Do not automatically add "None" here.
+                                      // Let the final "OK" logic or validation handle empty states if needed.
                                       // If user explicitly deselects Milk, update flag
                                       if (allergy == "Milk") {
                                         _milkAutoAdded = false; // User deselected it
                                       }
-                                      // Do not automatically add "None" here.
-                                      // Let the final "OK" logic or validation handle empty states if needed.
                                     }
                                   }
                                 });
@@ -395,14 +402,19 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                     // When OK is pressed, commit the temp selection to main state
                     setState(() {
                       _selectedAllergies = Set.from(tempSelection);
-                      _milkAutoAdded = tempSelection.contains("Milk") && isMilkLocked; // Update flag correctly
+                      _milkAutoAdded = tempSelection.contains("Milk") && _dietPreference == "Dairy Free"; // Update flag correctly
+                      _noneAutoDisabled = _dietPreference == "Dairy Free"; // Update flag correctly
 
                       // Finalize selection logic upon closing dialog:
-                      // If absolutely nothing is selected, set to {"None"}
-                      // This handles edge cases where user deselects everything.
+                      // If absolutely nothing is selected, leave it empty {}
+                      // This preserves the initial prompt state if user cancels all selections.
+                      // DO NOT set to {"None"} here.
+                      // The validation on submit will handle the empty state.
                       if (_selectedAllergies.isEmpty) {
-                        _selectedAllergies = {"None"};
-                        _milkAutoAdded = false; // Reset flag when "None" is set
+                        // Keep it empty {}
+                        // Also reset the auto-added flags as there are no selections
+                        _milkAutoAdded = false; // Reset flag
+                        _noneAutoDisabled = false; // Reset flag
                       }
                       // If "None" is explicitly in the selection (and passed validation in dialog),
                       // or other items are selected, keep them as is.
@@ -427,12 +439,18 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
   /// Formats the display text for the allergies input field.
   String getAllergyDisplay() {
-    // Check for "None" selection or empty set (though it should be {"None"} or have items)
-    if (_selectedAllergies.isEmpty || (_selectedAllergies.length == 1 && _selectedAllergies.contains("None"))) {
+    // Check for initial prompt state (empty set)
+    if (_selectedAllergies.isEmpty) {
+      return "Select Allergies"; // Prompt text
+    }
+    // Check for "None" selection
+    else if (_selectedAllergies.length == 1 && _selectedAllergies.contains("None")) {
       return "No Allergies"; // Confirmed "None" selection
     }
     // Join multiple selections
-    return _selectedAllergies.join(", ");
+    else {
+      return _selectedAllergies.join(", ");
+    }
   }
 
   @override
@@ -462,9 +480,9 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
     }
 
     return WillPopScope(
-      onWillPop: () async => await _onWillPop(), // Return a Future<bool>
+      onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: Colors.deepPurple.shade50, // Softer background
+        backgroundColor: Colors.deepPurple.shade50, // Softer background - Improved Design
         appBar: AppBar(
           automaticallyImplyLeading: false,
           title: const Text("Diet & Allergies"),
@@ -489,7 +507,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        Icons.restaurant, // Changed icon to food related
+                        Icons.restaurant,
                         size: 50,
                         color: Colors.deepPurple.shade800,
                       ),
@@ -605,7 +623,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                     onChanged: (val) {
                       setState(() {
                         _dietPreference = val;
-                        // Trigger auto-allergy evaluation when diet changes
+                        // 1, 2 & 3. Trigger auto-allergy evaluation when diet changes
                         _evaluateAutoAllergies();
                       });
                     },
@@ -654,9 +672,11 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                           getAllergyDisplay(), // Use the formatted display text
                           style: TextStyle(
                             color: _selectedAllergies.isEmpty ||
-                                getAllergyDisplay() == "No Allergies"
-                                ? Colors.grey.shade600 // Grey for placeholder/no allergies
-                                : Colors.black87,      // Black for selections
+                                getAllergyDisplay() == "Select Allergies"
+                                ? Colors.grey.shade600 // Grey for placeholder/prompt
+                                : (getAllergyDisplay() == "No Allergies"
+                                ? Colors.grey.shade600 // Grey for "No Allergies"
+                                : Colors.black87),      // Black for selections
                             fontSize: 16,
                           ),
                         ),
@@ -666,7 +686,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
                   const SizedBox(height: 40),
 
-                  // Save Button
+                  // Save Button (only visible when editing)
                   SizedBox(
                     width: double.infinity,
                     height: 55,
@@ -704,6 +724,12 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
     );
   }
 
+  Future<bool> _onWillPop() async {
+    // Handle unsaved changes logic here if needed
+    // For now, just allow popping
+    return true;
+  }
+
   InputDecoration _inputDecoration() {
     return InputDecoration(
       filled: true,
@@ -726,7 +752,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
   @override
   void dispose() {
-    // Dispose controllers if you have any
+    // Remove listeners and dispose controllers if needed
     super.dispose();
   }
 }
