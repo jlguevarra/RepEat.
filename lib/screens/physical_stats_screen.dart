@@ -262,6 +262,12 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       return;
     }
 
+    // Ensure current weight is not equal to target weight (they must be different)
+    if (currentWeight == targetWeight) {
+      _showCustomSnackBar('Current weight and target weight must be different.', false);
+      return;
+    }
+
     // Update BMI before saving
     _calculateBMI();
 

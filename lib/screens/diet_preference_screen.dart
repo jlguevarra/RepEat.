@@ -17,6 +17,8 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
   bool isEditing = false;
 
   int? userId;
+  double currentWeight = 0;
+  double targetWeight = 0;
 
   String selectedDiet = 'None';
   String originalDiet = 'None';
@@ -24,28 +26,28 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
   Set<String> selectedAllergies = {};
   Set<String> originalAllergies = {};
 
-  final List<String> dietOptions = [
-    "None",
-    "Vegetarian",
-    "Vegan",
-    "Keto",
-    "Paleo",
-    "Mediterranean",
-    "Low-Carb",
-    "High-Protein",
+  // Base diet options
+  final List<String> _baseDietOptions = [
+    "High Protein",
+    "Low Carb",
+    "Low Fat",
+    "Low Sodium",
+    "Dairy Free",
   ];
 
+  // Filtered diet options based on goal
+  List<String> _filteredDietOptions = [];
+
   final List<String> allergyOptions = [
-    "None",
+    "None", // Explicit "None" option
     "Peanuts",
     "Tree Nuts",
-    "Shellfish",
-    "Fish",
-    "Milk",
+    "Milk", // This will be locked/auto-managed if Dairy Free is selected
     "Eggs",
     "Wheat",
     "Soy",
-    "Gluten",
+    "Fish",
+    "Shellfish",
   ];
 
   @override
@@ -117,8 +119,12 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     final prefs = await SharedPreferences.getInstance();
     userId = prefs.getInt('user_id');
 
+    // Load current and target weights from SharedPreferences (fallback)
+    currentWeight = double.tryParse(prefs.getString('current_weight') ?? '') ?? 0;
+    targetWeight = double.tryParse(prefs.getString('target_weight') ?? '') ?? 0;
+
     if (userId == null) {
-      _showCustomSnackBar('User ID not found. Please log in again.', false); // Updated SnackBar
+      _showCustomSnackBar('User ID not found. Please log in again.', false);
       if (mounted) Navigator.pop(context);
       return;
     }
@@ -134,29 +140,61 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
         final String diet = profile['diet_preference'] ?? 'None';
         final String allergiesRaw = profile['allergies'] ?? '';
 
+        // Override weights from profile if available
+        final profileCurrentWeight = double.tryParse(profile['current_weight'] ?? '') ?? 0;
+        final profileTargetWeight = double.tryParse(profile['target_weight'] ?? '') ?? 0;
+
+        if (profileCurrentWeight > 0) currentWeight = profileCurrentWeight;
+        if (profileTargetWeight > 0) targetWeight = profileTargetWeight;
+
         final Set<String> allergiesSet = allergiesRaw.isNotEmpty && allergiesRaw != "None"
             ? Set<String>.from(
           allergiesRaw.split(',').map((e) => e.trim()).where((e) => allergyOptions.contains(e)),
         )
             : {};
 
-        if (mounted) { // Check if mounted before setState
+        // Determine filtered diet options based on goal
+        _updateFilteredDietOptions(diet);
+
+        if (mounted) {
           setState(() {
-            selectedDiet = dietOptions.contains(diet) ? diet : 'None';
+            selectedDiet = _filteredDietOptions.contains(diet) ? diet : 'None';
             originalDiet = selectedDiet;
             selectedAllergies = Set.from(allergiesSet);
             originalAllergies = Set.from(allergiesSet);
           });
         }
       } else {
-        _showCustomSnackBar(data['message'] ?? 'Failed to load profile.', false); // Updated SnackBar
+        _showCustomSnackBar(data['message'] ?? 'Failed to load profile.', false);
       }
     } catch (e) {
-      _showCustomSnackBar('Error loading profile: $e', false); // Updated SnackBar
+      _showCustomSnackBar('Error loading profile: $e', false);
     } finally {
-      if (mounted) { // Check if mounted before setState
+      if (mounted) {
         setState(() => isLoading = false);
       }
+    }
+  }
+
+  void _updateFilteredDietOptions(String currentDiet) {
+    // Determine goal based on weight difference
+    String goal = 'General Fitness';
+    if (targetWeight > currentWeight) {
+      goal = 'Muscle Gain';
+    } else if (targetWeight < currentWeight) {
+      goal = 'Weight Loss';
+    }
+
+    // Filter diet options based on goal
+    if (goal == 'Weight Loss') {
+      // Hide High Protein for Weight Loss
+      _filteredDietOptions = _baseDietOptions.where((diet) => diet != 'High Protein').toList();
+    } else if (goal == 'Muscle Gain') {
+      // Hide Low Carb for Muscle Gain
+      _filteredDietOptions = _baseDietOptions.where((diet) => diet != 'Low Carb').toList();
+    } else {
+      // Default: show all options
+      _filteredDietOptions = List.from(_baseDietOptions);
     }
   }
 
@@ -180,21 +218,21 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
       final result = json.decode(response.body);
 
       if (result['success'] == true) {
-        if (mounted) { // Check if mounted before setState
+        if (mounted) {
           setState(() {
             isEditing = false;
             originalDiet = selectedDiet;
             originalAllergies = Set.from(selectedAllergies);
           });
         }
-        _showCustomSnackBar(result['message'] ?? 'Preferences updated.', true); // Updated SnackBar
+        _showCustomSnackBar(result['message'] ?? 'Preferences updated.', true);
       } else {
-        _showCustomSnackBar(result['message'] ?? 'Failed to update preferences.', false); // Updated SnackBar
+        _showCustomSnackBar(result['message'] ?? 'Failed to update preferences.', false);
       }
     } catch (e) {
-      _showCustomSnackBar('Error: $e', false); // Updated SnackBar
+      _showCustomSnackBar('Error: $e', false);
     } finally {
-      if (mounted) { // Check if mounted before setState
+      if (mounted) {
         setState(() => isSaving = false);
       }
     }
@@ -239,7 +277,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(
-        backgroundColor: Colors.deepPurple, // Match app bar color
+        backgroundColor: Colors.deepPurple,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -264,7 +302,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: Colors.deepPurple.shade50, // Softer background - Improved Design
+        backgroundColor: Colors.deepPurple.shade50,
         appBar: AppBar(
           title: const Text('Diet & Allergies'),
           backgroundColor: Colors.deepPurple,
@@ -292,13 +330,13 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
               ),
           ],
         ),
-        body: SafeArea( // Improved Design
-          child: SingleChildScrollView( // Improved Design
-            padding: const EdgeInsets.all(16), // Improved Design
-            child: Column( // Changed from ListView to Column inside SingleChildScrollView
-              crossAxisAlignment: CrossAxisAlignment.start, // Improved Design
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Section - Improved Design
+                // Header Section
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -365,7 +403,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
                         isEditing
                             ? DropdownButtonFormField<String>(
                           value: selectedDiet,
-                          items: dietOptions.map((diet) {
+                          items: _filteredDietOptions.map((diet) {
                             return DropdownMenuItem(
                               value: diet,
                               child: Text(diet),
@@ -373,10 +411,24 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
                           }).toList(),
                           onChanged: (val) {
                             if (val != null) {
-                              setState(() => selectedDiet = val);
+                              setState(() {
+                                selectedDiet = val;
+
+                                // Auto-manage Milk allergy when switching to Dairy Free
+                                if (val == 'Dairy Free') {
+                                  // If Milk is already selected, keep it selected
+                                  // If Milk is not selected, add it to allergies
+                                  if (!selectedAllergies.contains('Milk')) {
+                                    selectedAllergies.add('Milk');
+                                  }
+                                } else {
+                                  // Remove Milk allergy when not Dairy Free
+                                  selectedAllergies.remove('Milk');
+                                }
+                              });
                             }
                           },
-                          decoration: _inputDecoration(), // Improved Design
+                          decoration: _inputDecoration(),
                         )
                             : Text(
                           selectedDiet,
@@ -480,7 +532,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
 
                 const SizedBox(height: 30),
 
-                // Save Button (only visible when editing) - Improved Design
+                // Save Button (only visible when editing)
                 if (isEditing)
                   Center(
                     child: SizedBox(
@@ -523,7 +575,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     );
   }
 
-  // Improved Input Decoration - Better Design Consistency
+  // Improved Input Decoration
   InputDecoration _inputDecoration() {
     return InputDecoration(
       filled: true,
