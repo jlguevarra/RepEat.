@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'recipe_details_screen.dart';
-import 'favorites_screen.dart'; // Update path if needed
+import 'favorites_screen.dart';
+import 'chat_screen.dart';
 
 class MealPlanScreen extends StatefulWidget {
   final int userId;
@@ -18,10 +19,19 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   Map<String, dynamic>? mealPlan;
   bool isLoading = true;
   bool isGeneratingMeal = false;
-  String timeFrame = 'day'; // 'day' or 'week'
+  bool isChatOpen = false;
+  bool isChatLoading = false;
+  String timeFrame = 'day';
   DateTime selectedDate = DateTime.now();
   final NumberFormat caloriesFormat = NumberFormat.decimalPattern();
   String? apiError;
+  final TextEditingController _chatController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  List<Map<String, dynamic>> _chatMessages = [];
+
+  // Hugging Face configuration
+  static const String huggingFaceToken = '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';
+  static const String modelEndpoint = 'https://api-inference.huggingface.co/models/deepseek-ai/deepseek-v3.1-base';
 
   @override
   void initState() {
@@ -223,7 +233,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     }
   }
 
-  // Build meal card (❤️ removed)
+  // Build meal card
   Widget buildMealCard(String mealType, dynamic mealData) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0),
@@ -434,6 +444,114 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     }
   }
 
+  // AI Chat Functions - Hugging Face Implementation
+  Future<String> _sendToHuggingFace(String message) async {
+    final url = Uri.parse(modelEndpoint);
+
+    final headers = {
+      'Authorization': 'Bearer $huggingFaceToken',
+      'Content-Type': 'application/json',
+    };
+
+    final prompt = _buildChatPrompt(message);
+
+    final body = {
+      'inputs': prompt,
+      'parameters': {
+        'max_new_tokens': 200,
+        'temperature': 0.7,
+        'top_p': 0.9,
+      }
+    };
+
+    try {
+      print('=== Sending to Hugging Face ===');
+      print('URL: $url');
+      print('Prompt: $prompt');
+
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: jsonEncode(body),
+      );
+
+      print('Response Status: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body);
+          print('Data received: $data');
+
+          if (data is List && data.isNotEmpty) {
+            if (data[0] is Map && data[0].containsKey('generated_text')) {
+              return data[0]['generated_text'] as String;
+            } else if (data[0] is String) {
+              return data[0] as String;
+            } else {
+              return data[0].toString();
+            }
+          } else if (data is Map && data.containsKey('generated_text')) {
+            return data['generated_text'] as String;
+          } else if (data is String) {
+            return data;
+          } else {
+            throw Exception('Unexpected response format: $data');
+          }
+        } catch (parseError) {
+          print('JSON parsing error: $parseError');
+          throw Exception('Failed to parse response: ${response.body}');
+        }
+      } else if (response.statusCode == 429) {
+        throw Exception('Rate limit exceeded. Try again later.');
+      } else if (response.statusCode == 401) {
+        throw Exception('Authentication failed. Check your token.');
+      } else {
+        throw Exception('Hugging Face API error: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      print('Network error: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+
+  String _buildChatPrompt(String message) {
+    if (userData == null) return message;
+
+    String prompt = '''
+You are a nutrition expert assistant for a fitness app called RepEat. 
+The user has the following profile:
+- Goal: ${userData!['goal'] ?? 'Not specified'}
+- Diet Preference: ${userData!['diet_preference'] ?? 'Not specified'}
+- Allergies: ${userData!['allergies']?.isNotEmpty == true ? userData!['allergies'] : 'None'}
+
+User asks: "$message"
+
+Provide helpful, accurate, and personalized nutrition advice based on their profile.
+Keep responses concise but informative. Focus on:
+1. How the request aligns with their fitness goals
+2. Nutritional benefits relevant to their diet
+3. Practical suggestions they can follow
+''';
+
+    return prompt;
+  }
+
+  // Navigate to chat screen
+  void _navigateToChatScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          userId: widget.userId,
+          userData: userData,
+          huggingFaceToken: huggingFaceToken,
+          modelEndpoint: modelEndpoint,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -604,6 +722,12 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           ],
         ),
       ),
+      // AI Chat Button (now goes to separate screen)
+      floatingActionButton: FloatingActionButton(
+        onPressed: _navigateToChatScreen,
+        backgroundColor: Colors.deepPurple,
+        child: const Icon(Icons.chat, color: Colors.white),
+      ),
     );
   }
 
@@ -629,5 +753,12 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _chatController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 }
