@@ -35,7 +35,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.11/repEatApi/get_weekly_challenge.php"),
+        Uri.parse("http://192.168.100.78/repEatApi/get_weekly_challenge.php"),
         body: {
           "user_id": widget.userId.toString(),
         },
