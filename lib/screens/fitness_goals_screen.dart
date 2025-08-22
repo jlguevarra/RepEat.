@@ -76,7 +76,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     targetWeight = double.tryParse(prefs.getString('target_weight') ?? '') ?? 0;
     try {
       final response = await http.get(Uri.parse(
-        'http://192.168.100.79/repEatApi/get_profile.php?user_id=$userId',
+        'http://192.168.100.11/repEatApi/get_profile.php?user_id=$userId',
       ));
       final data = json.decode(response.body);
       if (data['success'] == true) {

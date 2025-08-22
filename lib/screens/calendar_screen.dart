@@ -29,6 +29,11 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
   int _selectedSets = 3;
   int _selectedReps = 10;
 
+  // Add recommendation system variables
+  List<Map<String, dynamic>> _recommendedExercises = [];
+  UserProfile? _userProfile;
+  String _workoutFocus = '';
+
   final Map<String, List<Map<String, String>>> _exercises = {
     'Biceps': [
       {'name': 'Dumbbell Curls'},
@@ -77,6 +82,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     _setsController.text = '3';
     _repsController.text = '10';
     _fetchWorkouts();
+    _loadRecommendations(); // Load recommendations
   }
 
   @override
@@ -85,11 +91,30 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     _repsController.dispose();
     super.dispose();
   }
+
+  // Add recommendation loading method
+  Future<void> _loadRecommendations() async {
+    final response = await http.get(
+        Uri.parse('http://192.168.100.11/repEatApi/get_onboarding_data.php?user_id=${widget.userId}')
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['success'] && data['data'] != null) {
+        setState(() {
+          _userProfile = UserProfile.fromJson(data['data']);
+          _recommendedExercises = ExerciseRecommender.recommendExercises(_userProfile!);
+          _workoutFocus = ExerciseRecommender.getWorkoutFocus(_userProfile!);
+        });
+      }
+    }
+  }
+
   Future<void> _fetchWorkouts() async {
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse('http://192.168.100.79/repEatApi/get_workouts.php?user_id=${widget.userId}');
+      final url = Uri.parse('http://192.168.100.11/repEatApi/get_workouts.php?user_id=${widget.userId}');
       final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -122,6 +147,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
       setState(() => _isLoading = false);
     }
   }
+
   void _toggleExerciseForm({GymExercise? workout}) {
     setState(() {
       _showExerciseForm = !_showExerciseForm;
@@ -155,12 +181,12 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
         'exercise_name': _selectedExercise,
         'sets': int.parse(_setsController.text),
         'reps': int.parse(_repsController.text),
-        'note': '', // Add note field if needed
+        'note': '',
       };
 
       final endpoint = _formMode == 'add'
-          ? 'http://192.168.100.79/repEatApi/save_workout.php'
-          : 'http://192.168.100.79/repEatApi/update_workout.php';
+          ? 'http://192.168.100.11/repEatApi/save_workout.php'
+          : 'http://192.168.100.11/repEatApi/update_workout.php';
 
       final response = await http.post(
         Uri.parse(endpoint),
@@ -192,7 +218,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.79/repEatApi/toggle_workout_completion.php'),
+        Uri.parse('http://192.168.100.11/repEatApi/toggle_workout_completion.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'workout_id': workoutId,
@@ -221,7 +247,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.79/repEatApi/delete_workout.php'),
+        Uri.parse('http://192.168.100.11/repEatApi/delete_workout.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'workout_id': workoutId}),
       );
@@ -298,6 +324,16 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     }
   }
 
+  // Helper method to find muscle group for an exercise
+  String _findMuscleGroup(String exerciseName) {
+    for (var entry in _exercises.entries) {
+      if (entry.value.any((ex) => ex['name'] == exerciseName)) {
+        return entry.key;
+      }
+    }
+    return 'Biceps'; // Default fallback
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -306,7 +342,10 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _fetchWorkouts,
+            onPressed: () {
+              _fetchWorkouts();
+              _loadRecommendations();
+            },
             tooltip: 'Refresh',
           ),
         ],
@@ -378,10 +417,68 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_workoutFocus.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _userProfile!.isBulking
+                      ? Colors.blue.shade100
+                      : Colors.green.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Workout Focus: $_workoutFocus',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
             Text(
               '${_formMode == 'add' ? 'Add New' : 'Edit'} Workout',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18),
             ),
+
+            if (_recommendedExercises.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text('Recommended Exercises:',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 60,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _recommendedExercises.length,
+                  itemBuilder: (context, index) {
+                    final exercise = _recommendedExercises[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: Text(exercise['name']),
+                        selected: _selectedExercise == exercise['name'],
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedExercise = exercise['name'];
+                            _selectedMuscleGroup = _findMuscleGroup(exercise['name']);
+                            _setsController.text = exercise['sets'].toString();
+                            _repsController.text = exercise['reps'].toString();
+                          });
+                        },
+                        backgroundColor: _userProfile!.isBulking
+                            ? Colors.blue.shade100
+                            : Colors.green.shade100,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const Divider(height: 20),
+            ],
+
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _selectedMuscleGroup,
@@ -586,5 +683,183 @@ class GymExercise {
       note: json['note'] as String? ?? '',
       createdAt: json['created_at'] as String,
     );
+  }
+}
+
+// Add UserProfile and ExerciseRecommender classes here
+class UserProfile {
+  final int userId;
+  final String goal;
+  final bool hasInjury;
+  final String? injuryDetails;
+  final String dietPreference;
+  final String? allergies;
+  final DateTime? birthdate;
+  final String bodyType;
+  final double currentWeight;
+  final double targetWeight;
+  final double height;
+  final String gender;
+
+  UserProfile({
+    required this.userId,
+    required this.goal,
+    required this.hasInjury,
+    this.injuryDetails,
+    required this.dietPreference,
+    this.allergies,
+    this.birthdate,
+    required this.bodyType,
+    required this.currentWeight,
+    required this.targetWeight,
+    required this.height,
+    required this.gender,
+  });
+
+  factory UserProfile.fromJson(Map<String, dynamic> json) {
+    return UserProfile(
+      userId: json['user_id'] as int,
+      goal: json['goal'] as String,
+      hasInjury: (json['has_injury'] as int) == 1,
+      injuryDetails: json['injury_details'],
+      dietPreference: json['diet_preference'] as String,
+      allergies: json['allergies'],
+      birthdate: json['birthdate'] != null ? DateTime.parse(json['birthdate']) : null,
+      bodyType: json['body_type'] as String,
+      currentWeight: double.tryParse(json['current_weight']?.toString() ?? '0') ?? 0,
+      targetWeight: double.tryParse(json['target_weight']?.toString() ?? '0') ?? 0,
+      height: double.tryParse(json['height']?.toString() ?? '0') ?? 0,
+      gender: json['gender'] as String,
+    );
+  }
+
+  bool get isBulking => goal.toLowerCase() == 'bulk' || goal.toLowerCase().contains('muscle');
+  bool get isCutting => goal.toLowerCase() == 'cut' || goal.toLowerCase().contains('weight') || goal.toLowerCase().contains('loss');
+
+  int get age {
+    if (birthdate == null) return 30;
+    return DateTime.now().difference(birthdate!).inDays ~/ 365;
+  }
+
+  int get recommendedSets => isBulking ? 4 : 3;
+  int get recommendedReps => isBulking ? 8 : 12;
+
+  List<String> get targetMuscles {
+    if (isBulking) {
+      return ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs'];
+    } else {
+      return ['core', 'legs', 'back'];
+    }
+  }
+}
+
+class ExerciseRecommender {
+  static final Map<String, Map<String, dynamic>> _exerciseDatabase = {
+    'Dumbbell Curls': {
+      'equipment': ['dumbbells'],
+      'muscles': ['biceps'],
+      'bulk': {'sets': 4, 'reps': 8},
+      'cut': {'sets': 3, 'reps': 15},
+      'injury_safe': true,
+      'injury_restrictions': [],
+    },
+    'Hammer Curls': {
+      'equipment': ['dumbbells'],
+      'muscles': ['biceps', 'forearms'],
+      'bulk': {'sets': 4, 'reps': 8},
+      'cut': {'sets': 3, 'reps': 15},
+      'injury_safe': true,
+      'injury_restrictions': [],
+    },
+    'Shoulder Press': {
+      'equipment': ['dumbbells'],
+      'muscles': ['shoulders', 'triceps'],
+      'bulk': {'sets': 4, 'reps': 8},
+      'cut': {'sets': 3, 'reps': 12},
+      'injury_safe': false,
+      'injury_restrictions': ['shoulder', 'neck'],
+    },
+    'Dumbbell Bench Press': {
+      'equipment': ['dumbbells', 'bench'],
+      'muscles': ['chest', 'triceps', 'shoulders'],
+      'bulk': {'sets': 4, 'reps': 8},
+      'cut': {'sets': 3, 'reps': 12},
+      'injury_safe': false,
+      'injury_restrictions': ['shoulder', 'chest'],
+    },
+    'Dumbbell Rows': {
+      'equipment': ['dumbbells', 'bench'],
+      'muscles': ['back', 'biceps'],
+      'bulk': {'sets': 4, 'reps': 8},
+      'cut': {'sets': 3, 'reps': 12},
+      'injury_safe': true,
+      'injury_restrictions': ['lower back'],
+    },
+    'Goblet Squats': {
+      'equipment': ['dumbbell'],
+      'muscles': ['legs', 'core'],
+      'bulk': {'sets': 4, 'reps': 8},
+      'cut': {'sets': 3, 'reps': 15},
+      'injury_safe': false,
+      'injury_restrictions': ['knee', 'back'],
+    },
+    'Plank': {
+      'equipment': [],
+      'muscles': ['core'],
+      'bulk': {'sets': 3, 'reps': 30},
+      'cut': {'sets': 4, 'reps': 45},
+      'injury_safe': true,
+      'injury_restrictions': [],
+    },
+    'Jumping Jacks': {
+      'equipment': [],
+      'muscles': ['cardio', 'legs'],
+      'bulk': {'sets': 3, 'reps': 30},
+      'cut': {'sets': 4, 'reps': 45},
+      'injury_safe': false,
+      'injury_restrictions': ['knee', 'ankle'],
+    },
+  };
+
+  static List<Map<String, dynamic>> recommendExercises(UserProfile profile) {
+    return _exerciseDatabase.entries.where((exercise) {
+      final exData = exercise.value;
+
+      if (profile.hasInjury) {
+        final injuryDetails = profile.injuryDetails?.toLowerCase() ?? '';
+        final hasMatchingRestriction = exData['injury_restrictions'].any((restriction) =>
+            injuryDetails.contains(restriction.toLowerCase()));
+
+        if (hasMatchingRestriction || !exData['injury_safe']) {
+          return false;
+        }
+      }
+
+      return exData['muscles'].any((muscle) =>
+          profile.targetMuscles.contains(muscle));
+    }).map((exercise) {
+      final exName = exercise.key;
+      final exData = exercise.value;
+
+      var recommendation = {
+        'sets': profile.recommendedSets,
+        'reps': profile.recommendedReps,
+      };
+
+      return {
+        'name': exName,
+        ...recommendation,
+        'muscles_targeted': exData['muscles'],
+        'goal_specific': profile.isBulking ? 'Muscle Gain' : 'Fat Loss',
+      };
+    }).toList();
+  }
+
+  static String getWorkoutFocus(UserProfile profile) {
+    if (profile.isBulking) {
+      return 'Strength & Muscle Building';
+    } else {
+      return 'Fat Loss & Endurance';
+    }
   }
 }
