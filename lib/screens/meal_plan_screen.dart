@@ -19,19 +19,14 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   Map<String, dynamic>? mealPlan;
   bool isLoading = true;
   bool isGeneratingMeal = false;
-  bool isChatOpen = false;
-  bool isChatLoading = false;
   String timeFrame = 'day';
   DateTime selectedDate = DateTime.now();
   final NumberFormat caloriesFormat = NumberFormat.decimalPattern();
   String? apiError;
-  final TextEditingController _chatController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-  List<Map<String, dynamic>> _chatMessages = [];
 
-  // Hugging Face configuration
-  static const String huggingFaceToken = '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';
-  static const String modelEndpoint = 'https://api-inference.huggingface.co/models/deepseek-ai/deepseek-v3.1-base';
+  // ✅ OpenRouter API configuration (for the AI chat screen)
+  // Replace with your real key or inject via secure config.
+  static const String openRouterApiKey = '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';
 
   @override
   void initState() {
@@ -78,7 +73,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
             mealPlan = savedPlan;
             timeFrame = mealData['data']['time_frame'] ?? 'day';
             if (mealData['data']['start_date'] != null) {
-              selectedDate = DateFormat('yyyy-MM-dd').parse(mealData['data']['start_date']);
+              selectedDate = DateFormat('yyyy-MM-dd')
+                  .parse(mealData['data']['start_date']);
             }
           });
         }
@@ -117,13 +113,14 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         'targetCalories': mapGoalToCalories(goal).toString(),
         'diet': mapDietToSpoonacular(diet),
         'exclude': allergies,
-        'apiKey': 'f9cc3b3cd30e4007bf4da738d79d9680',
+        'apiKey': 'f9cc3b3cd30e4007bf4da738d79d9680', // Spoonacular key
       };
 
       // Add startDate only for weekly, with safety
       if (timeFrame == 'week') {
         try {
-          queryParams['startDate'] = DateFormat('yyyy-MM-dd').format(selectedDate);
+          queryParams['startDate'] =
+              DateFormat('yyyy-MM-dd').format(selectedDate);
         } catch (e) {
           setState(() {
             apiError = "Invalid date selected.";
@@ -167,7 +164,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   // Step 3: Save generated meal plan to server
   Future<void> _saveMealPlanToServer(dynamic mealPlanData) async {
     try {
-      final url = Uri.parse('http://192.168.100.78/repEatApi/save_meal_plan.php');
+      final url =
+      Uri.parse('http://192.168.100.78/repEatApi/save_meal_plan.php');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -346,7 +344,9 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
 
   // Nutrition summary
   Widget _buildNutritionInfo() {
-    if (mealPlan == null || mealPlan!['nutrients'] == null) return const SizedBox();
+    if (mealPlan == null || mealPlan!['nutrients'] == null) {
+      return const SizedBox();
+    }
 
     final nutrients = mealPlan!['nutrients'];
     return Card(
@@ -367,10 +367,12 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            _buildNutritionRow("Calories", "${caloriesFormat.format(nutrients['calories'])} kcal"),
+            _buildNutritionRow(
+                "Calories", "${caloriesFormat.format(nutrients['calories'])} kcal"),
             _buildNutritionRow("Protein", "${nutrients['protein']}g"),
             _buildNutritionRow("Fat", "${nutrients['fat']}g"),
-            _buildNutritionRow("Carbohydrates", "${nutrients['carbohydrates']}g"),
+            _buildNutritionRow(
+                "Carbohydrates", "${nutrients['carbohydrates']}g"),
           ],
         ),
       ),
@@ -444,100 +446,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     }
   }
 
-  // AI Chat Functions - Hugging Face Implementation
-  Future<String> _sendToHuggingFace(String message) async {
-    final url = Uri.parse(modelEndpoint);
-
-    final headers = {
-      'Authorization': 'Bearer $huggingFaceToken',
-      'Content-Type': 'application/json',
-    };
-
-    final prompt = _buildChatPrompt(message);
-
-    final body = {
-      'inputs': prompt,
-      'parameters': {
-        'max_new_tokens': 200,
-        'temperature': 0.7,
-        'top_p': 0.9,
-      }
-    };
-
-    try {
-      print('=== Sending to Hugging Face ===');
-      print('URL: $url');
-      print('Prompt: $prompt');
-
-      final response = await http.post(
-        url,
-        headers: headers,
-        body: jsonEncode(body),
-      );
-
-      print('Response Status: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        try {
-          final data = jsonDecode(response.body);
-          print('Data received: $data');
-
-          if (data is List && data.isNotEmpty) {
-            if (data[0] is Map && data[0].containsKey('generated_text')) {
-              return data[0]['generated_text'] as String;
-            } else if (data[0] is String) {
-              return data[0] as String;
-            } else {
-              return data[0].toString();
-            }
-          } else if (data is Map && data.containsKey('generated_text')) {
-            return data['generated_text'] as String;
-          } else if (data is String) {
-            return data;
-          } else {
-            throw Exception('Unexpected response format: $data');
-          }
-        } catch (parseError) {
-          print('JSON parsing error: $parseError');
-          throw Exception('Failed to parse response: ${response.body}');
-        }
-      } else if (response.statusCode == 429) {
-        throw Exception('Rate limit exceeded. Try again later.');
-      } else if (response.statusCode == 401) {
-        throw Exception('Authentication failed. Check your token.');
-      } else {
-        throw Exception('Hugging Face API error: ${response.statusCode} - ${response.body}');
-      }
-    } catch (e) {
-      print('Network error: $e');
-      throw Exception('Network error: $e');
-    }
-  }
-
-  String _buildChatPrompt(String message) {
-    if (userData == null) return message;
-
-    String prompt = '''
-You are a nutrition expert assistant for a fitness app called RepEat. 
-The user has the following profile:
-- Goal: ${userData!['goal'] ?? 'Not specified'}
-- Diet Preference: ${userData!['diet_preference'] ?? 'Not specified'}
-- Allergies: ${userData!['allergies']?.isNotEmpty == true ? userData!['allergies'] : 'None'}
-
-User asks: "$message"
-
-Provide helpful, accurate, and personalized nutrition advice based on their profile.
-Keep responses concise but informative. Focus on:
-1. How the request aligns with their fitness goals
-2. Nutritional benefits relevant to their diet
-3. Practical suggestions they can follow
-''';
-
-    return prompt;
-  }
-
-  // Navigate to chat screen
+  // ✅ Navigate to chat screen (now passes OpenRouter credentials)
   void _navigateToChatScreen() {
     Navigator.push(
       context,
@@ -545,8 +454,8 @@ Keep responses concise but informative. Focus on:
         builder: (context) => ChatScreen(
           userId: widget.userId,
           userData: userData,
-          huggingFaceToken: huggingFaceToken,
-          modelEndpoint: modelEndpoint,
+          apiKey: openRouterApiKey,
+          apiType: 'openrouter',
         ),
       ),
     );
@@ -608,11 +517,15 @@ Keep responses concise but informative. Focus on:
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _buildPreferenceRow("Diet", userData!['diet_preference'] ?? 'Not specified'),
-                    _buildPreferenceRow("Goal", userData!['goal'] ?? 'Not specified'),
-                    _buildPreferenceRow("Allergies", userData!['allergies']?.isNotEmpty == true
-                        ? userData!['allergies']
-                        : 'None'),
+                    _buildPreferenceRow("Diet",
+                        userData!['diet_preference'] ?? 'Not specified'),
+                    _buildPreferenceRow(
+                        "Goal", userData!['goal'] ?? 'Not specified'),
+                    _buildPreferenceRow(
+                        "Allergies",
+                        userData!['allergies']?.isNotEmpty == true
+                            ? userData!['allergies']
+                            : 'None'),
                   ],
                 ),
               ),
@@ -705,7 +618,9 @@ Keep responses concise but informative. Focus on:
                   ),
                   const SizedBox(height: 10),
                   ..._extractMealsFromMealPlan().map<Widget>((meal) {
-                    return buildMealCard(meal['title'], meal);
+                    // Note: The first argument is used as the section label/icon source.
+                    // With Spoonacular "meals", there's no explicit meal type—so we pass the title.
+                    return buildMealCard(meal['title'] ?? 'Meal', meal);
                   }).toList(),
                   const SizedBox(height: 16),
                   _buildNutritionInfo(),
@@ -722,7 +637,7 @@ Keep responses concise but informative. Focus on:
           ],
         ),
       ),
-      // AI Chat Button (now goes to separate screen)
+      // AI Chat Button (now goes to separate screen with OpenRouter)
       floatingActionButton: FloatingActionButton(
         onPressed: _navigateToChatScreen,
         backgroundColor: Colors.deepPurple,
@@ -757,9 +672,6 @@ Keep responses concise but informative. Focus on:
 
   @override
   void dispose() {
-    _chatController.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 }
-//
