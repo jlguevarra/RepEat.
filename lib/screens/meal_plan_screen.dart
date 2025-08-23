@@ -26,7 +26,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
 
   // ✅ OpenRouter API configuration (for the AI chat screen)
   // Replace with your real key or inject via secure config.
-  static const String openRouterApiKey = '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';
+  static const String openRouterApiKey = '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';
 
   @override
   void initState() {
