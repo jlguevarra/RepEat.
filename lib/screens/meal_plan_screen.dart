@@ -268,7 +268,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     if (mealType.toLowerCase().contains('breakfast')) return Icons.breakfast_dining;
     if (mealType.toLowerCase().contains('lunch')) return Icons.lunch_dining;
     if (mealType.toLowerCase().contains('dinner')) return Icons.dinner_dining;
-    if (mealType.toLowerCase().contains('snack')) return Icons.local_cafe;
     return Icons.restaurant;
   }
 
@@ -315,12 +314,12 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     if (mealPlan == null) return [];
 
     if (timeFrame == 'day') {
-      // Organize meals into breakfast, lunch, dinner, snack categories
+      // Organize meals into breakfast, lunch, dinner categories only
       final List<dynamic> meals = mealPlan!['meals'] ?? [];
       final Map<String, dynamic> categorizedMeals = {};
 
       // Define meal types in order
-      final List<String> mealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
+      final List<String> mealTypes = ['breakfast', 'lunch', 'dinner'];
 
       // Categorize meals by type
       for (var meal in meals) {
@@ -328,7 +327,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         String mealType = 'other';
 
         // Determine meal type based on title keywords
-        if (mealTitle.contains('breakfast') || mealTitle.contains('breakfast')) {
+        if (mealTitle.contains('breakfast')) {
           mealType = 'breakfast';
         } else if (mealTitle.contains('lunch')) {
           mealType = 'lunch';
@@ -336,10 +335,24 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           mealType = 'dinner';
         } else if (mealTitle.contains('snack') || mealTitle.contains('morning') ||
             mealTitle.contains('evening') || mealTitle.contains('afternoon')) {
-          mealType = 'snack';
+          // Skip snacks, assign to nearest meal type
+          if (mealTitle.contains('morning') || mealTitle.contains('breakfast')) {
+            mealType = 'breakfast';
+          } else if (mealTitle.contains('afternoon') || mealTitle.contains('lunch')) {
+            mealType = 'lunch';
+          } else if (mealTitle.contains('evening') || mealTitle.contains('dinner')) {
+            mealType = 'dinner';
+          }
         } else {
-          // Assign to first available category if not matched
-          mealType = mealTypes.firstWhere((type) => !categorizedMeals.containsKey(type), orElse: () => 'breakfast');
+          // For meals without clear indicators, assign based on position
+          int index = meals.indexOf(meal);
+          if (index % 3 == 0) {
+            mealType = 'breakfast';
+          } else if (index % 3 == 1) {
+            mealType = 'lunch';
+          } else {
+            mealType = 'dinner';
+          }
         }
 
         // Only add if not already assigned to this category
@@ -483,16 +496,44 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
   }
 
+  // This is the key fix - ensure we return the correct meal type strings
   String _getMealTypeFromMealData(dynamic meal) {
     final String mealTitle = meal['title']?.toLowerCase() ?? '';
 
-    if (mealTitle.contains('breakfast')) return 'Breakfast';
-    if (mealTitle.contains('lunch')) return 'Lunch';
-    if (mealTitle.contains('dinner')) return 'Dinner';
-    if (mealTitle.contains('snack')) return 'Snack';
+    // Debug print to see what's being processed
+    print("Processing meal title: $mealTitle");
 
-    // Default to generic meal type
-    return 'Meal';
+    // First check if we can identify it directly
+    if (mealTitle.contains('breakfast')) {
+      print("Identified as Breakfast");
+      return 'Breakfast';
+    }
+    if (mealTitle.contains('lunch')) {
+      print("Identified as Lunch");
+      return 'Lunch';
+    }
+    if (mealTitle.contains('dinner')) {
+      print("Identified as Dinner");
+      return 'Dinner';
+    }
+
+    // Check for related terms
+    if (mealTitle.contains('morning') || mealTitle.contains('breakfast')) {
+      print("Identified as Breakfast (morning)");
+      return 'Breakfast';
+    }
+    if (mealTitle.contains('afternoon') || mealTitle.contains('lunch')) {
+      print("Identified as Lunch (afternoon)");
+      return 'Lunch';
+    }
+    if (mealTitle.contains('evening') || mealTitle.contains('dinner')) {
+      print("Identified as Dinner (evening)");
+      return 'Dinner';
+    }
+
+    // If still not identified, return a default but log it
+    print("Default case - returning 'Meal'");
+    return 'Meal'; // This should not happen with proper categorization
   }
 
   Widget _buildErrorState(String message) {
