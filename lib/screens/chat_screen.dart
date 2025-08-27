@@ -31,12 +31,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool isChatLoading = false;
   bool _sentProfile = false;
 
-  // ✅ Free models with fallback
-  final List<String> _freeModels = const [
-    'mistralai/mistral-7b-instruct:free',
-    'openchat/openchat-7b:free',
-    'nousresearch/nous-hermes-2-mistral-7b:free',
-  ];
+  // ✅ Single GPT model (OpenRouter)
+  final String _gptModel = 'openai/gpt-3.5-turbo'; // You can change to gpt-4 or others
 
   late AnimationController _dotsController;
 
@@ -70,23 +66,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   Future<void> _sendToAIWithStreaming(String message) async {
     final int assistantIndex = _addAssistantPlaceholder();
 
-    for (int i = 0; i < _freeModels.length; i++) {
-      try {
-        await _streamResponseFromOpenRouter(
-          message: message,
-          model: _freeModels[i],
-          assistantIndex: assistantIndex,
-        );
-        return;
-      } catch (e) {
-        debugPrint('Model ${_freeModels[i]} failed: $e');
-        if (i == _freeModels.length - 1) {
-          setState(() {
-            _chatMessages[assistantIndex]['content'] =
-            'All free models are busy or unavailable right now. Please try again in a bit.';
-          });
-        }
-      }
+    try {
+      await _streamResponseFromOpenRouter(
+        message: message,
+        model: _gptModel,
+        assistantIndex: assistantIndex,
+      );
+    } catch (e) {
+      setState(() {
+        _chatMessages[assistantIndex]['content'] =
+        'The GPT model is currently unavailable. Please try again later.';
+      });
     }
   }
 
@@ -268,7 +258,8 @@ Keep responses concise but informative (150-300 words). Focus on practical sugge
             CircleAvatar(
               radius: 16,
               backgroundColor: Colors.deepPurple,
-              child: const Icon(Icons.restaurant, size: 16, color: Colors.white),
+              child:
+              const Icon(Icons.restaurant, size: 16, color: Colors.white),
             ),
           const SizedBox(width: 8),
           Expanded(
@@ -345,7 +336,6 @@ Keep responses concise but informative (150-300 words). Focus on practical sugge
               },
             ),
           ),
-          // ✅ Input area similar size as old, but auto-expands for 2+ lines
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -357,8 +347,8 @@ Keep responses concise but informative (150-300 words). Focus on practical sugge
                 Expanded(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
-                      minHeight: 44, // Same as old input
-                      maxHeight: 100, // Expands for multiple lines
+                      minHeight: 44,
+                      maxHeight: 100,
                     ),
                     child: Scrollbar(
                       child: TextField(
@@ -369,8 +359,7 @@ Keep responses concise but informative (150-300 words). Focus on practical sugge
                         minLines: 1,
                         maxLines: null,
                         decoration: InputDecoration(
-                          hintText:
-                          'Ask about nutrition, recipe, etc...',
+                          hintText: 'Ask about nutrition, recipe, etc...',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(24),
                           ),
