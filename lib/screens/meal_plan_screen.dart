@@ -315,7 +315,55 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     if (mealPlan == null) return [];
 
     if (timeFrame == 'day') {
-      return List.from(mealPlan!['meals'] ?? []);
+      // Organize meals into breakfast, lunch, dinner, snack categories
+      final List<dynamic> meals = mealPlan!['meals'] ?? [];
+      final Map<String, dynamic> categorizedMeals = {};
+
+      // Define meal types in order
+      final List<String> mealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+      // Categorize meals by type
+      for (var meal in meals) {
+        final String mealTitle = meal['title']?.toLowerCase() ?? '';
+        String mealType = 'other';
+
+        // Determine meal type based on title keywords
+        if (mealTitle.contains('breakfast') || mealTitle.contains('breakfast')) {
+          mealType = 'breakfast';
+        } else if (mealTitle.contains('lunch')) {
+          mealType = 'lunch';
+        } else if (mealTitle.contains('dinner')) {
+          mealType = 'dinner';
+        } else if (mealTitle.contains('snack') || mealTitle.contains('morning') ||
+            mealTitle.contains('evening') || mealTitle.contains('afternoon')) {
+          mealType = 'snack';
+        } else {
+          // Assign to first available category if not matched
+          mealType = mealTypes.firstWhere((type) => !categorizedMeals.containsKey(type), orElse: () => 'breakfast');
+        }
+
+        // Only add if not already assigned to this category
+        if (!categorizedMeals.containsKey(mealType)) {
+          categorizedMeals[mealType] = meal;
+        }
+      }
+
+      // Ensure all categories have meals, fill with empty if needed
+      List<dynamic> result = [];
+      for (String type in mealTypes) {
+        if (categorizedMeals.containsKey(type)) {
+          result.add(categorizedMeals[type]);
+        } else {
+          // Add placeholder for missing meal type
+          result.add({
+            'title': '$type (Not specified)',
+            'id': null,
+            'image': null,
+          });
+        }
+      }
+
+      return result;
     } else {
       final List<dynamic> allMeals = [];
       final weekData = mealPlan!['week'];
@@ -375,7 +423,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildUserPreferencesCard(),
             const SizedBox(height: 20),
             Center(
               child: FilledButton.icon(
@@ -411,7 +458,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
               ),
               const SizedBox(height: 10),
               ..._extractMealsFromMealPlan()
-                  .map<Widget>((meal) => buildMealCard(meal['title'] ?? 'Meal', meal))
+                  .map<Widget>((meal) => buildMealCard(
+                  _getMealTypeFromMealData(meal), meal))
                   .toList(),
               _buildNutritionInfo(),
             ] else
@@ -422,44 +470,29 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _navigateToChatScreen,
         backgroundColor: Colors.deepPurple,
-        icon: const Icon(Icons.chat, color: Colors.white),
-        label: const Text("AI Assistant"),
-      ),
-    );
-  }
-
-  Widget _buildUserPreferencesCard() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text("Your Preferences",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          const SizedBox(height: 12),
-          _buildPreferenceRow("Diet", userData!['diet_preference'] ?? 'Not specified'),
-          _buildPreferenceRow("Goal", userData!['goal'] ?? 'Not specified'),
-          _buildPreferenceRow("Allergies",
-              userData!['allergies']?.isNotEmpty == true ? userData!['allergies'] : 'None'),
-        ]),
-      ),
-    );
-  }
-
-  Widget _buildPreferenceRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          SizedBox(width: 80, child: Text(label, style: const TextStyle(color: Colors.grey))),
-          Expanded(
-            child: Text(value,
-                style: const TextStyle(fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
+        icon: const Icon(Icons.chat, color: Colors.white, size: 26),
+        label: const Text(
+          "AI Assistant",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
           ),
-        ],
+        ),
       ),
     );
+  }
+
+  String _getMealTypeFromMealData(dynamic meal) {
+    final String mealTitle = meal['title']?.toLowerCase() ?? '';
+
+    if (mealTitle.contains('breakfast')) return 'Breakfast';
+    if (mealTitle.contains('lunch')) return 'Lunch';
+    if (mealTitle.contains('dinner')) return 'Dinner';
+    if (mealTitle.contains('snack')) return 'Snack';
+
+    // Default to generic meal type
+    return 'Meal';
   }
 
   Widget _buildErrorState(String message) {
@@ -467,8 +500,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         const Icon(Icons.error_outline, color: Colors.red, size: 48),
         const SizedBox(height: 12),
-        Text("Something went wrong",
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const Text("Something went wrong",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
       ]),
