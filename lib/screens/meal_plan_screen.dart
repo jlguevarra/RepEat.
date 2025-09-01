@@ -24,7 +24,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   final NumberFormat caloriesFormat = NumberFormat.decimalPattern();
   String? apiError;
 
-  static const String openRouterApiKey = 'sk-or-your-openrouter-api-key';
+  static const String openRouterApiKey =
+      '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';
 
   @override
   void initState() {
@@ -169,14 +170,11 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   String mapDietToSpoonacular(String diet) {
     final String normalized = diet.toLowerCase().replaceAll('-', ' ').trim();
     const Map<String, String> dietMap = {
-      'none': '',
-      'vegetarian': 'vegetarian',
-      'vegan': 'vegan',
-      'keto': 'ketogenic',
-      'paleo': 'paleo',
-      'mediterranean': 'mediterranean',
-      'low carb': 'low-carb',
       'high protein': 'high-protein',
+      'low carb': 'low-carb',
+      'low fat': 'low-fat',
+      'low sodium': 'low-sodium',
+      'dairy free': 'dairy-free',
     };
     return dietMap[normalized] ?? '';
   }
@@ -184,10 +182,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   int mapGoalToCalories(String goal) {
     final String normalized = goal.toLowerCase().trim();
     const Map<String, int> goalMap = {
-      'weight loss': 1500,
       'muscle gain': 2500,
-      'endurance': 2200,
-      'general fitness': 2000,
+      'weight loss': 1500,
     };
     return goalMap[normalized] ?? 2000;
   }
@@ -211,7 +207,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    mealType.toUpperCase(),
+                    mealType,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
@@ -310,73 +306,12 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
   }
 
+  /// ✅ Extract meals from API response (keep original order)
   List<dynamic> _extractMealsFromMealPlan() {
     if (mealPlan == null) return [];
 
     if (timeFrame == 'day') {
-      // Organize meals into breakfast, lunch, dinner categories only
-      final List<dynamic> meals = mealPlan!['meals'] ?? [];
-      final Map<String, dynamic> categorizedMeals = {};
-
-      // Define meal types in order
-      final List<String> mealTypes = ['breakfast', 'lunch', 'dinner'];
-
-      // Categorize meals by type
-      for (var meal in meals) {
-        final String mealTitle = meal['title']?.toLowerCase() ?? '';
-        String mealType = 'other';
-
-        // Determine meal type based on title keywords
-        if (mealTitle.contains('breakfast')) {
-          mealType = 'breakfast';
-        } else if (mealTitle.contains('lunch')) {
-          mealType = 'lunch';
-        } else if (mealTitle.contains('dinner')) {
-          mealType = 'dinner';
-        } else if (mealTitle.contains('snack') || mealTitle.contains('morning') ||
-            mealTitle.contains('evening') || mealTitle.contains('afternoon')) {
-          // Skip snacks, assign to nearest meal type
-          if (mealTitle.contains('morning') || mealTitle.contains('breakfast')) {
-            mealType = 'breakfast';
-          } else if (mealTitle.contains('afternoon') || mealTitle.contains('lunch')) {
-            mealType = 'lunch';
-          } else if (mealTitle.contains('evening') || mealTitle.contains('dinner')) {
-            mealType = 'dinner';
-          }
-        } else {
-          // For meals without clear indicators, assign based on position
-          int index = meals.indexOf(meal);
-          if (index % 3 == 0) {
-            mealType = 'breakfast';
-          } else if (index % 3 == 1) {
-            mealType = 'lunch';
-          } else {
-            mealType = 'dinner';
-          }
-        }
-
-        // Only add if not already assigned to this category
-        if (!categorizedMeals.containsKey(mealType)) {
-          categorizedMeals[mealType] = meal;
-        }
-      }
-
-      // Ensure all categories have meals, fill with empty if needed
-      List<dynamic> result = [];
-      for (String type in mealTypes) {
-        if (categorizedMeals.containsKey(type)) {
-          result.add(categorizedMeals[type]);
-        } else {
-          // Add placeholder for missing meal type
-          result.add({
-            'title': '$type (Not specified)',
-            'id': null,
-            'image': null,
-          });
-        }
-      }
-
-      return result;
+      return List.from(mealPlan!['meals'] ?? []);
     } else {
       final List<dynamic> allMeals = [];
       final weekData = mealPlan!['week'];
@@ -387,6 +322,14 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       });
       return allMeals;
     }
+  }
+
+  /// ✅ Assign meal type by index
+  String _getMealTypeByIndex(int index) {
+    if (index == 0) return 'Breakfast';
+    if (index == 1) return 'Lunch';
+    if (index == 2) return 'Dinner';
+    return 'Meal';
   }
 
   void _navigateToChatScreen() {
@@ -408,8 +351,16 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9FB),
       appBar: AppBar(
-        title: const Text("Meal Plan", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          "Meal Plan",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white, // ✅ Make title white
+          ),
+        ),
         backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white, // ✅ Makes icons and back button white
+        elevation: 0, // Optional: Flat style like profile screen
         actions: [
           IconButton(
             icon: const Icon(Icons.favorite_border, size: 28),
@@ -425,6 +376,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           ),
         ],
       ),
+
       body: isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.deepPurple))
           : apiError != null
@@ -471,8 +423,13 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
               ),
               const SizedBox(height: 10),
               ..._extractMealsFromMealPlan()
-                  .map<Widget>((meal) => buildMealCard(
-                  _getMealTypeFromMealData(meal), meal))
+                  .asMap()
+                  .entries
+                  .map<Widget>((entry) {
+                final index = entry.key;
+                final meal = entry.value;
+                return buildMealCard(_getMealTypeByIndex(index), meal);
+              })
                   .toList(),
               _buildNutritionInfo(),
             ] else
@@ -494,46 +451,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         ),
       ),
     );
-  }
-
-  // This is the key fix - ensure we return the correct meal type strings
-  String _getMealTypeFromMealData(dynamic meal) {
-    final String mealTitle = meal['title']?.toLowerCase() ?? '';
-
-    // Debug print to see what's being processed
-    print("Processing meal title: $mealTitle");
-
-    // First check if we can identify it directly
-    if (mealTitle.contains('breakfast')) {
-      print("Identified as Breakfast");
-      return 'Breakfast';
-    }
-    if (mealTitle.contains('lunch')) {
-      print("Identified as Lunch");
-      return 'Lunch';
-    }
-    if (mealTitle.contains('dinner')) {
-      print("Identified as Dinner");
-      return 'Dinner';
-    }
-
-    // Check for related terms
-    if (mealTitle.contains('morning') || mealTitle.contains('breakfast')) {
-      print("Identified as Breakfast (morning)");
-      return 'Breakfast';
-    }
-    if (mealTitle.contains('afternoon') || mealTitle.contains('lunch')) {
-      print("Identified as Lunch (afternoon)");
-      return 'Lunch';
-    }
-    if (mealTitle.contains('evening') || mealTitle.contains('dinner')) {
-      print("Identified as Dinner (evening)");
-      return 'Dinner';
-    }
-
-    // If still not identified, return a default but log it
-    print("Default case - returning 'Meal'");
-    return 'Meal'; // This should not happen with proper categorization
   }
 
   Widget _buildErrorState(String message) {

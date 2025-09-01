@@ -26,7 +26,6 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
   Set<String> selectedAllergies = {};
   Set<String> originalAllergies = {};
 
-  // Base diet options
   final List<String> _baseDietOptions = [
     "High Protein",
     "Low Carb",
@@ -35,14 +34,13 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     "Dairy Free",
   ];
 
-  // Filtered diet options based on goal
   List<String> _filteredDietOptions = [];
 
   final List<String> allergyOptions = [
-    "None", // Explicit "None" option
+    "None",
     "Peanuts",
     "Tree Nuts",
-    "Milk", // This will be locked/auto-managed if Dairy Free is selected
+    "Milk",
     "Eggs",
     "Wheat",
     "Soy",
@@ -56,9 +54,8 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     _loadProfile();
   }
 
-  // Custom Snackbar method - Improved Design
   void _showCustomSnackBar(String message, bool isSuccess) {
-    if (!mounted) return; // Guard against state changes if widget is disposed
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -71,19 +68,14 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
             Expanded(
               child: Text(
                 message,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               ),
             ),
           ],
         ),
         backgroundColor: isSuccess ? Colors.green.shade700 : Colors.red.shade700,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(20),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         duration: const Duration(seconds: 3),
@@ -100,14 +92,8 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
         title: const Text('Unsaved Changes'),
         content: const Text('You have unsaved changes. Are you sure you want to leave?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Leave'),
-          ),
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Leave')),
         ],
       ),
     );
@@ -119,7 +105,6 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     final prefs = await SharedPreferences.getInstance();
     userId = prefs.getInt('user_id');
 
-    // Load current and target weights from SharedPreferences (fallback)
     currentWeight = double.tryParse(prefs.getString('current_weight') ?? '') ?? 0;
     targetWeight = double.tryParse(prefs.getString('target_weight') ?? '') ?? 0;
 
@@ -130,9 +115,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     }
 
     try {
-      final response = await http.get(Uri.parse(
-        'http://localhost/repEatApi/get_profile.php?user_id=$userId',
-      ));
+      final response = await http.get(Uri.parse('http://localhost/repEatApi/get_profile.php?user_id=$userId'));
       final data = json.decode(response.body);
 
       if (data['success'] == true) {
@@ -140,7 +123,6 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
         final String diet = profile['diet_preference'] ?? 'None';
         final String allergiesRaw = profile['allergies'] ?? '';
 
-        // Override weights from profile if available
         final profileCurrentWeight = double.tryParse(profile['current_weight'] ?? '') ?? 0;
         final profileTargetWeight = double.tryParse(profile['target_weight'] ?? '') ?? 0;
 
@@ -148,12 +130,9 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
         if (profileTargetWeight > 0) targetWeight = profileTargetWeight;
 
         final Set<String> allergiesSet = allergiesRaw.isNotEmpty && allergiesRaw != "None"
-            ? Set<String>.from(
-          allergiesRaw.split(',').map((e) => e.trim()).where((e) => allergyOptions.contains(e)),
-        )
+            ? Set<String>.from(allergiesRaw.split(',').map((e) => e.trim()).where((e) => allergyOptions.contains(e)))
             : {};
 
-        // Determine filtered diet options based on goal
         _updateFilteredDietOptions(diet);
 
         if (mounted) {
@@ -170,14 +149,11 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     } catch (e) {
       _showCustomSnackBar('Error loading profile: $e', false);
     } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
   void _updateFilteredDietOptions(String currentDiet) {
-    // Determine goal based on weight difference
     String goal = 'General Fitness';
     if (targetWeight > currentWeight) {
       goal = 'Muscle Gain';
@@ -185,15 +161,11 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
       goal = 'Weight Loss';
     }
 
-    // Filter diet options based on goal
     if (goal == 'Weight Loss') {
-      // Hide High Protein for Weight Loss
       _filteredDietOptions = _baseDietOptions.where((diet) => diet != 'High Protein').toList();
     } else if (goal == 'Muscle Gain') {
-      // Hide Low Carb for Muscle Gain
       _filteredDietOptions = _baseDietOptions.where((diet) => diet != 'Low Carb').toList();
     } else {
-      // Default: show all options
       _filteredDietOptions = List.from(_baseDietOptions);
     }
   }
@@ -232,17 +204,13 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     } catch (e) {
       _showCustomSnackBar('Error: $e', false);
     } finally {
-      if (mounted) {
-        setState(() => isSaving = false);
-      }
+      if (mounted) setState(() => isSaving = false);
     }
   }
 
   Future<void> _cancelEditing() async {
     if (!_hasChanges()) {
-      setState(() {
-        isEditing = false;
-      });
+      setState(() => isEditing = false);
       return;
     }
 
@@ -252,14 +220,8 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
         title: const Text('Cancel Changes?'),
         content: const Text('Any unsaved changes will be lost. Are you sure?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('No'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Yes'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes')),
         ],
       ),
     );
@@ -282,17 +244,9 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
+              CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
               SizedBox(height: 16),
-              Text(
-                'Loading Diet Preferences...',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 16,
-                ),
-              ),
+              Text('Loading Diet Preferences...', style: TextStyle(color: Colors.white70, fontSize: 16)),
             ],
           ),
         ),
@@ -317,17 +271,9 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
           ),
           actions: [
             if (isEditing)
-              IconButton(
-                icon: const Icon(Icons.cancel),
-                tooltip: 'Cancel',
-                onPressed: _cancelEditing,
-              )
+              IconButton(icon: const Icon(Icons.cancel), tooltip: 'Cancel', onPressed: _cancelEditing)
             else
-              IconButton(
-                icon: const Icon(Icons.edit),
-                onPressed: () => setState(() => isEditing = true),
-                tooltip: 'Edit',
-              ),
+              IconButton(icon: const Icon(Icons.edit), onPressed: () => setState(() => isEditing = true), tooltip: 'Edit'),
           ],
         ),
         body: SafeArea(
@@ -340,199 +286,132 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.deepPurple.shade100,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.restaurant,
-                      size: 40,
-                      color: Colors.deepPurple.shade800,
-                    ),
+                    decoration: BoxDecoration(color: Colors.deepPurple.shade100, shape: BoxShape.circle),
+                    child: Icon(Icons.restaurant, size: 40, color: Colors.deepPurple.shade800),
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  'Dietary Preferences',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
-                  ),
-                ),
+                const Text('Dietary Preferences', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
                 const SizedBox(height: 8),
-                const Text(
-                  'Manage your dietary needs and restrictions',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                  ),
-                ),
+                const Text('Manage your dietary needs and restrictions', style: TextStyle(fontSize: 14, color: Colors.grey)),
                 const SizedBox(height: 30),
 
-                // Diet Preference Section - Improved Design (Card)
+                // Diet Preference Section
                 Card(
                   elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.fastfood_outlined,
-                              color: Colors.deepPurple.shade700,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Diet Preference',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.deepPurple,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Icon(Icons.fastfood_outlined, color: Colors.deepPurple.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        const Text('Diet Preference', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.deepPurple)),
+                      ]),
+                      const SizedBox(height: 12),
+                      isEditing
+                          ? DropdownButtonFormField<String>(
+                        value: selectedDiet,
+                        items: _filteredDietOptions.map((diet) {
+                          return DropdownMenuItem(value: diet, child: Text(diet));
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              selectedDiet = val;
+
+                              if (val == 'Dairy Free') {
+                                if (selectedAllergies.contains('None')) selectedAllergies.remove('None');
+                                selectedAllergies.add('Milk'); // Auto-add Milk
+                              } else {
+                                selectedAllergies.remove('Milk'); // Remove if diet changes
+                              }
+                            });
+                          }
+                        },
+                        decoration: _inputDecoration(),
+                      )
+                          : Text(selectedDiet, style: const TextStyle(fontSize: 16, color: Colors.black87)),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Allergies Section
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Icon(Icons.warning_amber_outlined, color: Colors.deepPurple.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        const Text('Allergies', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.deepPurple)),
+                      ]),
+                      const SizedBox(height: 12),
+                      if (isEditing) ...[
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: allergyOptions.map((allergy) {
+                            final isSelected = selectedAllergies.contains(allergy);
+                            final isDisabled = selectedDiet == 'Dairy Free' && allergy == 'Milk';
+
+                            return FilterChip(
+                              label: Text(allergy),
+                              selected: isSelected,
+                              onSelected: isDisabled
+                                  ? null // Disable if Dairy Free and Milk
+                                  : (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    if (selectedDiet == 'Dairy Free' && allergy == 'None') {
+                                      _showCustomSnackBar('Cannot select None when Dairy Free diet is chosen.', false);
+                                      return;
+                                    }
+
+                                    if (allergy == 'None') {
+                                      selectedAllergies.clear();
+                                      selectedAllergies.add('None');
+                                    } else {
+                                      selectedAllergies.remove('None');
+                                      selectedAllergies.add(allergy);
+                                    }
+                                  } else {
+                                    selectedAllergies.remove(allergy);
+                                  }
+                                });
+                              },
+                              selectedColor: Colors.deepPurple.shade100,
+                              checkmarkColor: Colors.deepPurple,
+                              labelStyle: TextStyle(
+                                color: isSelected ? Colors.deepPurple.shade800 : Colors.grey.shade700,
+                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        isEditing
-                            ? DropdownButtonFormField<String>(
-                          value: selectedDiet,
-                          items: _filteredDietOptions.map((diet) {
-                            return DropdownMenuItem(
-                              value: diet,
-                              child: Text(diet),
+                              backgroundColor: Colors.grey.shade100,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                side: BorderSide(color: isSelected ? Colors.deepPurple.shade300 : Colors.grey.shade300, width: 1),
+                              ),
                             );
                           }).toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() {
-                                selectedDiet = val;
-
-                                // Auto-manage Milk allergy when switching to Dairy Free
-                                if (val == 'Dairy Free') {
-                                  // If Milk is already selected, keep it selected
-                                  // If Milk is not selected, add it to allergies
-                                  if (!selectedAllergies.contains('Milk')) {
-                                    selectedAllergies.add('Milk');
-                                  }
-                                } else {
-                                  // Remove Milk allergy when not Dairy Free
-                                  selectedAllergies.remove('Milk');
-                                }
-                              });
-                            }
-                          },
-                          decoration: _inputDecoration(),
-                        )
-                            : Text(
-                          selectedDiet,
+                        ),
+                      ] else ...[
+                        Text(
+                          selectedAllergies.isEmpty ||
+                              (selectedAllergies.length == 1 && selectedAllergies.contains('None'))
+                              ? "No allergies selected"
+                              : selectedAllergies.join(', '),
                           style: const TextStyle(fontSize: 16, color: Colors.black87),
                         ),
                       ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Allergies Section - Improved Design (Card)
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.warning_amber_outlined,
-                              color: Colors.deepPurple.shade700,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Allergies',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.deepPurple,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        if (isEditing) ...[
-                          // Improved Allergy Selection using Wrap and FilterChip
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: allergyOptions.map((allergy) {
-                              final isSelected = selectedAllergies.contains(allergy);
-                              return FilterChip(
-                                label: Text(allergy),
-                                selected: isSelected,
-                                onSelected: (selected) {
-                                  setState(() {
-                                    if (selected) {
-                                      if (allergy == 'None') {
-                                        selectedAllergies.clear();
-                                        selectedAllergies.add('None');
-                                      } else {
-                                        selectedAllergies.remove('None');
-                                        selectedAllergies.add(allergy);
-                                      }
-                                    } else {
-                                      selectedAllergies.remove(allergy);
-                                    }
-                                  });
-                                },
-                                selectedColor: Colors.deepPurple.shade100,
-                                checkmarkColor: Colors.deepPurple,
-                                labelStyle: TextStyle(
-                                  color: isSelected
-                                      ? Colors.deepPurple.shade800
-                                      : Colors.grey.shade700,
-                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                ),
-                                backgroundColor: Colors.grey.shade100,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                  side: BorderSide(
-                                    color: isSelected
-                                        ? Colors.deepPurple.shade300
-                                        : Colors.grey.shade300,
-                                    width: 1,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ] else ...[
-                          // Improved Read-Only Display
-                          Text(
-                            selectedAllergies.isEmpty || (selectedAllergies.length == 1 && selectedAllergies.contains('None'))
-                                ? "No allergies selected"
-                                : selectedAllergies.join(', '),
-                            style: const TextStyle(fontSize: 16, color: Colors.black87),
-                          ),
-                        ],
-                      ],
-                    ),
+                    ]),
                   ),
                 ),
 
                 const SizedBox(height: 30),
 
-                // Save Button (only visible when editing)
                 if (isEditing)
                   Center(
                     child: SizedBox(
@@ -543,27 +422,16 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.deepPurple.shade800,
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 2,
                         ),
                         child: isSaving
                             ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
-                            : const Text(
-                          'Save Changes',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                            : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                       ),
                     ),
                   ),
@@ -575,24 +443,14 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     );
   }
 
-  // Improved Input Decoration
   InputDecoration _inputDecoration() {
     return InputDecoration(
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.deepPurple.shade200),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.deepPurple.shade200)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2)),
     );
   }
 }

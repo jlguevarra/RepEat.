@@ -32,6 +32,9 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   bool isEditing = false;
   int? userId;
 
+  // Add this field to track injury validation
+  bool _injuryValid = true;
+
   final List<String> injuryCategories = [
     "None",
     "Knee Pain",
@@ -168,7 +171,8 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         heightController.text.trim() != originalHeight ||
         hasInjury != originalHasInjury ||
         (hasInjury && selectedInjuryCategory != originalInjuryDetails) ||
-        updatedGoal != originalGoal;
+        updatedGoal != originalGoal ||
+        (!_injuryValid && hasInjury); // Add this line
   }
 
   void _calculateBMI() {
@@ -266,6 +270,15 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     if (currentWeight == targetWeight) {
       _showCustomSnackBar('Current weight and target weight must be different.', false);
       return;
+    }
+
+    // Validate injury selection if injury is present
+    if (hasInjury && selectedInjuryCategory == 'None') {
+      setState(() => _injuryValid = false);
+      _showCustomSnackBar('Please select an injury category', false);
+      return;
+    } else {
+      setState(() => _injuryValid = true);
     }
 
     // Update BMI before saving
@@ -750,6 +763,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                               hasInjury = val;
                               if (!hasInjury) {
                                 selectedInjuryCategory = 'None';
+                                setState(() => _injuryValid = true); // Reset validation when injury is turned off
                               }
                             });
                           }
@@ -768,7 +782,10 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                             onChanged: isEditing
                                 ? (val) {
                               if (val != null) {
-                                setState(() => selectedInjuryCategory = val);
+                                setState(() {
+                                  selectedInjuryCategory = val;
+                                  _injuryValid = true; // Mark as valid when selection is made
+                                });
                               }
                             }
                                 : null,

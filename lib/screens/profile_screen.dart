@@ -29,15 +29,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadUserData();
   }
 
-  // Custom Snackbar method - Improved Design
   void _showCustomSnackBar(String message, bool isSuccess) {
-    if (!mounted) return; // Guard against state changes if widget is disposed
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
             Icon(
-              isSuccess ? Icons.check_circle : Icons.error, // Icon based on result
+              isSuccess ? Icons.check_circle : Icons.error,
               color: Colors.white,
             ),
             const SizedBox(width: 12),
@@ -52,23 +51,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
         ),
-        backgroundColor: isSuccess ? Colors.green.shade700 : Colors.red.shade700, // Color based on result
-        behavior: SnackBarBehavior.floating, // Modern floating style
+        backgroundColor:
+        isSuccess ? Colors.green.shade700 : Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12), // Rounded corners
+          borderRadius: BorderRadius.circular(12),
         ),
-        margin: const EdgeInsets.all(20), // Margin from screen edges
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), // Internal padding
-        duration: const Duration(seconds: 3), // Display duration
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
 
   Future<void> _loadUserData() async {
     try {
-      // First try to get from API
       final response = await http.get(
-        Uri.parse('http://localhost/repEatApi/get_profile.php?user_id=${widget.userId}'),
+        Uri.parse(
+            'http://localhost/repEatApi/get_profile.php?user_id=${widget.userId}'),
       );
 
       if (response.statusCode == 200) {
@@ -76,11 +76,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (data['success'] == true) {
           final name = data['data']['name'] ?? 'User';
 
-          // Update local cache
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('user_name', name);
 
-          if (mounted) { // Check if mounted before setState
+          if (mounted) {
             setState(() {
               fullName = name;
               isLoading = false;
@@ -90,7 +89,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }
           return;
         } else {
-          // If API returns but with success=false
           final prefs = await SharedPreferences.getInstance();
           final cachedName = prefs.getString('user_name') ?? 'User';
           if (mounted) {
@@ -98,16 +96,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               fullName = cachedName;
               isLoading = false;
               isRefreshing = false;
-              errorMessage = 'Using cached data - ${data['message'] ?? 'API returned error'}';
+              errorMessage =
+              'Using cached data - ${data['message'] ?? 'API returned error'}';
             });
           }
-          // Show snackbar for error using the new method
           _showCustomSnackBar(errorMessage!, false);
           return;
         }
       }
 
-      // If API fails completely (network error or status code != 200)
       final prefs = await SharedPreferences.getInstance();
       final cachedName = prefs.getString('user_name') ?? 'User';
       if (mounted) {
@@ -118,11 +115,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           errorMessage = 'Using cached data - Network error';
         });
       }
-      // Show snackbar for error using the new method
       _showCustomSnackBar(errorMessage!, false);
-
     } catch (e) {
-      // Fall back to local cache if both API and cache fail
       final prefs = await SharedPreferences.getInstance();
       final cachedName = prefs.getString('user_name') ?? 'User';
       if (mounted) {
@@ -133,21 +127,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           errorMessage = 'Using cached data - ${e.toString()}';
         });
       }
-      // Show snackbar for error using the new method
       _showCustomSnackBar(errorMessage!, false);
     }
   }
 
   Future<void> _refreshData() async {
-    if (mounted) { // Check if mounted before setState
+    if (mounted) {
       setState(() {
         isRefreshing = true;
         errorMessage = null;
       });
     }
     await _loadUserData();
-    // REMOVED: The line that showed "Profile refreshed successfully!" snackbar
-    // The refresh functionality itself (calling _loadUserData) is kept.
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -164,7 +155,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.deepPurple,
-              foregroundColor: Colors.white, // Explicit text color
+              foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Logout'),
@@ -183,7 +174,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         MaterialPageRoute(builder: (_) => const LoginScreen()),
             (route) => false,
       );
-      // Show logout success snackbar using the new method
       _showCustomSnackBar('You have been logged out.', true);
     }
   }
@@ -192,7 +182,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(
-        backgroundColor: Colors.deepPurple, // Match app bar color
+        backgroundColor: Colors.deepPurple,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -215,18 +205,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.deepPurple.shade50, // Softer background - Improved Design
+      backgroundColor: Colors.deepPurple.shade50,
       appBar: AppBar(
-        title: const Text('Profile'),
+        title: const Text(
+          'Profile',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
         backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white, // Explicit text/icon color
-        elevation: 0, // Remove shadow for a flatter look - Improved Design
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings, size: 28),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+              );
+              await _refreshData();
+            },
+            tooltip: 'Settings',
+          ),
           if (errorMessage != null)
             IconButton(
               icon: const Icon(Icons.warning, color: Colors.amber),
               onPressed: () {
-                // Use the new snackbar method
                 _showCustomSnackBar(errorMessage!, false);
               },
             ),
@@ -234,17 +240,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _refreshData,
-        backgroundColor: Colors.deepPurple, // Custom refresh indicator color - Improved Design
-        color: Colors.white, // Custom refresh indicator color - Improved Design
+        backgroundColor: Colors.deepPurple,
+        color: Colors.white,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           children: [
-            // Profile Header Card - Improved Design
             Card(
-              elevation: 2, // Subtle shadow
+              elevation: 2,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16), // Rounded corners
+                borderRadius: BorderRadius.circular(16),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(20),
@@ -265,7 +270,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 20,
-                              color: Colors.deepPurple, // Consistent color
+                              color: Colors.deepPurple,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -284,8 +289,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 24),
-
-            // Profile Options Section Header - Improved Design
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8.0),
               child: Text(
@@ -299,13 +302,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 8),
-
-            // Profile Options - Improved Design using _buildProfileOption
             _buildProfileOption(
               context,
               icon: Icons.fitness_center,
               title: 'Fitness Goals',
-              subtitle: 'Set and track your fitness objectives', // Added subtitle
+              subtitle: 'Set and track your fitness objectives',
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const FitnessGoalsScreen()),
@@ -315,7 +316,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               context,
               icon: Icons.restaurant_menu,
               title: 'Diet Preference',
-              subtitle: 'Manage your dietary needs and restrictions', // Added subtitle
+              subtitle: 'Manage your dietary needs and restrictions',
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const DietPreferenceScreen()),
@@ -325,29 +326,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               context,
               icon: Icons.straighten,
               title: 'Physical Stats',
-              subtitle: 'Update your height, weight, and measurements', // Added subtitle
+              subtitle: 'Update your height, weight, and measurements',
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const PhysicalStatsScreen()),
               ),
             ),
-            _buildProfileOption(
-              context,
-              icon: Icons.settings,
-              title: 'Account Settings',
-              subtitle: 'Change password and full name', // Added subtitle
-              onTap: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
-                );
-                await _refreshData(); // Refresh after account settings change
-              },
-            ),
-
             const SizedBox(height: 24),
-
-            // Logout Button - Improved Design
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: OutlinedButton.icon(
@@ -355,17 +340,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.deepPurple,
                   side: const BorderSide(color: Colors.deepPurple),
-                  padding: const EdgeInsets.symmetric(vertical: 16), // Increased padding
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12), // Rounded corners
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 icon: const Icon(Icons.logout),
                 label: const Text(
                   'Logout',
                   style: TextStyle(
-                    fontSize: 16, // Larger text
-                    fontWeight: FontWeight.w600, // Bolder text
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -377,49 +362,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // Improved Profile Option Builder - Better Design Consistency
   Widget _buildProfileOption(
       BuildContext context, {
         required IconData icon,
         required String title,
-        String? subtitle, // Added optional subtitle
+        String? subtitle,
         required VoidCallback onTap,
       }) {
     return Card(
-      elevation: 0, // Flat card
-      margin: const EdgeInsets.symmetric(vertical: 6), // Vertical spacing
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12), // Rounded corners
+        borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // Internal padding
-        leading: Container( // Icon container for better visual
+        contentPadding:
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.deepPurple.shade50, // Background for icon
-            shape: BoxShape.circle, // Circular background
+            color: Colors.deepPurple.shade50,
+            shape: BoxShape.circle,
           ),
           child: Icon(icon, color: Colors.deepPurple),
         ),
         title: Text(
           title,
           style: const TextStyle(
-            fontWeight: FontWeight.w600, // Slightly bolder title
-            fontSize: 16, // Larger title
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
           ),
         ),
-        subtitle: subtitle != null // Show subtitle if provided
+        subtitle: subtitle != null
             ? Text(
           subtitle,
           style: const TextStyle(
             color: Colors.black54,
-            fontSize: 13, // Smaller subtitle
+            fontSize: 13,
           ),
         )
             : null,
         trailing: const Icon(
           Icons.chevron_right,
-          color: Colors.grey, // Softer trailing icon color
+          color: Colors.grey,
         ),
         onTap: onTap,
       ),
