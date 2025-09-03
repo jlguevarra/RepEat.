@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:lottie/lottie.dart';
 import 'camera_workout_screen.dart'; // Import your camera screen
 
 class WorkoutScreen extends StatefulWidget {
@@ -172,9 +171,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: Colors.deepPurple,
-        title: const Text("FULL BODY CHALLENGE",
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
+        title: const Text("Workout",
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        centerTitle: false,
         elevation: 0,
       ),
       body: isLoading
@@ -182,10 +181,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Lottie.asset(
-              "assets/animations/loading.json",
-              width: 150,
-              height: 150,
+            // Replaced Lottie with built-in CircularProgressIndicator
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.deepPurple),
+              strokeWidth: 4,
             ),
             const SizedBox(height: 16),
             const Text(
@@ -440,29 +439,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.fitness_center),
-            label: 'Workout',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.restaurant),
-            label: 'Meal Plan',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
-        currentIndex: 1,
-        selectedItemColor: Colors.deepPurple,
-        unselectedItemColor: Colors.grey,
-      ),
+      // BottomNavigationBar removed from here
     );
   }
 
