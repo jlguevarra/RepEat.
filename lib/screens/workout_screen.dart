@@ -29,7 +29,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPlanFromStorage();
+    _loadPlanFromStorage().then((_) {
+      // After trying to load from storage, if no plan exists, check with server
+      if (weeklyPlan == null) {
+        checkSavedPlan();
+      }
+    });
     _loadProgressFromStorage();
   }
 
@@ -40,7 +45,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     if (savedPlan != null) {
       setState(() {
         weeklyPlan = json.decode(savedPlan);
-        hasPlan = true; // ✅ Set flag to true since plan exists
         _initializeCameraCompletion(weeklyPlan!);
       });
     }
@@ -349,8 +353,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
             CircularProgressIndicator(
-              valueColor:
-              AlwaysStoppedAnimation<Color>(Colors.deepPurple),
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.deepPurple),
               strokeWidth: 4,
             ),
             SizedBox(height: 16),
@@ -361,7 +364,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ],
         ),
       )
-          : weeklyPlan == null || !hasPlan // ✅ Check both conditions
+          : weeklyPlan == null // Show generate UI only when NO plan data is loaded
           ? Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -373,8 +376,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             const SizedBox(height: 20),
             const Text(
               "Start Your Fitness Journey",
-              style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
             const Padding(
@@ -402,12 +404,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ],
         ),
       )
-          : SingleChildScrollView(
+          : SingleChildScrollView( // Show plan content when weeklyPlan is NOT null
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // same UI you had (progress bar, days, exercises, stats, complete button)
             _buildPlanContent(),
           ],
         ),
