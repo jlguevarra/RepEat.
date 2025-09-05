@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'camera_workout_screen.dart'; // Import your camera screen
+import 'package:shared_preferences/shared_preferences.dart';
+import 'camera_workout_screen.dart';
 
 class WorkoutScreen extends StatefulWidget {
   final int userId;
@@ -22,9 +23,51 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   double progressValue = 0.0;
   List<bool> exerciseCompletion = List.filled(5, false);
   List<bool> dayCompletion = List.filled(7, false);
-
-  // Track which exercises have been completed with camera
   Map<String, List<bool>> exerciseCameraCompletion = {};
+
+  @override
+  void initState() {
+    super.initState();
+    checkSavedPlan();
+  }
+
+  Future<void> checkSavedPlan() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse("http://192.168.100.11/repEatApi/get_weekly_challenge.php"),
+        body: {"user_id": widget.userId.toString()},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        if (data["success"] == true) {
+          setState(() {
+            weeklyPlan = data;
+            // Check if this is a saved plan or a new one
+            if (data["from_saved"] == true) {
+              // Load any saved progress if available
+              _loadProgressFromStorage();
+            } else {
+              // This is a newly generated plan, save it
+              saveGeneratedPlan(data);
+            }
+            _initializeCameraCompletion(data);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking saved plan: $e");
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
 
   Future<void> fetchWeeklyPlan() async {
     setState(() {
@@ -34,10 +77,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://localhost/repEatApi/get_weekly_challenge.php"),
-        body: {
-          "user_id": widget.userId.toString(),
-        },
+        Uri.parse("http://192.168.100.11/repEatApi/get_weekly_challenge.php"),
+        body: {"user_id": widget.userId.toString()},
       );
 
       if (response.statusCode == 200) {
@@ -46,9 +87,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         if (data["success"] == true) {
           setState(() {
             weeklyPlan = data;
-            // Initialize camera completion tracking
             _initializeCameraCompletion(data);
           });
+
+          // Only save if this is a newly generated plan
+          if (data["from_saved"] != true) {
+            await saveGeneratedPlan(data);
+          }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text("Error: ${data["message"]}")),
@@ -71,6 +116,88 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
+  Future<void> saveGeneratedPlan(Map<String, dynamic> plan) async {
+    try {
+      debugPrint("💾 Attempting to save plan to database...");
+
+      final response = await http.post(
+        Uri.parse("http://192.168.100.11/repEatApi/save_weekly_plan.php"),
+        body: {
+          "user_id": widget.userId.toString(),
+          "week": "Week $currentWeek", // This will be parsed to week_number in PHP
+          "goal": plan["goal"].toString(),
+          "sets": plan["sets"].toString(),
+          "reps": plan["reps"].toString(),
+          "plan_json": jsonEncode(plan["daily_exercises"]), // This will be saved as 'plan' column
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data["success"] == true) {
+          debugPrint("✅ Weekly plan saved successfully!");
+          // Save initial progress
+          _saveProgressToStorage();
+        } else {
+          debugPrint("⚠️ Failed to save plan: ${data["message"]}");
+        }
+      } else {
+        debugPrint("❌ Server error when saving: ${response.statusCode}");
+        debugPrint("❌ Response body: ${response.body}");
+      }
+    } catch (e) {
+      debugPrint("❌ Error saving plan: $e");
+    }
+  }
+  // Save progress to local storage
+  Future<void> _saveProgressToStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final progressData = {
+        "currentWeek": currentWeek,
+        "currentDay": currentDay,
+        "daysCompleted": daysCompleted,
+        "progressValue": progressValue,
+        "dayCompletion": dayCompletion,
+        "exerciseCameraCompletion": exerciseCameraCompletion,
+      };
+
+      await prefs.setString('workout_progress_${widget.userId}', jsonEncode(progressData));
+      debugPrint("✅ Progress saved to local storage");
+    } catch (e) {
+      debugPrint("❌ Error saving progress to storage: $e");
+    }
+  }
+
+  // Load progress from local storage
+  Future<void> _loadProgressFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final progressDataString = prefs.getString('workout_progress_${widget.userId}');
+
+      if (progressDataString != null) {
+        final progressData = json.decode(progressDataString);
+        setState(() {
+          currentWeek = progressData["currentWeek"] ?? 1;
+          currentDay = progressData["currentDay"] ?? 1;
+          daysCompleted = progressData["daysCompleted"] ?? 0;
+          progressValue = (progressData["progressValue"] ?? 0.0).toDouble();
+          dayCompletion = List<bool>.from(progressData["dayCompletion"] ?? List.filled(7, false));
+
+          if (progressData["exerciseCameraCompletion"] != null) {
+            exerciseCameraCompletion = Map<String, List<bool>>.from(
+                progressData["exerciseCameraCompletion"].map((key, value) =>
+                    MapEntry(key, List<bool>.from(value)))
+            );
+          }
+        });
+        debugPrint("✅ Progress loaded from local storage");
+      }
+    } catch (e) {
+      debugPrint("❌ Error loading progress from storage: $e");
+    }
+  }
+
   void _initializeCameraCompletion(Map<String, dynamic> data) {
     final dayNames = [
       "Monday", "Tuesday", "Wednesday", "Thursday",
@@ -78,17 +205,18 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     ];
 
     for (var day in dayNames) {
-      if (data["daily_exercises"] != null &&
-          data["daily_exercises"][day] != null) {
-        exerciseCameraCompletion[day] =
-            List.filled(data["daily_exercises"][day].length, false);
+      if (data["daily_exercises"] != null && data["daily_exercises"][day] != null) {
+        // Only initialize if not already set from saved progress
+        if (!exerciseCameraCompletion.containsKey(day)) {
+          exerciseCameraCompletion[day] =
+              List.filled(data["daily_exercises"][day].length, false);
+        }
       }
     }
   }
 
   void _navigateToCameraWorkout(int exerciseIndex, String exerciseName) {
-    // Extract category from exercise name if needed
-    String category = "Arms"; // Default category, you can customize this
+    String category = "Arms"; // Default category
 
     if (exerciseName.toLowerCase().contains("chest")) {
       category = "Chest";
@@ -109,7 +237,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           category: category,
           exercise: exerciseName,
           onExerciseCompleted: (bool completed) {
-            // Update completion status when returning from camera
             if (completed) {
               setState(() {
                 final dayNames = [
@@ -125,6 +252,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   // Check if all exercises for the day are completed
                   if (exerciseCameraCompletion[currentDayName]!.every((e) => e)) {
                     _markDayCompleted();
+                  } else {
+                    // Update progress after each exercise completion
+                    _saveProgressToStorage();
                   }
                 }
               });
@@ -157,11 +287,17 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       } else if (currentWeek < 4) {
         currentWeek++;
         currentDay = 1;
+        daysCompleted = 0;
+        progressValue = 0.0;
+        dayCompletion = List.filled(7, false);
       }
+
+      // Save progress to local storage
+      _saveProgressToStorage();
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Day $currentDay completed! Great job!")),
+      SnackBar(content: Text("Day ${currentDay - 1} completed! Great job!")),
     );
   }
 
@@ -181,7 +317,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Replaced Lottie with built-in CircularProgressIndicator
             const CircularProgressIndicator(
               valueColor: AlwaysStoppedAnimation<Color>(Colors.deepPurple),
               strokeWidth: 4,
@@ -205,7 +340,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             ),
             const SizedBox(height: 20),
             const Text(
-              "Start Your Fitness Journey",
+              "No plan found yet",
               style: TextStyle(
                   fontSize: 24, fontWeight: FontWeight.bold),
             ),
@@ -213,7 +348,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 40.0),
               child: Text(
-                "Kick off your full-body fitness journey with energy!",
+                "Tap below to create your first weekly plan.",
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
@@ -235,6 +370,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ],
         ),
       )
+
           : SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -314,6 +450,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     onTap: () {
                       setState(() {
                         currentDay = index + 1;
+                        _saveProgressToStorage();
                       });
                     },
                     child: Container(
@@ -439,7 +576,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ],
         ),
       ),
-      // BottomNavigationBar removed from here
     );
   }
 

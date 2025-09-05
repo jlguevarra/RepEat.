@@ -232,7 +232,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
     setState(() => _isSubmitting = true);
 
-    final url = Uri.parse("http://localhost/repEatApi/save_onboarding.php"); // Ensure IP is correct
+    final url = Uri.parse("http://192.168.100.11/repEatApi/save_onboarding.php"); // Ensure IP is correct
 
     // Prepare data, handling "None" case correctly for submission
     String allergiesToSend;

@@ -92,7 +92,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
     setState(() => _isLoading = true);
 
-    final apiUrl = 'http://localhost/repEatApi/verify_code.php'; // Replace with your LAN IP
+    final apiUrl = 'http://192.168.100.11/repEatApi/verify_code.php'; // Replace with your LAN IP
 
     try {
       final response = await http.post(
@@ -134,7 +134,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
   }
 
   Future<void> _resendCode() async {
-    final resendUrl = 'http://localhost/repEatApi/forgot_password.php'; // Replace with your LAN IP
+    final resendUrl = 'http://192.168.100.11/repEatApi/forgot_password.php'; // Replace with your LAN IP
 
     try {
       final response = await http.post(
