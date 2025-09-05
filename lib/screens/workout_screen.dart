@@ -24,6 +24,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<bool> exerciseCompletion = List.filled(5, false);
   List<bool> dayCompletion = List.filled(7, false);
   Map<String, List<bool>> exerciseCameraCompletion = {};
+  bool hasPlan = false; // ✅ Added flag to track if user has a plan
 
   @override
   void initState() {
@@ -39,6 +40,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     if (savedPlan != null) {
       setState(() {
         weeklyPlan = json.decode(savedPlan);
+        hasPlan = true; // ✅ Set flag to true since plan exists
         _initializeCameraCompletion(weeklyPlan!);
       });
     }
@@ -48,6 +50,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> _savePlanToStorage(Map<String, dynamic> plan) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('weeklyPlan_${widget.userId}', json.encode(plan));
+    setState(() {
+      hasPlan = true; // ✅ Set flag to true after saving
+    });
   }
 
   Future<void> fetchWeeklyPlan() async {
@@ -68,6 +73,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         if (data["success"] == true) {
           setState(() {
             weeklyPlan = data;
+            hasPlan = true; // ✅ Set flag to true
             _initializeCameraCompletion(data);
           });
 
@@ -112,6 +118,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         if (data["success"] == true) {
           setState(() {
             weeklyPlan = data;
+            hasPlan = true; // ✅ Set flag to true
 
             // Check if this is a saved plan or a new one
             if (data["from_saved"] == true) {
@@ -120,7 +127,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               _loadProgressFromStorage();
             } else {
               debugPrint("🔄 Generated new plan (already saved by PHP)");
-              // No need to call saveGeneratedPlan anymore - it's done in PHP
               // Just save progress to local storage
               _saveProgressToStorage();
             }
@@ -137,55 +143,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
-  // Future<void> fetchWeeklyPlan() async {
-  //   setState(() {
-  //     isLoading = true;
-  //     showAnimation = true;
-  //   });
-  //
-  //   try {
-  //     final response = await http.post(
-  //       Uri.parse("http://192.168.100.11/repEatApi/get_weekly_challenge.php"),
-  //       body: {"user_id": widget.userId.toString()},
-  //     );
-  //
-  //     if (response.statusCode == 200) {
-  //       final data = json.decode(response.body);
-  //
-  //       if (data["success"] == true) {
-  //         setState(() {
-  //           weeklyPlan = data;
-  //           _initializeCameraCompletion(data);
-  //         });
-  //
-  //         // No need to call saveGeneratedPlan anymore since it's done in PHP
-  //         // The plan is automatically saved when generated
-  //
-  //         // Save progress to local storage
-  //         _saveProgressToStorage();
-  //       } else {
-  //         ScaffoldMessenger.of(context).showSnackBar(
-  //           SnackBar(content: Text("Error: ${data["message"]}")),
-  //         );
-  //       }
-  //     } else {
-  //       ScaffoldMessenger.of(context).showSnackBar(
-  //         const SnackBar(content: Text("Server error")),
-  //       );
-  //     }
-  //   } catch (e) {
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       SnackBar(content: Text("Exception: $e")),
-  //     );
-  //   } finally {
-  //     setState(() {
-  //       isLoading = false;
-  //       showAnimation = false;
-  //     });
-  //   }
-  // }
-
-// You can remove the saveGeneratedPlan method entirely since it's not needed anymore
   Future<void> saveGeneratedPlan(Map<String, dynamic> plan) async {
     try {
       final response = await http.post(
@@ -404,7 +361,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ],
         ),
       )
-          : weeklyPlan == null
+          : weeklyPlan == null || !hasPlan // ✅ Check both conditions
           ? Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
