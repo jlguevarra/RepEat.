@@ -95,6 +95,97 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
+  Future<void> checkSavedPlan() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse("http://192.168.100.11/repEatApi/get_weekly_challenge.php"),
+        body: {"user_id": widget.userId.toString()},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        if (data["success"] == true) {
+          setState(() {
+            weeklyPlan = data;
+
+            // Check if this is a saved plan or a new one
+            if (data["from_saved"] == true) {
+              debugPrint("✅ Loaded saved plan from database");
+              // Load any saved progress if available
+              _loadProgressFromStorage();
+            } else {
+              debugPrint("🔄 Generated new plan (already saved by PHP)");
+              // No need to call saveGeneratedPlan anymore - it's done in PHP
+              // Just save progress to local storage
+              _saveProgressToStorage();
+            }
+            _initializeCameraCompletion(data);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking saved plan: $e");
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  // Future<void> fetchWeeklyPlan() async {
+  //   setState(() {
+  //     isLoading = true;
+  //     showAnimation = true;
+  //   });
+  //
+  //   try {
+  //     final response = await http.post(
+  //       Uri.parse("http://192.168.100.11/repEatApi/get_weekly_challenge.php"),
+  //       body: {"user_id": widget.userId.toString()},
+  //     );
+  //
+  //     if (response.statusCode == 200) {
+  //       final data = json.decode(response.body);
+  //
+  //       if (data["success"] == true) {
+  //         setState(() {
+  //           weeklyPlan = data;
+  //           _initializeCameraCompletion(data);
+  //         });
+  //
+  //         // No need to call saveGeneratedPlan anymore since it's done in PHP
+  //         // The plan is automatically saved when generated
+  //
+  //         // Save progress to local storage
+  //         _saveProgressToStorage();
+  //       } else {
+  //         ScaffoldMessenger.of(context).showSnackBar(
+  //           SnackBar(content: Text("Error: ${data["message"]}")),
+  //         );
+  //       }
+  //     } else {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         const SnackBar(content: Text("Server error")),
+  //       );
+  //     }
+  //   } catch (e) {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text("Exception: $e")),
+  //     );
+  //   } finally {
+  //     setState(() {
+  //       isLoading = false;
+  //       showAnimation = false;
+  //     });
+  //   }
+  // }
+
+// You can remove the saveGeneratedPlan method entirely since it's not needed anymore
   Future<void> saveGeneratedPlan(Map<String, dynamic> plan) async {
     try {
       final response = await http.post(
