@@ -66,7 +66,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.1.252/repEatApi/get_weekly_challenge.php"),
+        Uri.parse("http://localhost/repEatApi/get_weekly_challenge.php"),
         body: {"user_id": widget.userId.toString()},
       );
 
@@ -111,7 +111,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.1.252/repEatApi/get_weekly_challenge.php"),
+        Uri.parse("http://localhost/repEatApi/get_weekly_challenge.php"),
         body: {"user_id": widget.userId.toString()},
       );
 
@@ -146,7 +146,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> saveGeneratedPlan(Map<String, dynamic> plan) async {
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.1.252/repEatApi/save_weekly_plan.php"),
+        Uri.parse("http://localhost/repEatApi/save_weekly_plan.php"),
         body: {
           "user_id": widget.userId.toString(),
           "week": "Week $currentWeek",

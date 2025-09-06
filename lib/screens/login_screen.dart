@@ -39,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMessage = null;
     });
 
-    final apiUrl = 'http://192.168.1.252/repEatApi/login.php';
+    final apiUrl = 'http://localhost/repEatApi/login.php';
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
