@@ -159,7 +159,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       }
 
       final response = await http.post(
-        Uri.parse('http://localhost/repEatApi/update_account.php'),
+        Uri.parse('http://192.168.1.252/repEatApi/update_account.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestData),
       );

@@ -22,15 +22,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   int daysCompleted = 0;
   double progressValue = 0.0;
   List<bool> exerciseCompletion = List.filled(5, false);
-  List<bool> dayCompletion = List.filled(7, false);
+  List<bool> dayCompletion = List.filled(28, false); // Changed from 7 to 28
   Map<String, List<bool>> exerciseCameraCompletion = {};
-  bool hasPlan = false; // ✅ Added flag to track if user has a plan
+  bool hasPlan = false;
 
   @override
   void initState() {
     super.initState();
     _loadPlanFromStorage().then((_) {
-      // After trying to load from storage, if no plan exists, check with server
       if (weeklyPlan == null) {
         checkSavedPlan();
       }
@@ -55,7 +54,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('weeklyPlan_${widget.userId}', json.encode(plan));
     setState(() {
-      hasPlan = true; // ✅ Set flag to true after saving
+      hasPlan = true;
     });
   }
 
@@ -67,7 +66,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://localhost/repEatApi/get_weekly_challenge.php"),
+        Uri.parse("http://192.168.1.252/repEatApi/get_weekly_challenge.php"),
         body: {"user_id": widget.userId.toString()},
       );
 
@@ -77,7 +76,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         if (data["success"] == true) {
           setState(() {
             weeklyPlan = data;
-            hasPlan = true; // ✅ Set flag to true
+            hasPlan = true;
             _initializeCameraCompletion(data);
           });
 
@@ -112,7 +111,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.11/repEatApi/get_weekly_challenge.php"),
+        Uri.parse("http://192.168.1.252/repEatApi/get_weekly_challenge.php"),
         body: {"user_id": widget.userId.toString()},
       );
 
@@ -122,16 +121,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         if (data["success"] == true) {
           setState(() {
             weeklyPlan = data;
-            hasPlan = true; // ✅ Set flag to true
+            hasPlan = true;
 
-            // Check if this is a saved plan or a new one
             if (data["from_saved"] == true) {
               debugPrint("✅ Loaded saved plan from database");
-              // Load any saved progress if available
               _loadProgressFromStorage();
             } else {
               debugPrint("🔄 Generated new plan (already saved by PHP)");
-              // Just save progress to local storage
               _saveProgressToStorage();
             }
             _initializeCameraCompletion(data);
@@ -150,7 +146,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> saveGeneratedPlan(Map<String, dynamic> plan) async {
     try {
       final response = await http.post(
-        Uri.parse("http://localhost/repEatApi/save_weekly_plan.php"),
+        Uri.parse("http://192.168.1.252/repEatApi/save_weekly_plan.php"),
         body: {
           "user_id": widget.userId.toString(),
           "week": "Week $currentWeek",
@@ -204,8 +200,19 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           currentDay = progressData["currentDay"] ?? 1;
           daysCompleted = progressData["daysCompleted"] ?? 0;
           progressValue = (progressData["progressValue"] ?? 0.0).toDouble();
-          dayCompletion = List<bool>.from(
-              progressData["dayCompletion"] ?? List.filled(7, false));
+
+          // Handle both old (7 days) and new (28 days) format
+          final savedDayCompletion = progressData["dayCompletion"];
+          if (savedDayCompletion != null) {
+            if (savedDayCompletion.length == 7) {
+              // Convert from 7 days to 28 days format
+              dayCompletion = List<bool>.from(savedDayCompletion + List.filled(21, false));
+            } else {
+              dayCompletion = List<bool>.from(savedDayCompletion);
+            }
+          } else {
+            dayCompletion = List.filled(28, false);
+          }
 
           if (progressData["exerciseCameraCompletion"] != null) {
             exerciseCameraCompletion = Map<String, List<bool>>.from(
@@ -221,18 +228,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   void _initializeCameraCompletion(Map<String, dynamic> data) {
     final dayNames = [
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-      "Sunday"
+      "Monday", "Tuesday", "Wednesday", "Thursday",
+      "Friday", "Saturday", "Sunday"
     ];
 
     for (var day in dayNames) {
-      if (data["daily_exercises"] != null &&
-          data["daily_exercises"][day] != null) {
+      if (data["daily_exercises"] != null && data["daily_exercises"][day] != null) {
         if (!exerciseCameraCompletion.containsKey(day)) {
           exerciseCameraCompletion[day] =
               List.filled(data["daily_exercises"][day].length, false);
@@ -266,27 +267,27 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             if (completed) {
               setState(() {
                 final dayNames = [
-                  "Monday",
-                  "Tuesday",
-                  "Wednesday",
-                  "Thursday",
-                  "Friday",
-                  "Saturday",
-                  "Sunday"
+                  "Monday", "Tuesday", "Wednesday", "Thursday",
+                  "Friday", "Saturday", "Sunday"
                 ];
-                final currentDayName = dayNames[currentDay - 1];
 
-                if (exerciseCameraCompletion.containsKey(currentDayName) &&
-                    exerciseIndex <
-                        exerciseCameraCompletion[currentDayName]!.length) {
-                  exerciseCameraCompletion[currentDayName]![exerciseIndex] =
-                  true;
+                // Calculate which day of the week we're on (0-6)
+                final weekDayIndex = (currentDay - 1) % 7;
 
-                  if (exerciseCameraCompletion[currentDayName]!
-                      .every((e) => e)) {
-                    _markDayCompleted();
-                  } else {
-                    _saveProgressToStorage();
+                // Safety check
+                if (weekDayIndex >= 0 && weekDayIndex < dayNames.length) {
+                  final currentDayName = dayNames[weekDayIndex];
+
+                  if (exerciseCameraCompletion.containsKey(currentDayName) &&
+                      exerciseIndex < exerciseCameraCompletion[currentDayName]!.length) {
+                    exerciseCameraCompletion[currentDayName]![exerciseIndex] = true;
+
+                    // Check if all exercises for the day are completed
+                    if (exerciseCameraCompletion[currentDayName]!.every((e) => e)) {
+                      _markDayCompleted();
+                    } else {
+                      _saveProgressToStorage();
+                    }
                   }
                 }
               });
@@ -300,40 +301,27 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   void _markDayCompleted() {
     setState(() {
       daysCompleted++;
-      progressValue = daysCompleted / 7;
+      progressValue = daysCompleted / 28; // Changed from 7 to 28
       dayCompletion[currentDay - 1] = true;
-
-      if (currentDay < 7) {
-        currentDay++;
-        final dayNames = [
-          "Monday",
-          "Tuesday",
-          "Wednesday",
-          "Thursday",
-          "Friday",
-          "Saturday",
-          "Sunday"
-        ];
-        final nextDayName = dayNames[currentDay - 1];
-
-        if (exerciseCameraCompletion.containsKey(nextDayName)) {
-          exerciseCameraCompletion[nextDayName] =
-              List.filled(exerciseCameraCompletion[nextDayName]!.length, false);
-        }
-      } else if (currentWeek < 4) {
-        currentWeek++;
-        currentDay = 1;
-        daysCompleted = 0;
-        progressValue = 0.0;
-        dayCompletion = List.filled(7, false);
-      }
 
       _saveProgressToStorage();
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Day ${currentDay - 1} completed! Great job!")),
+      SnackBar(content: Text("Day $currentDay completed! Great job!")),
     );
+  }
+  // Check if a day is unlocked (previous day is completed)
+  bool _isDayUnlocked(int dayNumber) {
+    if (dayNumber == 1) return true; // Day 1 is always unlocked
+    if (dayNumber < 1 || dayNumber > 28) return false;
+    return _isDayCompleted(dayNumber - 1); // Previous day must be completed
+  }
+
+  // Check if a day is completed
+  bool _isDayCompleted(int dayNumber) {
+    if (dayNumber < 1 || dayNumber > 28) return false;
+    return dayCompletion[dayNumber - 1];
   }
 
   @override
@@ -342,7 +330,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: Colors.deepPurple,
-        title: const Text("Workout",
+        title: const Text("30-Day Challenge",
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         centerTitle: false,
         elevation: 0,
@@ -364,7 +352,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ],
         ),
       )
-          : weeklyPlan == null // Show generate UI only when NO plan data is loaded
+          : weeklyPlan == null
           ? Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -375,14 +363,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             ),
             const SizedBox(height: 20),
             const Text(
-              "Start Your Fitness Journey",
+              "30-Day Fitness Challenge",
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 40.0),
               child: Text(
-                "Tap below to generate your first weekly workout plan.",
+                "Start your transformation journey today! Complete each day to unlock the next.",
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
@@ -398,240 +386,318 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   borderRadius: BorderRadius.circular(30),
                 ),
               ),
-              child: const Text("Generate Workout Plan",
+              child: const Text("Start Challenge",
                   style: TextStyle(fontSize: 16)),
             ),
           ],
         ),
       )
-          : SingleChildScrollView( // Show plan content when weeklyPlan is NOT null
+          : SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildPlanContent(),
+            // Header with progress
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.deepPurple,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "${28 - daysCompleted} Days left", // Changed from calculation to simple subtraction
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        "${(progressValue * 100).toStringAsFixed(0)}%",
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  LinearProgressIndicator(
+                    value: progressValue,
+                    backgroundColor: Colors.deepPurple[300],
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                    minHeight: 10,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  const SizedBox(height: 15),
+                  Text(
+                    "Day $currentDay/28 - ${((currentDay - 1) ~/ 7) + 1}/4 Weeks", // Added week info
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Week section
+            Text(
+              "Week ${((currentDay - 1) ~/ 7) + 1} of 4",
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "Day $currentDay/28",
+              style: TextStyle(
+                  fontSize: 16, color: Colors.grey[700], fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 20),
+
+            // Day navigation - 4 weeks of 7 days
+            Column(
+              children: [
+                // Week 1
+                _buildWeekRow(1, 7),
+                const SizedBox(height: 10),
+                // Week 2
+                _buildWeekRow(8, 14),
+                const SizedBox(height: 10),
+                // Week 3
+                _buildWeekRow(15, 21),
+                const SizedBox(height: 10),
+                // Week 4
+                _buildWeekRow(22, 28),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Only show exercises if current day is unlocked
+            if (_isDayUnlocked(currentDay)) ...[
+              Text(
+                "Day $currentDay Exercises",
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              ..._buildExerciseList(),
+              const SizedBox(height: 20),
+
+              // Sets and reps info
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.2),
+                      spreadRadius: 2,
+                      blurRadius: 5,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      children: [
+                        Text(
+                          "${weeklyPlan!["sets"]}",
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const Text("Sets", style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        Text(
+                          "${weeklyPlan!["reps"]}",
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const Text("Reps", style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        Text(
+                          weeklyPlan!["goal"].toString().toUpperCase(),
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const Text("Goal", style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 30),
+              // Complete button only if day is unlocked but not completed
+              if (!_isDayCompleted(currentDay))
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _markDayCompleted,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text("COMPLETE DAY",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+            ] else ...[
+              // Show locked message if day is not unlocked
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.lock, size: 50, color: Colors.grey),
+                    const SizedBox(height: 10),
+                    Text(
+                      "Day $currentDay is locked",
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      "Complete the previous day to unlock this workout",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPlanContent() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // header card
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.deepPurple,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "${28 - (7 * (currentWeek - 1) + (currentDay - 1))} Days left",
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    "${(progressValue * 100).toStringAsFixed(0)}%",
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              LinearProgressIndicator(
-                value: progressValue,
-                backgroundColor: Colors.deepPurple[300],
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                minHeight: 10,
-                borderRadius: BorderRadius.circular(5),
-              ),
-              const SizedBox(height: 15),
-              const Text(
-                "Kick off your full-body fitness journey with energy!",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
+  Widget _buildWeekRow(int startDay, int endDay) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: List.generate(endDay - startDay + 1, (index) {
+        final dayNumber = startDay + index;
 
-        Text(
-          "Week $currentWeek",
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          "$currentDay/7",
-          style: TextStyle(
-              fontSize: 16, color: Colors.grey[700], fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 20),
+        // Safety check to ensure dayNumber is within valid range
+        if (dayNumber < 1 || dayNumber > 28) {
+          return Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: Colors.transparent,
+              shape: BoxShape.circle,
+            ),
+          );
+        }
 
-        SizedBox(
-          height: 50,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: 7,
-            itemBuilder: (context, index) {
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    currentDay = index + 1;
-                    _saveProgressToStorage();
-                  });
-                },
-                child: Container(
-                  width: 50,
-                  margin: const EdgeInsets.only(right: 10),
-                  decoration: BoxDecoration(
-                    color: currentDay == index + 1
-                        ? Colors.deepPurple
-                        : dayCompletion[index]
-                        ? Colors.green
-                        : Colors.grey[300],
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${index + 1}',
-                      style: TextStyle(
-                        color: currentDay == index + 1
-                            ? Colors.white
-                            : Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+        final isUnlocked = _isDayUnlocked(dayNumber);
+        final isCompleted = _isDayCompleted(dayNumber);
+        final isCurrent = currentDay == dayNumber;
+
+        return GestureDetector(
+          onTap: isUnlocked
+              ? () {
+            setState(() {
+              currentDay = dayNumber;
+              _saveProgressToStorage();
+            });
+          }
+              : null,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isCurrent
+                  ? Colors.deepPurple
+                  : isCompleted
+                  ? Colors.green
+                  : isUnlocked
+                  ? Colors.blue[300]
+                  : Colors.grey[300],
+              shape: BoxShape.circle,
+              border: isCurrent ? Border.all(color: Colors.white, width: 2) : null,
+            ),
+            child: Center(
+              child: Text(
+                '$dayNumber',
+                style: TextStyle(
+                  color: isUnlocked ? Colors.white : Colors.grey[600],
+                  fontWeight: FontWeight.bold,
                 ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        Text(
-          "Today's Exercises",
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-
-        ..._buildExerciseList(),
-
-        const SizedBox(height: 20),
-        Container(
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.2),
-                spreadRadius: 2,
-                blurRadius: 5,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Column(
-                children: [
-                  Text(
-                    "${weeklyPlan!["sets"]}",
-                    style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const Text("Sets", style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-              Column(
-                children: [
-                  Text(
-                    "${weeklyPlan!["reps"]}",
-                    style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const Text("Reps", style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-              Column(
-                children: [
-                  Text(
-                    weeklyPlan!["goal"].toString().toUpperCase(),
-                    style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const Text("Goal", style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 30),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _markDayCompleted,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepPurple,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
               ),
             ),
-            child: const Text("COMPLETE DAY",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
-        ),
-      ],
+        );
+      }),
     );
   }
 
   List<Widget> _buildExerciseList() {
     final dayNames = [
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-      "Sunday"
+      "Monday", "Tuesday", "Wednesday", "Thursday",
+      "Friday", "Saturday", "Sunday"
     ];
-    final currentDayName = dayNames[currentDay - 1];
+
+    // Calculate which day of the week we're on (0-6)
+    final weekDayIndex = (currentDay - 1) % 7;
+
+    // Safety check to ensure index is within bounds
+    if (weekDayIndex < 0 || weekDayIndex >= dayNames.length) {
+      return [
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: const Text(
+            "No exercises scheduled for today",
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+        )
+      ];
+    }
+
+    final currentDayName = dayNames[weekDayIndex];
 
     List<String> exercises = [];
 
     if (weeklyPlan!["daily_exercises"] != null &&
         weeklyPlan!["daily_exercises"][currentDayName] != null) {
-      exercises =
-      List<String>.from(weeklyPlan!["daily_exercises"][currentDayName]);
+      exercises = List<String>.from(weeklyPlan!["daily_exercises"][currentDayName]);
     } else if (weeklyPlan!["plan"] != null &&
         weeklyPlan!["plan"][currentDayName] != null) {
       exercises = weeklyPlan!["plan"][currentDayName].split(", ");
+    }
+
+    // If no exercises found, return a placeholder
+    if (exercises.isEmpty) {
+      return [
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: const Text(
+            "Rest day! No exercises scheduled.",
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+        )
+      ];
     }
 
     return exercises.asMap().entries.map<Widget>((entry) {
       final index = entry.key;
       final exercise = entry.value;
 
-      final isCompleted =
-          exerciseCameraCompletion.containsKey(currentDayName) &&
-              index < exerciseCameraCompletion[currentDayName]!.length &&
-              exerciseCameraCompletion[currentDayName]![index];
+      final isCompleted = exerciseCameraCompletion.containsKey(currentDayName) &&
+          index < exerciseCameraCompletion[currentDayName]!.length &&
+          exerciseCameraCompletion[currentDayName]![index];
 
       return GestureDetector(
-        onTap: () => _navigateToCameraWorkout(index, exercise),
+        onTap: () => _isDayUnlocked(currentDay) ? _navigateToCameraWorkout(index, exercise) : null,
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(15),
@@ -663,8 +729,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 child: Center(
                   child: Text(
                     '${index + 1}',
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -675,9 +740,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    decoration: isCompleted
-                        ? TextDecoration.lineThrough
-                        : TextDecoration.none,
+                    decoration: isCompleted ? TextDecoration.lineThrough : TextDecoration.none,
                   ),
                 ),
               ),
@@ -690,5 +753,4 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         ),
       );
     }).toList();
-  }
-}
+  }}
