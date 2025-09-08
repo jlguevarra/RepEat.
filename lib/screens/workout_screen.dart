@@ -265,83 +265,90 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
         const SizedBox(height: 10),
 
-        // Week tabs
-        DefaultTabController(
-          length: 4,
-          child: Column(
-            children: [
-              const TabBar(
-                tabs: [
-                  Tab(text: "Week 1"),
-                  Tab(text: "Week 2"),
-                  Tab(text: "Week 3"),
-                  Tab(text: "Week 4"),
-                ],
-              ),
-              SizedBox(
-                height: 400,
-                child: TabBarView(
-                  children: List.generate(4, (weekIndex) {
-                    final weekKey = "Week ${weekIndex + 1}";
-                    final weekData = workoutPlan!["weekly_plan"][weekKey];
+        // Week tabs - Use Expanded to fix scrolling
+        Expanded(
+          child: DefaultTabController(
+            length: 4,
+            child: Column(
+              children: [
+                const TabBar(
+                  tabs: [
+                    Tab(text: "Week 1"),
+                    Tab(text: "Week 2"),
+                    Tab(text: "Week 3"),
+                    Tab(text: "Week 4"),
+                  ],
+                ),
+                Expanded(
+                  child: TabBarView(
+                    children: List.generate(4, (weekIndex) {
+                      final weekKey = "Week ${weekIndex + 1}";
+                      final weekData = workoutPlan!["weekly_plan"][weekKey];
 
-                    return ListView.builder(
-                      itemCount: weekData.length,
-                      itemBuilder: (context, dayIndex) {
-                        final dayName = weekData.keys.elementAt(dayIndex);
-                        final exercises = weekData[dayName];
+                      // Define all days in correct order
+                      final allDays = [
+                        "Monday", "Tuesday", "Wednesday", "Thursday",
+                        "Friday", "Saturday", "Sunday"
+                      ];
 
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 8),
-                          child: ExpansionTile(
-                            title: Row(
+                      return ListView.builder(
+                        itemCount: allDays.length,
+                        itemBuilder: (context, dayIndex) {
+                          final dayName = allDays[dayIndex];
+                          final exercises = weekData[dayName] ?? ["Rest Day"];
+
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            child: ExpansionTile(
+                              title: Row(
+                                children: [
+                                  Text(
+                                    dayName,
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  if (exercises[0] == "Rest Day")
+                                    Icon(Icons.hotel, color: Colors.green[700], size: 20)
+                                  else
+                                    Icon(Icons.fitness_center, color: Colors.blue[700], size: 20)
+                                ],
+                              ),
                               children: [
-                                Text(
-                                  dayName,
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(width: 8),
                                 if (exercises[0] == "Rest Day")
-                                  Icon(Icons.hotel, color: Colors.green[700], size: 20)
+                                  const ListTile(
+                                    title: Text("Rest and Recovery Day",
+                                        style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                                  )
                                 else
-                                  Icon(Icons.fitness_center, color: Colors.blue[700], size: 20)
+                                  ...exercises.map<Widget>((exercise) {
+                                    return ListTile(
+                                      leading: const Icon(Icons.fitness_center, size: 20),
+                                      title: Text(exercise),
+                                      trailing: IconButton(
+                                        icon: const Icon(Icons.camera_alt, size: 20),
+                                        onPressed: () {
+                                          // Navigate to camera workout screen
+                                          // Navigator.push(context, MaterialPageRoute(
+                                          //   builder: (context) => CameraWorkoutScreen(
+                                          //     exercise: exercise,
+                                          //     reps: workoutPlan!["reps"],
+                                          //     sets: workoutPlan!["sets"],
+                                          //   ),
+                                          // ));
+                                        },
+                                      ),
+                                    );
+                                  }).toList(),
                               ],
                             ),
-                            children: [
-                              if (exercises[0] == "Rest Day")
-                                const ListTile(
-                                  title: Text("Rest and Recovery Day",
-                                      style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
-                                )
-                              else
-                                ...exercises.map<Widget>((exercise) {
-                                  return ListTile(
-                                    leading: const Icon(Icons.fitness_center, size: 20),
-                                    title: Text(exercise),
-                                    trailing: IconButton(
-                                      icon: const Icon(Icons.camera_alt, size: 20),
-                                      onPressed: () {
-                                        // Navigate to camera workout screen
-                                        // Navigator.push(context, MaterialPageRoute(
-                                        //   builder: (context) => CameraWorkoutScreen(
-                                        //     exercise: exercise,
-                                        //     reps: workoutPlan!["reps"],
-                                        //     sets: workoutPlan!["sets"],
-                                        //   ),
-                                        // ));
-                                      },
-                                    ),
-                                  );
-                                }).toList(),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-                  }),
+                          );
+                        },
+                      );
+                    }),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -385,7 +392,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         centerTitle: false,
         elevation: 0,
-
       ),
       body: isLoading
           ? Center(
@@ -416,232 +422,234 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ],
         ),
       )
-          : SingleChildScrollView(
+          : (workoutPlan == null && errorMessage == null)
+          ? SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            if (errorMessage != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.red[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red[200]!),
+            // Header Section
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.error_outline, color: Colors.red[700]),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        errorMessage!,
-                        style: TextStyle(
-                          color: Colors.red[700],
-                          fontSize: 14,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.deepPurple.withOpacity(0.3),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.fitness_center,
+                    size: 60,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(height: 15),
+                  const Text(
+                    "Personalized Workout Plan",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    "Tailored to your fitness goals",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            // Benefits Section
+            Row(
+              children: [
+                _buildFeatureCard(
+                  icon: Icons.calendar_today,
+                  title: "4-Week Program",
+                  subtitle: "Structured progression",
+                  color: Colors.blue,
+                ),
+                const SizedBox(width: 12),
+                _buildFeatureCard(
+                  icon: Icons.directions_run,
+                  title: "Dumbbell Only",
+                  subtitle: "Home-friendly workouts",
+                  color: Colors.green,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                _buildFeatureCard(
+                  icon: Icons.timer,
+                  title: "Smart Planning",
+                  subtitle: "Optimal rest days",
+                  color: Colors.orange,
+                ),
+                const SizedBox(width: 12),
+                _buildFeatureCard(
+                  icon: Icons.track_changes,
+                  title: "Goal-Oriented",
+                  subtitle: "Based on your objectives",
+                  color: Colors.purple,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 30),
+
+            // Testimonial Section
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.format_quote,
+                    color: Colors.deepPurple[300],
+                    size: 30,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Our AI-powered system creates the perfect workout plan based on your goals, fitness level, and available equipment.",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[700],
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
+                        const SizedBox(height: 10),
+                        Text(
+                          "- RepEat Fitness Team",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            // Generate Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _generateWorkoutPlan,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 5,
+                  shadowColor: Colors.deepPurple.withOpacity(0.4),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.auto_awesome, size: 20),
+                    SizedBox(width: 10),
+                    Text(
+                      "Generate My Workout Plan",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
               ),
+            ),
 
-            if (workoutPlan == null && errorMessage == null)
-              Column(
-                children: [
-                  // Header Section
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.deepPurple.withOpacity(0.3),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        const Icon(
-                          Icons.fitness_center,
-                          size: 60,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(height: 15),
-                        const Text(
-                          "Personalized Workout Plan",
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          "Tailored to your fitness goals",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white.withOpacity(0.9),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+            const SizedBox(height: 20),
 
-                  const SizedBox(height: 30),
-
-                  // Benefits Section
-                  Row(
-                    children: [
-                      _buildFeatureCard(
-                        icon: Icons.calendar_today,
-                        title: "4-Week Program",
-                        subtitle: "Structured progression",
-                        color: Colors.blue,
-                      ),
-                      const SizedBox(width: 12),
-                      _buildFeatureCard(
-                        icon: Icons.directions_run,
-                        title: "Dumbbell Only",
-                        subtitle: "Home-friendly workouts",
-                        color: Colors.green,
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  Row(
-                    children: [
-                      _buildFeatureCard(
-                        icon: Icons.timer,
-                        title: "Smart Planning",
-                        subtitle: "Optimal rest days",
-                        color: Colors.orange,
-                      ),
-                      const SizedBox(width: 12),
-                      _buildFeatureCard(
-                        icon: Icons.track_changes,
-                        title: "Goal-Oriented",
-                        subtitle: "Based on your objectives",
-                        color: Colors.purple,
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  // Testimonial Section
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.format_quote,
-                          color: Colors.deepPurple[300],
-                          size: 30,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Our AI-powered system creates the perfect workout plan based on your goals, fitness level, and available equipment.",
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[700],
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                "- RepEat Fitness Team",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  // Generate Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _generateWorkoutPlan,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurple,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 5,
-                        shadowColor: Colors.deepPurple.withOpacity(0.4),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.auto_awesome, size: 20),
-                          SizedBox(width: 10),
-                          Text(
-                            "Generate My Workout Plan",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Note
-                  Text(
-                    "This will create a personalized 4-week plan that you can follow",
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              )
-            else if (workoutPlan != null)
-              _buildWorkoutPlan()
+            // Note
+            Text(
+              "This will create a personalized 4-week plan that you can follow",
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
+      )
+          : Column(
+        children: [
+          if (errorMessage != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red[700]),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      errorMessage!,
+                      style: TextStyle(
+                        color: Colors.red[700],
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (workoutPlan != null)
+            Expanded(
+              child: _buildWorkoutPlan(),
+            ),
+        ],
       ),
     );
   }
