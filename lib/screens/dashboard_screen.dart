@@ -179,16 +179,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: goalProgress,
-              minHeight: 10,
-              backgroundColor: Colors.grey.shade300,
-              color: Colors.deepPurple,
+
+            // ✅ Animated progress bar
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: goalProgress),
+              duration: const Duration(milliseconds: 800),
+              curve: Curves.easeInOut,
+              builder: (context, value, _) => LinearProgressIndicator(
+                value: value,
+                minHeight: 10,
+                backgroundColor: Colors.grey.shade300,
+                color: Colors.deepPurple,
+              ),
             ),
+
             const SizedBox(height: 6),
-            Text(
-              "$workoutsThisWeek of $weeklyGoal workouts completed",
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+
+            // ✅ Animated text
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: workoutsThisWeek.toDouble()),
+              duration: const Duration(milliseconds: 800),
+              builder: (context, value, _) => Text(
+                "${value.toStringAsFixed(0)} of $weeklyGoal workouts completed",
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
             ),
           ],
         ),
@@ -377,7 +391,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   DateTime date;
                   try {
-                    date = DateTime.parse(dateString);
+                    date = DateTime.parse(dateString).toLocal(); // ✅ Adjust to local time
                   } catch (e) {
                     return const SizedBox.shrink(); // Skip invalid date formats
                   }
