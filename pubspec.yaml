@@ -45,6 +45,7 @@ dependencies:
   flutter_launcher_icons: ^0.13.1
   intl: ^0.18.1
   flutter_html: ^3.0.0-alpha.6
+  image: ^4.1.4  # For image processing
 
 flutter_icons:
     android: true

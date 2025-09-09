@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'camera_workout_screen.dart';
 
 class WorkoutScreen extends StatefulWidget {
   final int userId;
@@ -328,13 +329,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                         icon: const Icon(Icons.camera_alt, size: 20),
                                         onPressed: () {
                                           // Navigate to camera workout screen
-                                          // Navigator.push(context, MaterialPageRoute(
-                                          //   builder: (context) => CameraWorkoutScreen(
-                                          //     exercise: exercise,
-                                          //     reps: workoutPlan!["reps"],
-                                          //     sets: workoutPlan!["sets"],
-                                          //   ),
-                                          // ));
+                                          Navigator.push(context, MaterialPageRoute(
+                                            builder: (context) => CameraWorkoutScreen(
+                                              userId: widget.userId,
+                                              exercise: exercise,
+                                              reps: int.parse(workoutPlan!["reps"].toString()),
+                                              sets: int.parse(workoutPlan!["sets"].toString()),
+                                              onExerciseCompleted: (completed) {
+                                                if (completed) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(content: Text('✅ $exercise completed!')),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ));
                                         },
                                       ),
                                     );
