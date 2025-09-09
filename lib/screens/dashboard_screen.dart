@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'calendar_screen.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'calendar_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final int userId;
@@ -15,7 +18,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late String _motivationalQuote;
   late String _greeting;
   bool _isRefreshing = false;
+  bool _isLoading = true;
   late DateTime _lastRefreshDate;
+  double get goalProgress {
+    if (weeklyGoal == 0) return 0;
+    return (workoutsThisWeek / weeklyGoal).clamp(0, 1);
+  }
+
+  int workoutsCompleted = 0;
+  int caloriesBurned = 0;
+  int streakDays = 0;
+  double weight = 0;
+  int workoutsThisWeek = 0; // from API
+  int weeklyGoal = 0;       // from API
+
+
+
+
+
+  List<Map<String, dynamic>> weeklyProgress = [];
+  List<Map<String, dynamic>> upcomingWorkouts = [];
+
+  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -23,12 +47,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _lastRefreshDate = DateTime.now();
     _updateGreeting();
     _loadDailyQuote();
+    _loadDashboardData();
+
+    // Auto-refresh every 60 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+      _loadDashboardData();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   void _updateGreeting() {
-    final currentTime = DateTime.now();
-    final hour = currentTime.hour;
-
+    final hour = DateTime.now().hour;
     if (hour < 12) {
       _greeting = 'Good Morning';
     } else if (hour < 17) {
@@ -46,36 +80,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
       "Don't stop when you're tired. Stop when you're done",
       "Wake up with determination. Go to bed with satisfaction"
     ];
-
-    // Use the day of year to get a consistent daily quote
     final dayOfYear = DateTime.now().day;
     _motivationalQuote = quotes[dayOfYear % quotes.length];
   }
 
+  Future<void> _loadDashboardData() async {
+    try {
+      final response = await http.post(
+        Uri.parse("http://localhost/repEatApi/dashboard.php"),
+        body: {"user_id": widget.userId.toString()},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['error'] != null) {
+          debugPrint("API Error: ${data['error']}");
+          return;
+        }
+
+        setState(() {
+          workoutsCompleted = data['workoutsCompleted'] ?? 0;
+          caloriesBurned = data['caloriesBurned'] ?? 0;
+          streakDays = data['streakDays'] ?? 0;
+          weight = (data['weight'] as num?)?.toDouble() ?? 0.0;
+          weeklyProgress = List<Map<String, dynamic>>.from(data['weeklyProgress'] ?? []);
+          upcomingWorkouts = List<Map<String, dynamic>>.from(data['upcomingWorkouts'] ?? []);
+          _isLoading = false;
+        });
+      } else {
+        debugPrint("HTTP Error: ${response.statusCode}");
+      }
+    } catch (e) {
+      debugPrint("API Exception: $e");
+    }
+  }
+
   Future<void> _refreshData() async {
-    if (_isRefreshing) return;
-
-    setState(() {
-      _isRefreshing = true;
-    });
-
-    // Simulate network request
-    await Future.delayed(const Duration(seconds: 1));
-
+    setState(() => _isRefreshing = true);
+    await _loadDashboardData();
     _updateGreeting();
-    // Only change quote if it's a new day
     if (!DateUtils.isSameDay(_lastRefreshDate, DateTime.now())) {
       _loadDailyQuote();
     }
     _lastRefreshDate = DateTime.now();
-
-    setState(() {
-      _isRefreshing = false;
-    });
+    setState(() => _isRefreshing = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
@@ -91,6 +150,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               _greetingCard(_greeting, _motivationalQuote),
               const SizedBox(height: 20),
+              _weeklyGoalProgressBar(), // ✅ must be here
+              const SizedBox(height: 20),
+
               _quickStatsRow(),
               const SizedBox(height: 20),
               _weeklyProgressSection(context),
@@ -103,48 +165,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _greetingCard(String greeting, String quote) {
-    return SizedBox(
-      height: 150, // Fixed height container
-      child: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+  Widget _weeklyGoalProgressBar() {
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Weekly Goal Progress",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: goalProgress,
+              minHeight: 10,
+              backgroundColor: Colors.grey.shade300,
+              color: Colors.deepPurple,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "$workoutsThisWeek of $weeklyGoal workouts completed",
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                greeting,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Text(
-                    quote,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey.shade700,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                DateFormat('EEEE, MMMM d').format(DateTime.now()),
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
+      ),
+    );
+  }
+
+  Widget _greetingCard(String greeting, String quote) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(greeting, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(quote,
+                style: TextStyle(fontSize: 16, color: Colors.grey.shade700, fontStyle: FontStyle.italic)),
+            const SizedBox(height: 8),
+            Text(DateFormat('EEEE, MMMM d').format(DateTime.now()),
+                style: TextStyle(color: Colors.grey.shade600)),
+          ],
         ),
       ),
     );
@@ -155,13 +223,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          _statCard("Workouts", "5", Icons.fitness_center),
+          _statCard("Workouts", "$workoutsCompleted", Icons.fitness_center),
           const SizedBox(width: 12),
-          _statCard("Calories", "1,240", Icons.local_fire_department),
+          _statCard("Calories", "$caloriesBurned", Icons.local_fire_department),
           const SizedBox(width: 12),
-          _statCard("Streak", "7 days", Icons.whatshot),
+          _statCard("Streak", "$streakDays days", Icons.whatshot),
           const SizedBox(width: 12),
-          _statCard("Weight", "75 kg", Icons.monitor_weight),
+          _statCard("Weight", "${weight.toStringAsFixed(1)} kg", Icons.monitor_weight),
         ],
       ),
     );
@@ -178,20 +246,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Icon(icon, color: Colors.deepPurple),
               const SizedBox(height: 8),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
-              ),
+              Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(title, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
             ],
           ),
         ),
@@ -207,27 +263,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Weekly Activity",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            const Text("Weekly Activity", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             SizedBox(
               height: 140,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _progressBar(50, "Mon"),
-                  _progressBar(80, "Tue"),
-                  _progressBar(90, "Wed"),
-                  _progressBar(70, "Thu"),
-                  _progressBar(100, "Fri"),
-                  _progressBar(60, "Sat"),
-                  _progressBar(75, "Sun"),
-                ],
+                children: weeklyProgress
+                    .map((dayData) => _progressBar(dayData['percent'], dayData['day']))
+                    .toList(),
               ),
             ),
             const SizedBox(height: 12),
@@ -237,17 +281,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => GymPlannerScreen (userId: widget.userId),
-                    ),
+                    MaterialPageRoute(builder: (_) => GymPlannerScreen(userId: widget.userId)),
                   );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepPurple,
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 child: const Text("View Full Calendar"),
               ),
@@ -266,15 +306,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           width: 14,
           height: percentage.toDouble(),
           decoration: BoxDecoration(
-            color: Colors.deepPurple,
+            color: percentage >= 80 ? Colors.green : Colors.deepPurple,
             borderRadius: BorderRadius.circular(4),
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          day,
-          style: const TextStyle(fontSize: 12),
-        ),
+        Text(day, style: const TextStyle(fontSize: 12)),
       ],
     );
   }
@@ -290,20 +327,179 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const Text(
               "Upcoming Workouts",
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 12),
-            _workoutItem("Chest & Triceps", "Tomorrow, 9:00 AM"),
-            _workoutItem("Leg Day", "Friday, 7:00 AM"),
-            _workoutItem("Full Body", "Sunday, 10:00 AM"),
+            const SizedBox(height: 16),
+
+            if (upcomingWorkouts.isEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.fitness_center,
+                      size: 48,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      "No upcoming workouts planned",
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Create a workout plan to see your schedule",
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              )
+            else
+              Column(
+                children: upcomingWorkouts.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final workout = entry.value;
+
+                  // Safely handle date with null check
+                  final dateString = workout['time']?.toString();
+                  if (dateString == null || dateString.isEmpty) {
+                    return const SizedBox.shrink(); // Skip invalid entries
+                  }
+
+                  DateTime date;
+                  try {
+                    date = DateTime.parse(dateString);
+                  } catch (e) {
+                    return const SizedBox.shrink(); // Skip invalid date formats
+                  }
+
+                  final isToday = DateUtils.isSameDay(date, DateTime.now());
+                  final isTomorrow = DateUtils.isSameDay(
+                      date,
+                      DateTime.now().add(const Duration(days: 1))
+                  );
+
+                  String dayLabel;
+                  if (isToday) {
+                    dayLabel = "Today";
+                  } else if (isTomorrow) {
+                    dayLabel = "Tomorrow";
+                  } else {
+                    dayLabel = DateFormat('EEEE').format(date);
+                  }
+
+                  // Safely handle workout titles (array of exercises)
+                  List<String> workoutExercises = [];
+                  final exercisesData = workout['title'];
+
+                  if (exercisesData is List) {
+                    workoutExercises = exercisesData.whereType<String>().where((exercise) => exercise.isNotEmpty).toList();
+                  } else if (exercisesData is String && exercisesData.isNotEmpty) {
+                    workoutExercises = [exercisesData];
+                  }
+
+                  // Skip if no valid exercises
+                  if (workoutExercises.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.deepPurple.withOpacity(0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.deepPurple,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  dayLabel,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                DateFormat('MMM d').format(date),
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Display exercises with proper alignment
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: workoutExercises.map((exercise) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Icon(
+                                      Icons.circle,
+                                      size: 8,
+                                      color: Colors.deepPurple,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      exercise,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )).toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
           ],
         ),
       ),
     );
   }
-
   Widget _workoutItem(String title, String time) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -338,7 +534,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.chevron_right),
-            onPressed: () {},
+            onPressed: () {
+              // TODO: Navigate to workout details screen
+              debugPrint("Tapped on $title");
+            },
           ),
         ],
       ),

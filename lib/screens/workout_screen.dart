@@ -31,7 +31,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/check_workout_plan.php"),
+        Uri.parse("http://localhost/repEatApi/check_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
 
@@ -40,10 +40,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
         if (data["success"] == true) {
           if (data["has_plan"] == true) {
-            // User has a plan, load it
             _loadWorkoutPlan();
           } else {
-            // User doesn't have a plan, show generate button
             setState(() {
               checkingPlan = false;
             });
@@ -75,7 +73,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/get_workout_plan.php"),
+        Uri.parse("http://localhost/repEatApi/get_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
 
@@ -119,7 +117,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/generate_workout.php"),
+        Uri.parse("http://localhost/repEatApi/generate_workout.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 30));
 
@@ -163,16 +161,20 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         // Header with goal-specific info
         Container(
           padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: isWeightLoss ? Colors.blue[50] : Colors.orange[50],
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isWeightLoss ? Colors.blue[100]! : Colors.orange[100]!,
+            ),
           ),
           child: Row(
             children: [
               Icon(
                 isWeightLoss ? Icons.favorite : Icons.fitness_center,
-                color: isWeightLoss ? Colors.blue : Colors.orange,
-                size: 40,
+                color: isWeightLoss ? Colors.blue[700] : Colors.orange[700],
+                size: 32,
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -194,6 +196,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                           : "6 workout days, 1 rest day per week",
                       style: TextStyle(
                         color: isWeightLoss ? Colors.blue[600] : Colors.orange[600],
+                        fontSize: 14,
                       ),
                     ),
                   ],
@@ -203,147 +206,185 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ),
         ),
 
-        const SizedBox(height: 20),
-
         // Sets and Reps info
-        Card(
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                Column(
-                  children: [
-                    Text(
-                      "Goal",
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                    ),
-                    Text(
-                      workoutPlan!["goal"].toString().replaceAll("_", " ").toUpperCase(),
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                Column(
-                  children: [
-                    Text(
-                      "Sets",
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                    ),
-                    Text(
-                      workoutPlan!["sets"].toString(),
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                Column(
-                  children: [
-                    Text(
-                      "Reps",
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                    ),
-                    Text(
-                      workoutPlan!["reps"].toString(),
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
+                _buildInfoColumn("Goal", workoutPlan!["goal"].toString().replaceAll("_", " ").toUpperCase()),
+                _buildInfoColumn("Sets", workoutPlan!["sets"].toString()),
+                _buildInfoColumn("Reps", workoutPlan!["reps"].toString()),
               ],
             ),
           ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
 
-        // Weekly plan
-        Text(
-          "4-Week Workout Plan",
-          style: Theme.of(context).textTheme.headlineSmall,
+        // Weekly plan header
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Text(
+            "4-Week Workout Plan",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+            ),
+          ),
         ),
 
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
 
-        // Week tabs - Use Expanded to fix scrolling
+        // Week tabs
         Expanded(
           child: DefaultTabController(
             length: 4,
             child: Column(
               children: [
-                const TabBar(
-                  tabs: [
-                    Tab(text: "Week 1"),
-                    Tab(text: "Week 2"),
-                    Tab(text: "Week 3"),
-                    Tab(text: "Week 4"),
-                  ],
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: TabBar(
+                    indicator: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Colors.deepPurple,
+                          width: 3.0,
+                        ),
+                      ),
+                    ),
+                    indicatorSize: TabBarIndicatorSize.label,
+                    indicatorWeight: 3.0,
+                    indicatorPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    labelColor: Colors.deepPurple,
+                    unselectedLabelColor: Colors.grey[600],
+                    labelStyle: TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    unselectedLabelStyle: TextStyle(
+                      fontWeight: FontWeight.normal,
+                    ),
+                    tabs: const [
+                      Tab(text: "Week 1"),
+                      Tab(text: "Week 2"),
+                      Tab(text: "Week 3"),
+                      Tab(text: "Week 4"),
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 16),
                 Expanded(
                   child: TabBarView(
                     children: List.generate(4, (weekIndex) {
                       final weekKey = "Week ${weekIndex + 1}";
                       final weekData = workoutPlan!["weekly_plan"][weekKey];
 
-                      // Define all days in correct order
                       final allDays = [
                         "Monday", "Tuesday", "Wednesday", "Thursday",
                         "Friday", "Saturday", "Sunday"
                       ];
 
-                      return ListView.builder(
-                        itemCount: allDays.length,
-                        itemBuilder: (context, dayIndex) {
-                          final dayName = allDays[dayIndex];
+                      return ListView(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        children: allDays.map((dayName) {
                           final exercises = weekData[dayName] ?? ["Rest Day"];
+                          final isRestDay = exercises[0] == "Rest Day";
 
                           return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 1,
                             child: ExpansionTile(
+                              tilePadding: const EdgeInsets.symmetric(horizontal: 16),
                               title: Row(
                                 children: [
                                   Text(
                                     dayName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[800],
+                                    ),
                                   ),
                                   const SizedBox(width: 8),
-                                  if (exercises[0] == "Rest Day")
-                                    Icon(Icons.hotel, color: Colors.green[700], size: 20)
-                                  else
-                                    Icon(Icons.fitness_center, color: Colors.blue[700], size: 20)
+                                  Icon(
+                                    isRestDay ? Icons.hotel : Icons.fitness_center,
+                                    color: isRestDay ? Colors.green[600] : Colors.blue[600],
+                                    size: 20,
+                                  )
                                 ],
                               ),
                               children: [
-                                if (exercises[0] == "Rest Day")
-                                  const ListTile(
-                                    title: Text("Rest and Recovery Day",
-                                        style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                                if (isRestDay)
+                                  Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Text(
+                                      "Rest and Recovery Day",
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
                                   )
                                 else
                                   ...exercises.map<Widget>((exercise) {
                                     return ListTile(
-                                      leading: const Icon(Icons.fitness_center, size: 20),
-                                      title: Text(exercise),
+                                      leading: Icon(
+                                        Icons.fitness_center,
+                                        size: 20,
+                                        color: Colors.deepPurple[400],
+                                      ),
+                                      title: Text(
+                                        exercise,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[800],
+                                        ),
+                                      ),
                                       trailing: IconButton(
-                                        icon: const Icon(Icons.camera_alt, size: 20),
+                                        icon: Icon(
+                                          Icons.camera_alt,
+                                          color: Colors.deepPurple[400],
+                                          size: 20,
+                                        ),
                                         onPressed: () {
-                                          // Navigate to camera workout screen
-                                          Navigator.push(context, MaterialPageRoute(
-                                            builder: (context) => CameraWorkoutScreen(
-                                              userId: widget.userId,
-                                              exercise: exercise,
-                                              reps: int.parse(workoutPlan!["reps"].toString()),
-                                              sets: int.parse(workoutPlan!["sets"].toString()),
-                                              onExerciseCompleted: (completed) {
-                                                if (completed) {
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                    SnackBar(content: Text('✅ $exercise completed!')),
-                                                  );
-                                                }
-                                              },
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => CameraWorkoutScreen(
+                                                userId: widget.userId,
+                                                exercise: exercise,
+                                                reps: int.parse(workoutPlan!["reps"].toString()),
+                                                sets: int.parse(workoutPlan!["sets"].toString()),
+                                                onExerciseCompleted: (completed) {
+                                                  if (completed) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(content: Text('✅ $exercise completed!')),
+                                                    );
+                                                  }
+                                                },
+                                              ),
                                             ),
-                                          ));
+                                          );
                                         },
                                       ),
                                     );
@@ -351,13 +392,37 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                               ],
                             ),
                           );
-                        },
+                        }).toList(),
                       );
                     }),
                   ),
                 ),
               ],
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoColumn(String title, String value) {
+    return Column(
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.deepPurple,
           ),
         ),
       ],
@@ -371,8 +436,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         backgroundColor: Colors.grey[100],
         appBar: AppBar(
           backgroundColor: Colors.deepPurple,
-          title: const Text("Workout Plan",
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+          title: const Text(
+            "Workout Plan",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
         ),
         body: const Center(
           child: Column(
@@ -397,8 +467,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         backgroundColor: Colors.deepPurple,
-        title: const Text("Workout Plan",
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: const Text(
+          "Workout Plan",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
         centerTitle: false,
         elevation: 0,
       ),
@@ -632,7 +707,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.all(20),
+              margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.red[50],
                 borderRadius: BorderRadius.circular(12),
