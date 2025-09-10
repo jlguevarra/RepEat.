@@ -10,6 +10,8 @@ class DashboardScreen extends StatefulWidget {
 
   const DashboardScreen({super.key, required this.userId});
 
+
+
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
@@ -17,6 +19,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   late String _motivationalQuote;
   late String _greeting;
+
   bool _isRefreshing = false;
   bool _isLoading = true;
   late DateTime _lastRefreshDate;
@@ -32,10 +35,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int workoutsThisWeek = 0; // from API
   int weeklyGoal = 0;       // from API
 
+// Temporary static data for testing
+  List<Map<String, dynamic>> weeklyActivity = [
+    {
+      "day": "Mon",
+      "isRestDay": false,
+      "exercises": ["Dumbbell Bench Press", "Bicep Curls"]
+    },
+    {
+      "day": "Tue",
+      "isRestDay": false,
+      "exercises": ["Shoulder Press", "Tricep Extensions"]
+    },
+    {
+      "day": "Wed",
+      "isRestDay": false,
+      "exercises": ["Squats", "Lunges", "Plank"]
+    },
+    {
+      "day": "Thu",
+      "isRestDay": true,
+      "exercises": []
+    },
+    {
+      "day": "Fri",
+      "isRestDay": false,
+      "exercises": ["Shoulder Press", "Tricep Extensions"]
+    },
+    {
+      "day": "Sat",
+      "isRestDay": false,
+      "exercises": ["Deadlifts", "Pull-ups"]
+    },
+    {
+      "day": "Sun",
+      "isRestDay": true,
+      "exercises": []
+    },
+  ];
 
 
-
-
+  //List<Map<String, dynamic>> weeklyActivity = [];
   List<Map<String, dynamic>> weeklyProgress = [];
   List<Map<String, dynamic>> upcomingWorkouts = [];
 
@@ -103,7 +143,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           workoutsCompleted = data['workoutsCompleted'] ?? 0;
           caloriesBurned = data['caloriesBurned'] ?? 0;
           streakDays = data['streakDays'] ?? 0;
+
           weight = (data['weight'] as num?)?.toDouble() ?? 0.0;
+          List<Map<String, dynamic>> weeklyActivity = [];
           weeklyProgress = List<Map<String, dynamic>>.from(data['weeklyProgress'] ?? []);
           upcomingWorkouts = List<Map<String, dynamic>>.from(data['upcomingWorkouts'] ?? []);
           _isLoading = false;
@@ -277,31 +319,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Weekly Activity", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 140,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: weeklyProgress
-                    .map((dayData) => _progressBar(dayData['percent'], dayData['day']))
-                    .toList(),
-              ),
+            const Text(
+              "Weekly Activity",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
+
+            SizedBox(
+              height: 160,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: weeklyActivity.map((dayData) {
+                  final String day = dayData['day'] ?? '';
+                  final bool isRestDay = dayData['isRestDay'] ?? true;
+                  final List exercises = dayData['exercises'] ?? [];
+
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      // Bar color based on rest or active
+                      Container(
+                        height: 60,
+                        width: 12,
+                        decoration: BoxDecoration(
+                          color: isRestDay
+                              ? Colors.grey.shade300
+                              : Colors.deepPurple,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+
+                      // Day label
+                      Text(
+                        day,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isRestDay
+                              ? Colors.grey.shade500
+                              : Colors.deepPurple.shade700,
+                          fontWeight:
+                          isRestDay ? FontWeight.normal : FontWeight.bold,
+                        ),
+                      ),
+
+                      // Rest day label
+                      if (isRestDay)
+                        const Text(
+                          "Rest Day",
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontStyle: FontStyle.italic,
+                            color: Colors.grey,
+                          ),
+                        ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => GymPlannerScreen(userId: widget.userId)),
+                    MaterialPageRoute(
+                      builder: (_) => GymPlannerScreen(userId: widget.userId),
+                    ),
                   );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepPurple,
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 child: const Text("View Full Calendar"),
               ),
