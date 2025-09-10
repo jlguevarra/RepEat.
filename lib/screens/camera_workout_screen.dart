@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'package:flutter/foundation.dart';
+
 
 class CameraWorkoutScreen extends StatefulWidget {
   final int userId;
@@ -231,35 +233,25 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   }
 
   InputImage _inputImageFromCameraImage(CameraImage image) {
-    // Get the camera rotation
-    final inputImageRotation = _getImageRotation();
+    final WriteBuffer allBytes = WriteBuffer();
+    for (final Plane plane in image.planes) {
+      allBytes.putUint8List(plane.bytes);
+    }
+    final bytes = allBytes.done().buffer.asUint8List();
 
-    // Get the image format
-    final inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw) ?? InputImageFormat.nv21;
+    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
 
-    // Create input image data
-    final planeData = image.planes.map(
-          (plane) => InputImagePlaneMetadata(
-        bytesPerRow: plane.bytesPerRow,
-        height: plane.height,
-        width: plane.width,
-      ),
-    ).toList();
+    final camera = _cameraController!.description;
+    final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation) ?? InputImageRotation.rotation0deg;
 
-    final inputImageData = InputImageData(
-      size: Size(image.width.toDouble(), image.height.toDouble()),
-      imageRotation: inputImageRotation,
-      inputImageFormat: inputImageFormat,
-      planeData: planeData,
-    );
-
-    // Get the bytes from the image planes
-    final bytes = _getBytesFromCameraImage(image);
-
-    // Return the InputImage
     return InputImage.fromBytes(
       bytes: bytes,
-      inputImageData: inputImageData,
+      metadata: InputImageMetadata(
+        size: imageSize,
+        rotation: rotation,
+        format: InputImageFormat.nv21, // Most common format for Android
+        bytesPerRow: image.planes.first.bytesPerRow,
+      ),
     );
   }
 
