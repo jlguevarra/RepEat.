@@ -4,8 +4,10 @@ import 'dart:ui';
 import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:typed_data';
 
 class CameraWorkoutScreen extends StatefulWidget {
   final int userId;
@@ -39,10 +41,23 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   Timer? _restTimer;
   bool _showSuccessAnimation = false;
   DateTime? _lastRepTime;
-  int _motionDirection = 0; // 0: neutral, 1: up, -1: down
-  bool _isRestPeriod = false;
-  bool _isEquipmentDetected = false;
+
+  // ML Kit detectors
+  late PoseDetector _poseDetector;
+  bool _isDetecting = false;
+
+  // Exercise state variables
   double _motionIntensity = 0.0;
+  bool _isEquipmentDetected = true; // 🔥 Always true now
+  bool _isRestPeriod = false;
+  String _formStatus = "Position yourself in frame";
+  Color _formStatusColor = Colors.white;
+
+  // Pose analysis variables
+  double _lastElbowAngle = 0;
+  bool _isAtTop = false;
+  bool _isAtBottom = true;
+  int _motionDirection = 0; // 0: neutral, 1: up, -1: down
 
   // Exercise classification
   bool get _isDumbbellExercise => widget.exercise.toLowerCase().contains('dumbbell');
@@ -51,8 +66,15 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeDetectors();
     _initializeCamera();
     _showExerciseInstructions();
+  }
+
+  void _initializeDetectors() {
+    // Initialize pose detector only
+    final poseOptions = PoseDetectorOptions();
+    _poseDetector = PoseDetector(options: poseOptions);
   }
 
   Future<void> _showExerciseInstructions() async {
@@ -78,7 +100,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
               const SizedBox(height: 12),
               Text(
                 _isDumbbellExercise
-                    ? 'Make sure your dumbbell is visible. Reps will only count when proper form is detected.'
+                    ? 'Reps will only count when proper form is detected.'
                     : 'Position yourself clearly in frame. The system will detect your body movements.',
                 textAlign: TextAlign.center,
               ),
@@ -119,7 +141,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       });
 
       _startWorkoutTimer();
-      _startMotionDetection();
+      _startPoseDetection();
     } catch (e) {
       debugPrint('Camera initialization error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -150,95 +172,175 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     });
   }
 
-  void _startMotionDetection() {
-    Timer.periodic(const Duration(milliseconds: 200), (timer) {
-      if (_workoutCompleted || !_isInitialized || _isRestPeriod) {
-        return;
-      }
-      _analyzeMotion();
+  void _startPoseDetection() {
+    _cameraController!.startImageStream((CameraImage image) {
+      if (_isDetecting || _workoutCompleted || _isRestPeriod) return;
+
+      _isDetecting = true;
+      _processCameraImage(image);
     });
   }
 
-  void _analyzeMotion() {
-    final now = DateTime.now();
+  Future<void> _processCameraImage(CameraImage image) async {
+    try {
+      final inputImage = _convertCameraImage(image);
 
-    // Prevent double counting
-    if (_lastRepTime != null && now.difference(_lastRepTime!).inMilliseconds < 1000) {
-      return;
+      // Detect poses
+      final poses = await _poseDetector.processImage(inputImage);
+
+      if (poses.isNotEmpty) {
+        final pose = poses.first;
+        _analyzePose(pose);
+      } else {
+        setState(() {
+          _formStatus = "No person detected";
+          _formStatusColor = Colors.orange;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error processing image: $e');
+    } finally {
+      _isDetecting = false;
     }
+  }
 
-    // Simulate motion detection
-    final motionData = _detectMotionPattern();
+  InputImage _convertCameraImage(CameraImage image) {
+    final allBytes = image.planes.fold<List<int>>([], (previous, plane) {
+      previous.addAll(plane.bytes);
+      return previous;
+    });
+
+    final bytes = Uint8List.fromList(allBytes);
+
+    final metadata = InputImageMetadata(
+      size: Size(image.width.toDouble(), image.height.toDouble()),
+      rotation: InputImageRotation.rotation0deg,
+      format: InputImageFormat.nv21,
+      bytesPerRow: image.planes.first.bytesPerRow,
+    );
+
+    return InputImage.fromBytes(bytes: bytes, metadata: metadata);
+  }
+
+  void _analyzePose(Pose pose) {
+    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final leftElbow = pose.landmarks[PoseLandmarkType.leftElbow];
+    final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
+    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
+    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
 
     if (_isDumbbellExercise) {
-      _handleDumbbellMotion(motionData);
+      _analyzeDumbbellExercise(
+        pose,
+        leftShoulder,
+        leftElbow,
+        leftWrist,
+        rightShoulder,
+        rightElbow,
+        rightWrist,
+      );
     } else {
-      _handleBodyweightMotion(motionData);
+      _analyzeBodyweightExercise(
+        pose,
+        leftShoulder,
+        leftElbow,
+        leftWrist,
+        rightShoulder,
+        rightElbow,
+        rightWrist,
+      );
     }
   }
 
-  Map<String, dynamic> _detectMotionPattern() {
-    // Simulate different motion patterns based on exercise type
-    final time = DateTime.now().millisecondsSinceEpoch / 1000;
-
-    return {
-      'intensity': (math.sin(time * 2).abs() * 0.8 + 0.2), // 0.2 to 1.0
-      'direction': math.sin(time * 2) > 0.5 ? 1 : (math.sin(time * 2) < -0.5 ? -1 : 0),
-      'equipmentDetected': _simulateEquipmentDetection(),
-    };
+  void _analyzeDumbbellExercise(
+      Pose pose,
+      PoseLandmark? leftShoulder,
+      PoseLandmark? leftElbow,
+      PoseLandmark? leftWrist,
+      PoseLandmark? rightShoulder,
+      PoseLandmark? rightElbow,
+      PoseLandmark? rightWrist,
+      ) {
+    if (leftElbow != null && leftShoulder != null && leftWrist != null) {
+      final angle = _calculateAngle(leftShoulder, leftElbow, leftWrist);
+      _analyzeBicepCurl(angle);
+    } else if (rightElbow != null && rightShoulder != null && rightWrist != null) {
+      final angle = _calculateAngle(rightShoulder, rightElbow, rightWrist);
+      _analyzeBicepCurl(angle);
+    }
   }
 
-  bool _simulateEquipmentDetection() {
-    // Simulate equipment detection - 80% detection rate when user is active
-    final time = DateTime.now().millisecondsSinceEpoch / 1000;
-    return math.sin(time * 3).abs() > 0.3;
-  }
-
-  void _handleDumbbellMotion(Map<String, dynamic> motionData) {
-    final intensity = motionData['intensity'] as double;
-    final direction = motionData['direction'] as int;
-    final equipmentDetected = motionData['equipmentDetected'] as bool;
-
+  void _analyzeBicepCurl(double elbowAngle) {
     setState(() {
-      _motionIntensity = intensity;
-      _motionDirection = direction;
-      _isEquipmentDetected = equipmentDetected;
-    });
+      _motionIntensity = (elbowAngle - 90).abs() / 90;
 
-    // Only count reps if equipment is detected and motion is significant
-    if (equipmentDetected && intensity > 0.6) {
-      if (direction == -1 && _motionDirection != -1) {
-        // Downward motion with proper form
+      if (elbowAngle < _lastElbowAngle) {
+        _motionDirection = 1;
+        _formStatus = "Lifting up ↑";
+        _formStatusColor = Colors.blue;
+      } else if (elbowAngle > _lastElbowAngle) {
+        _motionDirection = -1;
+        _formStatus = "Lowering down ↓";
+        _formStatusColor = Colors.green;
+      }
+
+      if (elbowAngle < 50 && !_isAtTop) {
+        _isAtTop = true;
+        _isAtBottom = false;
+      } else if (elbowAngle > 160 && _isAtTop && !_isAtBottom) {
+        _isAtBottom = true;
+        _isAtTop = false;
         _countRep();
       }
-    }
+
+      _lastElbowAngle = elbowAngle;
+    });
   }
 
-  void _handleBodyweightMotion(Map<String, dynamic> motionData) {
-    final intensity = motionData['intensity'] as double;
-    final direction = motionData['direction'] as int;
-
+  void _analyzeBodyweightExercise(
+      Pose pose,
+      PoseLandmark? leftShoulder,
+      PoseLandmark? leftElbow,
+      PoseLandmark? leftWrist,
+      PoseLandmark? rightShoulder,
+      PoseLandmark? rightElbow,
+      PoseLandmark? rightWrist,
+      ) {
     setState(() {
-      _motionIntensity = intensity;
-      _motionDirection = direction;
-      _isEquipmentDetected = true; // Always true for bodyweight exercises
+      _formStatus = "Body motion detected";
+      _formStatusColor = Colors.white;
+      _motionIntensity = 0.5;
     });
+  }
 
-    // Count reps based on motion intensity and pattern
-    if (intensity > 0.5) {
-      if (direction == -1 && _motionDirection != -1) {
-        // Significant downward motion
-        _countRep();
-      }
-    }
+  double _calculateAngle(PoseLandmark a, PoseLandmark b, PoseLandmark c) {
+    final baX = a.x - b.x;
+    final baY = a.y - b.y;
+    final bcX = c.x - b.x;
+    final bcY = c.y - b.y;
+
+    final dotProduct = baX * bcX + baY * bcY;
+    final magBA = math.sqrt(baX * baX + baY * baY);
+    final magBC = math.sqrt(bcX * bcX + bcY * bcY);
+
+    final angle = math.acos(dotProduct / (magBA * magBC));
+    return angle * 180 / math.pi;
   }
 
   void _countRep() {
-    if (_workoutCompleted || _isRestPeriod) return;
+    if (_workoutCompleted || _isRestPeriod || !_isEquipmentDetected) return;
+
+    final now = DateTime.now();
+    if (_lastRepTime != null && now.difference(_lastRepTime!).inMilliseconds < 800) {
+      return;
+    }
 
     setState(() {
       _repCount++;
-      _lastRepTime = DateTime.now();
+      _lastRepTime = now;
+      _formStatus = "REP COUNTED!";
+      _formStatusColor = Colors.green;
     });
 
     _showRepFeedback();
@@ -270,6 +372,8 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       _isRestPeriod = true;
       _currentSet++;
       _repCount = 0;
+      _isAtTop = false;
+      _isAtBottom = true;
     });
 
     _startRestTimer();
@@ -358,21 +462,19 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       _motionDirection = 0;
       _motionIntensity = 0.0;
       _isRestPeriod = false;
+      _isAtTop = false;
+      _isAtBottom = true;
     });
 
     _workoutTimer?.cancel();
     _restTimer?.cancel();
     _startWorkoutTimer();
-    _startMotionDetection();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Workout restarted!')),
-    );
   }
 
   @override
   void dispose() {
     _cameraController?.dispose();
+    _poseDetector.close();
     _workoutTimer?.cancel();
     _restTimer?.cancel();
     super.dispose();
@@ -397,7 +499,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.exercise} - Motion Detection'),
+        title: Text('${widget.exercise} - Smart Rep Counting'),
         backgroundColor: Colors.deepPurple,
         actions: [
           IconButton(
@@ -409,24 +511,9 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       ),
       body: Stack(
         children: [
-          // Camera preview
           Positioned.fill(
             child: CameraPreview(_cameraController!),
           ),
-
-          // Motion detection overlay
-          Positioned.fill(
-            child: CustomPaint(
-              painter: MotionDetectionPainter(
-                _motionDirection,
-                _motionIntensity,
-                _isEquipmentDetected,
-                _isDumbbellExercise,
-              ),
-            ),
-          ),
-
-          // Workout info overlay
           Positioned(
             top: 20,
             left: 0,
@@ -458,86 +545,79 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
               ),
             ),
           ),
-
-          // Rep counter
           Positioned(
-            bottom: 120,
+            top: 100,
             left: 0,
             right: 0,
             child: Center(
               child: Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.black54,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$_repCount / ${widget.reps}',
-                      style: const TextStyle(
-                        fontSize: 40,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _getMotionStatusText(),
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: _getStatusColor(),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  _formStatus,
+                  style: TextStyle(
+                    color: _formStatusColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
           ),
-
-          // Start Next Set Button (during rest period)
-          if (_isRestPeriod && _restSeconds == 0)
+          if (_isDumbbellExercise)
             Positioned(
-              bottom: 40,
+              top: 150,
               left: 0,
               right: 0,
               child: Center(
-                child: ElevatedButton(
-                  onPressed: _startNextSet,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _isEquipmentDetected ? Colors.green : Colors.red,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Text(
-                    'START NEXT SET',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  child: Text(
+                    _isEquipmentDetected ? '✅ DUMBBELL DETECTED (Bypassed)' : '❌ DUMBBELL NOT DETECTED',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
             ),
-
-          // Success animation
-          if (_showSuccessAnimation)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black54,
-                child: const Center(
+          Positioned(
+            bottom: 120,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.check_circle,
-                        color: Colors.green,
-                        size: 100,
-                      ),
-                      SizedBox(height: 20),
                       Text(
-                        'Workout Completed!',
-                        style: TextStyle(
+                        '$_repCount / ${widget.reps}',
+                        style: const TextStyle(
+                          fontSize: 40,
                           color: Colors.white,
-                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _getMotionStatusText(),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _getStatusColor(),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -546,95 +626,82 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
-
-  String _getMotionStatusText() {
-    if (!_isEquipmentDetected && _isDumbbellExercise) {
-      return '❌ DUMBBELL NOT DETECTED';
-    } else if (_motionIntensity < 0.3) {
-      return '🚶 READY FOR MOTION';
-    } else if (_motionDirection == 1) {
-      return '↑ LIFTING UP ↑';
-    } else if (_motionDirection == -1) {
-      return '↓ LOWERING ↓';
-    } else {
-      return '🔄 MOTION DETECTED';
-    }
-  }
-
-  Color _getStatusColor() {
-    if (!_isEquipmentDetected && _isDumbbellExercise) {
-      return Colors.red;
-    } else if (_motionIntensity < 0.3) {
-      return Colors.white70;
-    } else {
-      return Colors.green;
-    }
-  }
-}
-
-class MotionDetectionPainter extends CustomPainter {
-  final int motionDirection;
-  final double motionIntensity;
-  final bool isEquipmentDetected;
-  final bool isDumbbellExercise;
-
-  MotionDetectionPainter(
-      this.motionDirection,
-      this.motionIntensity,
-      this.isEquipmentDetected,
-      this.isDumbbellExercise,
+  
+            // Start Next Set Button (during rest period)
+            if (_isRestPeriod && _restSeconds == 0)
+              Positioned(
+                bottom: 40,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: ElevatedButton(
+                    onPressed: _startNextSet,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                    ),
+                    child: const Text(
+                      'START NEXT SET',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+  
+            // Success animation
+            if (_showSuccessAnimation)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black54,
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          color: Colors.green,
+                          size: 100,
+                        ),
+                        SizedBox(height: 20),
+                        Text(
+                          'Workout Completed!',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       );
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (motionIntensity > 0.3) {
-      final center = Offset(size.width / 2, size.height / 2);
-      final radius = size.width / 4 * motionIntensity;
-
-      final paint = Paint()
-        ..color = _getMotionColor()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4.0 * motionIntensity;
-
-      if (motionDirection == 1) {
-        // Upward motion
-        canvas.drawCircle(center, radius, paint);
-      } else if (motionDirection == -1) {
-        // Downward motion
-        canvas.drawRect(
-          Rect.fromCenter(center: center, width: radius * 2, height: radius * 2),
-          paint,
-        );
+    }
+  
+    String _getMotionStatusText() {
+      if (_isDumbbellExercise && !_isEquipmentDetected) {
+        return 'SHOW DUMBBELL TO CAMERA';
+      } else if (_motionIntensity < 0.3) {
+        return 'READY FOR MOTION';
+      } else if (_motionDirection == 1) {
+        return 'LIFTING UP ↑';
+      } else if (_motionDirection == -1) {
+        return 'LOWERING DOWN ↓';
+      } else {
+        return 'MOTION DETECTED';
       }
     }
-
-    // Draw equipment detection status
-    if (isDumbbellExercise && !isEquipmentDetected) {
-      final textPainter = TextPainter(
-        text: const TextSpan(
-          text: '❌',
-          style: TextStyle(fontSize: 40, color: Colors.red),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      textPainter.paint(canvas, Offset(size.width - 50, 50));
+  
+    Color _getStatusColor() {
+      if (_isDumbbellExercise && !_isEquipmentDetected) {
+        return Colors.red;
+      } else if (_motionIntensity < 0.3) {
+        return Colors.white70;
+      } else {
+        return Colors.green;
+      }
     }
   }
-
-  Color _getMotionColor() {
-    if (!isEquipmentDetected && isDumbbellExercise) {
-      return Colors.red.withOpacity(0.5);
-    }
-    return motionDirection == 1
-        ? Colors.green.withOpacity(0.5)
-        : Colors.blue.withOpacity(0.5);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
