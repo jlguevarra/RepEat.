@@ -95,7 +95,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
   // Add recommendation loading method
   Future<void> _loadRecommendations() async {
     final response = await http.get(
-        Uri.parse('http://192.168.100.78lhost/repEatApi/get_onboarding_data.php?user_id=${widget.userId}')
+        Uri.parse('http://192.168.100.78/repEatApi/get_onboarding_data.php?user_id=${widget.userId}')
     );
 
     if (response.statusCode == 200) {
