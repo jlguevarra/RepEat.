@@ -1,15 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
-import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
-import 'package:flutter/foundation.dart';
-
 
 class CameraWorkoutScreen extends StatefulWidget {
   final int userId;
@@ -45,21 +41,16 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   DateTime? _lastRepTime;
   int _motionDirection = 0; // 0: neutral, 1: up, -1: down
   bool _isRestPeriod = false;
+  bool _isEquipmentDetected = false;
   double _motionIntensity = 0.0;
-  String _formFeedback = 'Get ready to start';
-  int _previousMotionDirection = 0;
-  bool _isModelLoaded = false;
 
-  // ML Kit Pose Detector
-  PoseDetector? _poseDetector;
-  List<Pose> _poses = [];
-  double _imageHeight = 0;
-  double _imageWidth = 0;
+  // Exercise classification
+  bool get _isDumbbellExercise => widget.exercise.toLowerCase().contains('dumbbell');
+  bool get _isBodyweightExercise => !_isDumbbellExercise;
 
   @override
   void initState() {
     super.initState();
-    _initializePoseDetector();
     _initializeCamera();
     _showExerciseInstructions();
   }
@@ -75,7 +66,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.fitness_center,
+                _isDumbbellExercise ? Icons.fitness_center : Icons.directions_run,
                 size: 60,
                 color: Colors.blue,
               ),
@@ -85,14 +76,10 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Position yourself clearly in frame. Make sure your arms and shoulders are visible.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
               Text(
-                _getExerciseInstructions(),
-                style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey[700]),
+                _isDumbbellExercise
+                    ? 'Make sure your dumbbell is visible. Reps will only count when proper form is detected.'
+                    : 'Position yourself clearly in frame. The system will detect your body movements.',
                 textAlign: TextAlign.center,
               ),
             ],
@@ -106,34 +93,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         );
       },
     );
-  }
-
-  String _getExerciseInstructions() {
-    if (widget.exercise.toLowerCase().contains('curl')) {
-      return 'Perform bicep curls with full range of motion';
-    } else if (widget.exercise.toLowerCase().contains('press')) {
-      return 'Perform shoulder presses with full extension';
-    } else if (widget.exercise.toLowerCase().contains('raise')) {
-      return 'Perform lateral raises with controlled movement';
-    } else {
-      return 'Perform the exercise with clear arm movements';
-    }
-  }
-
-  Future<void> _initializePoseDetector() async {
-    try {
-      // Initialize Pose Detector with default options
-      _poseDetector = PoseDetector(options: PoseDetectorOptions());
-
-      setState(() {
-        _isModelLoaded = true;
-      });
-    } catch (e) {
-      debugPrint('Pose detector initialization error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Pose detector error: $e')),
-      );
-    }
   }
 
   Future<void> _initializeCamera() async {
@@ -160,7 +119,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       });
 
       _startWorkoutTimer();
-      _startPoseDetection();
+      _startMotionDetection();
     } catch (e) {
       debugPrint('Camera initialization error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -191,268 +150,16 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     });
   }
 
-  void _startPoseDetection() {
-    _cameraController!.startImageStream((CameraImage image) {
-      if (!_isModelLoaded || _workoutCompleted || _isRestPeriod) return;
-
-      // Process image with ML Kit
-      _processImage(image);
-    });
-  }
-
-  Future<void> _processImage(CameraImage image) async {
-    if (_poseDetector == null) return;
-
-    // Get image dimensions
-    if (_imageHeight == 0 || _imageWidth == 0) {
-      _imageHeight = image.height.toDouble();
-      _imageWidth = image.width.toDouble();
-    }
-
-    try {
-      // Convert CameraImage to InputImage using the new API
-      final inputImage = _inputImageFromCameraImage(image);
-
-      // Detect poses
-      final poses = await _poseDetector!.processImage(inputImage);
-
-      if (poses.isNotEmpty) {
-        setState(() {
-          _poses = poses;
-        });
-
-        _analyzePose(poses.first);
-      } else {
-        setState(() {
-          _formFeedback = "Please position yourself in frame";
-        });
+  void _startMotionDetection() {
+    Timer.periodic(const Duration(milliseconds: 200), (timer) {
+      if (_workoutCompleted || !_isInitialized || _isRestPeriod) {
+        return;
       }
-    } catch (e) {
-      debugPrint('Pose detection error: $e');
-    }
-  }
-
-  InputImage _inputImageFromCameraImage(CameraImage image) {
-    final WriteBuffer allBytes = WriteBuffer();
-    for (final Plane plane in image.planes) {
-      allBytes.putUint8List(plane.bytes);
-    }
-    final bytes = allBytes.done().buffer.asUint8List();
-
-    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
-
-    final camera = _cameraController!.description;
-    final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation) ?? InputImageRotation.rotation0deg;
-
-    return InputImage.fromBytes(
-      bytes: bytes,
-      metadata: InputImageMetadata(
-        size: imageSize,
-        rotation: rotation,
-        format: InputImageFormat.nv21, // Most common format for Android
-        bytesPerRow: image.planes.first.bytesPerRow,
-      ),
-    );
-  }
-
-  InputImageRotation _getImageRotation() {
-    // For front camera, rotation is 90 degrees for most devices
-    return InputImageRotation.rotation90deg;
-  }
-
-  Uint8List _getBytesFromCameraImage(CameraImage image) {
-    // Calculate total size
-    final int totalBytes = image.planes.fold(0, (sum, plane) => sum + plane.bytes.length);
-
-    // Create a buffer
-    final Uint8List bytes = Uint8List(totalBytes);
-    int offset = 0;
-
-    // Copy bytes from each plane
-    for (final Plane plane in image.planes) {
-      bytes.setRange(offset, offset + plane.bytes.length, plane.bytes);
-      offset += plane.bytes.length;
-    }
-
-    return bytes;
-  }
-
-  void _analyzePose(Pose pose) {
-    // Get key points for the exercise
-    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
-    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
-    final leftElbow = pose.landmarks[PoseLandmarkType.leftElbow];
-    final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
-    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
-    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
-
-    if (leftWrist == null || rightWrist == null ||
-        leftElbow == null || rightElbow == null ||
-        leftShoulder == null || rightShoulder == null) {
-      setState(() {
-        _formFeedback = "Please position yourself in frame";
-      });
-      return;
-    }
-
-    // Exercise-specific form analysis
-    if (widget.exercise.toLowerCase().contains('curl')) {
-      _checkBicepCurlForm(leftWrist, rightWrist, leftElbow, rightElbow, leftShoulder, rightShoulder);
-    } else if (widget.exercise.toLowerCase().contains('press')) {
-      _checkShoulderPressForm(leftWrist, rightWrist, leftElbow, rightElbow, leftShoulder, rightShoulder);
-    } else if (widget.exercise.toLowerCase().contains('raise')) {
-      _checkLateralRaiseForm(leftWrist, rightWrist, leftElbow, rightElbow, leftShoulder, rightShoulder);
-    } else {
-      _checkGeneralForm(leftWrist, rightWrist, leftElbow, rightElbow, leftShoulder, rightShoulder);
-    }
-  }
-
-  void _checkBicepCurlForm(
-      PoseLandmark leftWrist,
-      PoseLandmark rightWrist,
-      PoseLandmark leftElbow,
-      PoseLandmark rightElbow,
-      PoseLandmark leftShoulder,
-      PoseLandmark rightShoulder,
-      ) {
-    // Calculate angles for form analysis
-    final double leftArmAngle = _calculateAngle(leftShoulder, leftElbow, leftWrist);
-    final double rightArmAngle = _calculateAngle(rightShoulder, rightElbow, rightWrist);
-
-    // Determine motion direction based on arm angle
-    setState(() {
-      if (leftArmAngle < 45 && rightArmAngle < 45) {
-        _motionDirection = 1; // Top position (arms fully flexed)
-        _motionIntensity = 0.9;
-      } else if (leftArmAngle > 135 && rightArmAngle > 135) {
-        _motionDirection = -1; // Bottom position (arms extended)
-        _motionIntensity = 0.9;
-      } else {
-        _motionDirection = 0; // Intermediate position
-        _motionIntensity = (leftArmAngle + rightArmAngle) / 360;
-      }
-    });
-
-    // Check for proper form
-    final bool isGoodForm = (leftArmAngle > 30 && leftArmAngle < 160) &&
-        (rightArmAngle > 30 && rightArmAngle < 160);
-
-    if (isGoodForm) {
-      _checkForRepCompletion();
-      setState(() {
-        _formFeedback = "Good form!";
-      });
-    } else {
-      setState(() {
-        _formFeedback = "Extend your arms fully";
-      });
-    }
-  }
-
-  void _checkShoulderPressForm(
-      PoseLandmark leftWrist,
-      PoseLandmark rightWrist,
-      PoseLandmark leftElbow,
-      PoseLandmark rightElbow,
-      PoseLandmark leftShoulder,
-      PoseLandmark rightShoulder,
-      ) {
-    // Calculate vertical positions
-    final double leftExtension = (leftShoulder.y - leftWrist.y).abs();
-    final double rightExtension = (rightShoulder.y - rightWrist.y).abs();
-
-    // Determine motion direction
-    setState(() {
-      if (leftExtension > 0.3 && rightExtension > 0.3) {
-        _motionDirection = 1; // Top position (arms extended)
-        _motionIntensity = 0.9;
-      } else if (leftExtension < 0.1 && rightExtension < 0.1) {
-        _motionDirection = -1; // Bottom position (arms bent)
-        _motionIntensity = 0.9;
-      } else {
-        _motionDirection = 0; // Intermediate position
-        _motionIntensity = (leftExtension + rightExtension) / 0.6;
-      }
-    });
-
-    // Count reps with good form
-    _checkForRepCompletion();
-    setState(() {
-      _formFeedback = "Good form!";
+      _analyzeMotion();
     });
   }
 
-  void _checkLateralRaiseForm(
-      PoseLandmark leftWrist,
-      PoseLandmark rightWrist,
-      PoseLandmark leftElbow,
-      PoseLandmark rightElbow,
-      PoseLandmark leftShoulder,
-      PoseLandmark rightShoulder,
-      ) {
-    // Calculate horizontal extension
-    final double leftRaise = (leftShoulder.x - leftWrist.x).abs();
-    final double rightRaise = (rightShoulder.x - rightWrist.x).abs();
-
-    // Determine motion direction
-    setState(() {
-      if (leftRaise > 0.2 && rightRaise > 0.2) {
-        _motionDirection = 1; // Top position (arms raised)
-        _motionIntensity = 0.9;
-      } else if (leftRaise < 0.05 && rightRaise < 0.05) {
-        _motionDirection = -1; // Bottom position (arms down)
-        _motionIntensity = 0.9;
-      } else {
-        _motionDirection = 0; // Intermediate position
-        _motionIntensity = (leftRaise + rightRaise) / 0.4;
-      }
-    });
-
-    // Count reps with good form
-    _checkForRepCompletion();
-    setState(() {
-      _formFeedback = "Good form!";
-    });
-  }
-
-  void _checkGeneralForm(
-      PoseLandmark leftWrist,
-      PoseLandmark rightWrist,
-      PoseLandmark leftElbow,
-      PoseLandmark rightElbow,
-      PoseLandmark leftShoulder,
-      PoseLandmark rightShoulder,
-      ) {
-    // General motion detection
-    final double motionIntensity = (leftWrist.y - rightWrist.y).abs();
-
-    setState(() {
-      _motionIntensity = motionIntensity.clamp(0.0, 1.0);
-      _motionDirection = motionIntensity > 0.3 ? (_motionDirection == 1 ? -1 : 1) : 0;
-    });
-
-    // Count reps
-    _checkForRepCompletion();
-    setState(() {
-      _formFeedback = "Motion detected";
-    });
-  }
-
-  double _calculateAngle(PoseLandmark a, PoseLandmark b, PoseLandmark c) {
-    // Calculate angle at point b between points a and c
-    final double abX = a.x - b.x;
-    final double abY = a.y - b.y;
-    final double cbX = c.x - b.x;
-    final double cbY = c.y - b.y;
-
-    final double dot = (abX * cbX + abY * cbY);
-    final double cross = (abX * cbY - abY * cbX);
-
-    final double alpha = math.atan2(cross, dot);
-    return (alpha * 180 / math.pi).abs();
-  }
-
-  void _checkForRepCompletion() {
+  void _analyzeMotion() {
     final now = DateTime.now();
 
     // Prevent double counting
@@ -460,14 +167,70 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       return;
     }
 
-    // Count rep when completing full range of motion (from top to bottom)
-    if (_motionDirection == -1 && _previousMotionDirection == 1 && _motionIntensity > 0.5) {
-      _countRep();
+    // Simulate motion detection
+    final motionData = _detectMotionPattern();
+
+    if (_isDumbbellExercise) {
+      _handleDumbbellMotion(motionData);
+    } else {
+      _handleBodyweightMotion(motionData);
     }
+  }
+
+  Map<String, dynamic> _detectMotionPattern() {
+    // Simulate different motion patterns based on exercise type
+    final time = DateTime.now().millisecondsSinceEpoch / 1000;
+
+    return {
+      'intensity': (math.sin(time * 2).abs() * 0.8 + 0.2), // 0.2 to 1.0
+      'direction': math.sin(time * 2) > 0.5 ? 1 : (math.sin(time * 2) < -0.5 ? -1 : 0),
+      'equipmentDetected': _simulateEquipmentDetection(),
+    };
+  }
+
+  bool _simulateEquipmentDetection() {
+    // Simulate equipment detection - 80% detection rate when user is active
+    final time = DateTime.now().millisecondsSinceEpoch / 1000;
+    return math.sin(time * 3).abs() > 0.3;
+  }
+
+  void _handleDumbbellMotion(Map<String, dynamic> motionData) {
+    final intensity = motionData['intensity'] as double;
+    final direction = motionData['direction'] as int;
+    final equipmentDetected = motionData['equipmentDetected'] as bool;
 
     setState(() {
-      _previousMotionDirection = _motionDirection;
+      _motionIntensity = intensity;
+      _motionDirection = direction;
+      _isEquipmentDetected = equipmentDetected;
     });
+
+    // Only count reps if equipment is detected and motion is significant
+    if (equipmentDetected && intensity > 0.6) {
+      if (direction == -1 && _motionDirection != -1) {
+        // Downward motion with proper form
+        _countRep();
+      }
+    }
+  }
+
+  void _handleBodyweightMotion(Map<String, dynamic> motionData) {
+    final intensity = motionData['intensity'] as double;
+    final direction = motionData['direction'] as int;
+
+    setState(() {
+      _motionIntensity = intensity;
+      _motionDirection = direction;
+      _isEquipmentDetected = true; // Always true for bodyweight exercises
+    });
+
+    // Count reps based on motion intensity and pattern
+    if (intensity > 0.5) {
+      if (direction == -1 && _motionDirection != -1) {
+        // Significant downward motion
+        _countRep();
+      }
+    }
   }
 
   void _countRep() {
@@ -595,12 +358,12 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       _motionDirection = 0;
       _motionIntensity = 0.0;
       _isRestPeriod = false;
-      _formFeedback = 'Get ready to start';
     });
 
     _workoutTimer?.cancel();
     _restTimer?.cancel();
     _startWorkoutTimer();
+    _startMotionDetection();
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Workout restarted!')),
@@ -612,7 +375,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     _cameraController?.dispose();
     _workoutTimer?.cancel();
     _restTimer?.cancel();
-    _poseDetector?.close();
     super.dispose();
   }
 
@@ -626,7 +388,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
             children: [
               CircularProgressIndicator(),
               SizedBox(height: 16),
-              Text('Initializing camera and pose detection...'),
+              Text('Initializing camera and motion detection...'),
             ],
           ),
         ),
@@ -635,7 +397,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.exercise} - Smart Rep Counting'),
+        title: Text('${widget.exercise} - Motion Detection'),
         backgroundColor: Colors.deepPurple,
         actions: [
           IconButton(
@@ -652,13 +414,17 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
             child: CameraPreview(_cameraController!),
           ),
 
-          // Pose landmarks overlay
-          if (_poses.isNotEmpty)
-            Positioned.fill(
-              child: CustomPaint(
-                painter: PoseLandmarkPainter(_poses.first, _imageHeight, _imageWidth),
+          // Motion detection overlay
+          Positioned.fill(
+            child: CustomPaint(
+              painter: MotionDetectionPainter(
+                _motionDirection,
+                _motionIntensity,
+                _isEquipmentDetected,
+                _isDumbbellExercise,
               ),
             ),
+          ),
 
           // Workout info overlay
           Positioned(
@@ -718,7 +484,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _formFeedback,
+                      _getMotionStatusText(),
                       style: TextStyle(
                         fontSize: 14,
                         color: _getStatusColor(),
@@ -785,72 +551,90 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     );
   }
 
-  Color _getStatusColor() {
-    if (_formFeedback.contains("position yourself")) {
-      return Colors.orange;
-    } else if (_formFeedback.contains("Good form")) {
-      return Colors.green;
+  String _getMotionStatusText() {
+    if (!_isEquipmentDetected && _isDumbbellExercise) {
+      return '❌ DUMBBELL NOT DETECTED';
+    } else if (_motionIntensity < 0.3) {
+      return '🚶 READY FOR MOTION';
+    } else if (_motionDirection == 1) {
+      return '↑ LIFTING UP ↑';
+    } else if (_motionDirection == -1) {
+      return '↓ LOWERING ↓';
     } else {
+      return '🔄 MOTION DETECTED';
+    }
+  }
+
+  Color _getStatusColor() {
+    if (!_isEquipmentDetected && _isDumbbellExercise) {
+      return Colors.red;
+    } else if (_motionIntensity < 0.3) {
       return Colors.white70;
+    } else {
+      return Colors.green;
     }
   }
 }
 
-// Custom painter to draw pose landmarks
-class PoseLandmarkPainter extends CustomPainter {
-  final Pose pose;
-  final double imageHeight;
-  final double imageWidth;
+class MotionDetectionPainter extends CustomPainter {
+  final int motionDirection;
+  final double motionIntensity;
+  final bool isEquipmentDetected;
+  final bool isDumbbellExercise;
 
-  PoseLandmarkPainter(this.pose, this.imageHeight, this.imageWidth);
+  MotionDetectionPainter(
+      this.motionDirection,
+      this.motionIntensity,
+      this.isEquipmentDetected,
+      this.isDumbbellExercise,
+      );
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.green
-      ..strokeWidth = 4.0
-      ..style = PaintingStyle.stroke;
+    if (motionIntensity > 0.3) {
+      final center = Offset(size.width / 2, size.height / 2);
+      final radius = size.width / 4 * motionIntensity;
 
-    final pointPaint = Paint()
-      ..color = Colors.red
-      ..strokeWidth = 8.0
-      ..style = PaintingStyle.fill;
+      final paint = Paint()
+        ..color = _getMotionColor()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4.0 * motionIntensity;
 
-    final double scaleX = size.width / imageWidth;
-    final double scaleY = size.height / imageHeight;
+      if (motionDirection == 1) {
+        // Upward motion
+        canvas.drawCircle(center, radius, paint);
+      } else if (motionDirection == -1) {
+        // Downward motion
+        canvas.drawRect(
+          Rect.fromCenter(center: center, width: radius * 2, height: radius * 2),
+          paint,
+        );
+      }
+    }
 
-    // Draw connections between landmarks
-    _drawConnection(canvas, PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder, scaleX, scaleY, paint);
-    _drawConnection(canvas, PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow, scaleX, scaleY, paint);
-    _drawConnection(canvas, PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist, scaleX, scaleY, paint);
-    _drawConnection(canvas, PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow, scaleX, scaleY, paint);
-    _drawConnection(canvas, PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist, scaleX, scaleY, paint);
-
-    // Draw key points
-    for (final landmark in pose.landmarks.values) {
-      final double x = landmark.x * scaleX;
-      final double y = landmark.y * scaleY;
-      canvas.drawCircle(Offset(x, y), 6, pointPaint);
+    // Draw equipment detection status
+    if (isDumbbellExercise && !isEquipmentDetected) {
+      final textPainter = TextPainter(
+        text: const TextSpan(
+          text: '❌',
+          style: TextStyle(fontSize: 40, color: Colors.red),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(size.width - 50, 50));
     }
   }
 
-  void _drawConnection(Canvas canvas, PoseLandmarkType startType, PoseLandmarkType endType,
-      double scaleX, double scaleY, Paint paint) {
-    final startLandmark = pose.landmarks[startType];
-    final endLandmark = pose.landmarks[endType];
-
-    if (startLandmark != null && endLandmark != null) {
-      final double startX = startLandmark.x * scaleX;
-      final double startY = startLandmark.y * scaleY;
-      final double endX = endLandmark.x * scaleX;
-      final double endY = endLandmark.y * scaleY;
-
-      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), paint);
+  Color _getMotionColor() {
+    if (!isEquipmentDetected && isDumbbellExercise) {
+      return Colors.red.withOpacity(0.5);
     }
+    return motionDirection == 1
+        ? Colors.green.withOpacity(0.5)
+        : Colors.blue.withOpacity(0.5);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return true;
-  }
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

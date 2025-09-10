@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'camera_workout_screen1.dart'; // Updated to use the correct filename
+import 'camera_workout_screen.dart';
 
 class WorkoutScreen extends StatefulWidget {
   final int userId;
@@ -372,8 +372,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                             MaterialPageRoute(
                                               builder: (context) => CameraWorkoutScreen(
                                                 userId: widget.userId,
-                                                category: workoutPlan!["goal"].toString().replaceAll("_", " ").toUpperCase(),
                                                 exercise: exercise,
+                                                reps: int.parse(workoutPlan!["reps"].toString()),
+                                                sets: int.parse(workoutPlan!["sets"].toString()),
                                                 onExerciseCompleted: (completed) {
                                                   if (completed) {
                                                     ScaffoldMessenger.of(context).showSnackBar(
