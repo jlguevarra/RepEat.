@@ -127,7 +127,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadDashboardData() async {
     try {
       final response = await http.post(
-        Uri.parse("http://localhost/repEatApi/dashboard.php"),
+        Uri.parse("http://192.168.100.78/repEatApi/dashboard.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
 

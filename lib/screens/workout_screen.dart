@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'camera_workout_screen.dart';
+import 'camera_workout_screen1.dart'; // Updated to use the correct filename
 
 class WorkoutScreen extends StatefulWidget {
   final int userId;
@@ -31,7 +31,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://localhost/repEatApi/check_workout_plan.php"),
+        Uri.parse("http://192.168.100.78/repEatApi/check_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
 
@@ -73,7 +73,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://localhost/repEatApi/get_workout_plan.php"),
+        Uri.parse("http://192.168.100.78/repEatApi/get_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
 
@@ -117,7 +117,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://localhost/repEatApi/generate_workout.php"),
+        Uri.parse("http://192.168.100.78/repEatApi/generate_workout.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 30));
 
@@ -372,9 +372,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                             MaterialPageRoute(
                                               builder: (context) => CameraWorkoutScreen(
                                                 userId: widget.userId,
+                                                category: workoutPlan!["goal"].toString().replaceAll("_", " ").toUpperCase(),
                                                 exercise: exercise,
-                                                reps: int.parse(workoutPlan!["reps"].toString()),
-                                                sets: int.parse(workoutPlan!["sets"].toString()),
                                                 onExerciseCompleted: (completed) {
                                                   if (completed) {
                                                     ScaffoldMessenger.of(context).showSnackBar(
