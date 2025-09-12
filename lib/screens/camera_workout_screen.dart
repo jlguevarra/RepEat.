@@ -40,6 +40,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   Timer? _workoutTimer;
   Timer? _restTimer;
   bool _showSuccessAnimation = false;
+  bool _personDetected = false;
   DateTime? _lastRepTime;
 
   // ML Kit detectors
@@ -48,7 +49,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
   // Exercise state variables
   double _motionIntensity = 0.0;
-  bool _isEquipmentDetected = true; // 🔥 Always true now
   bool _isRestPeriod = false;
   String _formStatus = "Position yourself in frame";
   Color _formStatusColor = Colors.white;
@@ -190,13 +190,16 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
       if (poses.isNotEmpty) {
         final pose = poses.first;
+        _personDetected = true;
         _analyzePose(pose);
       } else {
         setState(() {
+          _personDetected = false;
           _formStatus = "No person detected";
           _formStatusColor = Colors.orange;
         });
       }
+
     } catch (e) {
       debugPrint('Error processing image: $e');
     } finally {
@@ -272,31 +275,41 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   }
 
   void _analyzeBicepCurl(double elbowAngle) {
-    setState(() {
-      _motionIntensity = (elbowAngle - 90).abs() / 90;
+    // No overlap: only one feedback at a time
+    String newStatus = "";
 
-      if (elbowAngle < _lastElbowAngle) {
-        _motionDirection = 1;
-        _formStatus = "Lifting up ↑";
-        _formStatusColor = Colors.blue;
-      } else if (elbowAngle > _lastElbowAngle) {
-        _motionDirection = -1;
-        _formStatus = "Lowering down ↓";
-        _formStatusColor = Colors.green;
-      }
+    // Person detected but not proper form
+    // if (elbowAngle > 50 && elbowAngle < 160) {
+    //   newStatus = "Position yourself in frame";
+    // }
 
-      if (elbowAngle < 50 && !_isAtTop) {
-        _isAtTop = true;
-        _isAtBottom = false;
-      } else if (elbowAngle > 160 && _isAtTop && !_isAtBottom) {
-        _isAtBottom = true;
-        _isAtTop = false;
-        _countRep();
-      }
+    // Top of curl
+    if (elbowAngle < 50 && !_isAtTop) {
+      _isAtTop = true;
+      _isAtBottom = false;
+    }
 
-      _lastElbowAngle = elbowAngle;
-    });
+    // Bottom of curl → count rep
+    else if (elbowAngle > 160 && _isAtTop && !_isAtBottom) {
+      _isAtBottom = true;
+      _isAtTop = false;
+      _countRep();
+      return; // handled by _countRep
+    }
+
+    // Update feedback only if changed
+    if (newStatus != _formStatus) {
+      setState(() {
+        _formStatus = newStatus;
+        _formStatusColor = Colors.orange;
+      });
+    }
+
+    _lastElbowAngle = elbowAngle;
   }
+
+
+
 
   void _analyzeBodyweightExercise(
       Pose pose,
@@ -329,7 +342,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   }
 
   void _countRep() {
-    if (_workoutCompleted || _isRestPeriod || !_isEquipmentDetected) return;
+    if (_workoutCompleted || _isRestPeriod || !_personDetected) return; // 👈 block rep counting if no person
 
     final now = DateTime.now();
     if (_lastRepTime != null && now.difference(_lastRepTime!).inMilliseconds < 800) {
@@ -343,19 +356,17 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       _formStatusColor = Colors.green;
     });
 
-    _showRepFeedback();
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted && _formStatus == "REP COUNTED!") {
+        setState(() => _formStatus = "");
+      }
+    });
+
     _checkSetCompletion();
   }
 
-  void _showRepFeedback() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('REP $_repCount!', style: const TextStyle(fontWeight: FontWeight.bold)),
-        duration: const Duration(milliseconds: 500),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
+
+
 
   void _checkSetCompletion() {
     if (_repCount >= widget.reps) {
@@ -374,16 +385,11 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       _repCount = 0;
       _isAtTop = false;
       _isAtBottom = true;
+      _formStatus = "Set completed! Rest period";
+      _formStatusColor = Colors.yellow;
     });
 
     _startRestTimer();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('✅ Set ${_currentSet - 1} completed! Rest time: 60 seconds'),
-        duration: const Duration(seconds: 3),
-      ),
-    );
   }
 
   void _startNextSet() {
@@ -391,20 +397,27 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
     setState(() {
       _isRestPeriod = false;
+      _formStatus = "New set started!";
+      _formStatusColor = Colors.green;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🏋️ Set $_currentSet started!'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    // Reset form status after 2 seconds
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _formStatus = "";
+          _formStatusColor = Colors.white;
+        });
+      }
+    });
   }
 
   void _completeWorkout() {
     setState(() {
       _workoutCompleted = true;
       _showSuccessAnimation = true;
+      _formStatus = "Workout completed!";
+      _formStatusColor = Colors.green;
     });
 
     _workoutTimer?.cancel();
@@ -438,15 +451,17 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
 
       final result = jsonDecode(response.body);
       if (result['success'] && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Workout saved successfully!')),
-        );
+        setState(() {
+          _formStatus = "Workout saved successfully!";
+          _formStatusColor = Colors.green;
+        });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Workout completed!')),
-        );
+        setState(() {
+          _formStatus = "Workout completed!";
+          _formStatusColor = Colors.green;
+        });
       }
     }
   }
@@ -464,12 +479,21 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       _isRestPeriod = false;
       _isAtTop = false;
       _isAtBottom = true;
+      _formStatus = "Workout restarted!";
+      _formStatusColor = Colors.white;
     });
 
     _workoutTimer?.cancel();
     _restTimer?.cancel();
     _startWorkoutTimer();
+
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && _formStatus == "Workout restarted!") {
+        setState(() => _formStatus = "");
+      }
+    });
   }
+
 
   @override
   void dispose() {
@@ -511,113 +535,156 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       ),
       body: Stack(
         children: [
+          // Camera preview
           Positioned.fill(
-            child: CameraPreview(_cameraController!),
+            child: _cameraController != null && _cameraController!.value.isInitialized
+                ? FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: _cameraController!.value.previewSize!.height,
+                height: _cameraController!.value.previewSize!.width,
+                child: CameraPreview(_cameraController!),
+              ),
+            )
+                : const Center(child: CircularProgressIndicator()),
           ),
+
+          // 🔹 Top Info Bar (Title + Timer + Sets + Rest)
+          // Timer & sets (top center)
           Positioned(
             top: 20,
             left: 0,
             right: 0,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              color: Colors.black54,
-              child: Column(
-                children: [
-                  Text(
-                    widget.exercise,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Set $_currentSet/${widget.sets} • ${_durationSeconds ~/ 60}:${(_durationSeconds % 60).toString().padLeft(2, '0')}',
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                  if (_isRestPeriod)
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.timer, color: Colors.white, size: 20),
+                    const SizedBox(width: 6),
                     Text(
-                      'Rest: $_restSeconds seconds',
-                      style: const TextStyle(color: Colors.yellow, fontSize: 16),
+                      '${_durationSeconds ~/ 60}:${(_durationSeconds % 60).toString().padLeft(2, '0')}',
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
                     ),
-                ],
+                    const SizedBox(width: 20),
+                    Icon(Icons.fitness_center, color: Colors.white, size: 20),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Set $_currentSet/${widget.sets}',
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                    if (_isRestPeriod)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 20),
+                        child: Text(
+                          'Rest: $_restSeconds s',
+                          style: const TextStyle(color: Colors.yellow, fontSize: 16),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
+
+
+          // 🔹 Feedback (center of screen)
+          // Feedback message (center)
+          if (_formStatus.isNotEmpty)
+            Positioned(
+              top: 100,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: AnimatedOpacity(
+                  opacity: _formStatus.isNotEmpty ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 400),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _formStatus,
+                      style: TextStyle(
+                        color: _formStatusColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+
+          // 🔹 Rep Counter (bottom center)
           Positioned(
-            top: 100,
+            bottom: 120,
             left: 0,
             right: 0,
             child: Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.black54,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  _formStatus,
-                  style: TextStyle(
-                    color: _formStatusColor,
-                    fontSize: 18,
+                  '$_repCount / ${widget.reps}',
+                  style: const TextStyle(
+                    fontSize: 40,
+                    color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
             ),
           ),
-          if (_isDumbbellExercise)
+
+          // 🔹 Start Next Set button (only when rest ends)
+          if (_isRestPeriod && _restSeconds == 0)
             Positioned(
-              top: 150,
+              bottom: 40,
               left: 0,
               right: 0,
               child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: _isEquipmentDetected ? Colors.green : Colors.red,
-                    borderRadius: BorderRadius.circular(20),
+                child: ElevatedButton(
+                  onPressed: _startNextSet,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                   ),
-                  child: Text(
-                    _isEquipmentDetected ? '✅ DUMBBELL DETECTED (Bypassed)' : '❌ DUMBBELL NOT DETECTED',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: const Text(
+                    'START NEXT SET',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
             ),
-          Positioned(
-            bottom: 120,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+
+          // 🔹 Success animation
+          if (_showSuccessAnimation)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black54,
+                child: const Center(
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      Icon(Icons.check_circle, color: Colors.green, size: 100),
+                      SizedBox(height: 20),
                       Text(
-                        '$_repCount / ${widget.reps}',
-                        style: const TextStyle(
-                          fontSize: 40,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _getMotionStatusText(),
+                        'Workout Completed!',
                         style: TextStyle(
-                          fontSize: 14,
-                          color: _getStatusColor(),
+                          color: Colors.white,
+                          fontSize: 24,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -626,82 +693,9 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
                 ),
               ),
             ),
-  
-            // Start Next Set Button (during rest period)
-            if (_isRestPeriod && _restSeconds == 0)
-              Positioned(
-                bottom: 40,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: ElevatedButton(
-                    onPressed: _startNextSet,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                    ),
-                    child: const Text(
-                      'START NEXT SET',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ),
-  
-            // Success animation
-            if (_showSuccessAnimation)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.black54,
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.check_circle,
-                          color: Colors.green,
-                          size: 100,
-                        ),
-                        SizedBox(height: 20),
-                        Text(
-                          'Workout Completed!',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      );
-    }
-  
-    String _getMotionStatusText() {
-      if (_isDumbbellExercise && !_isEquipmentDetected) {
-        return 'SHOW DUMBBELL TO CAMERA';
-      } else if (_motionIntensity < 0.3) {
-        return 'READY FOR MOTION';
-      } else if (_motionDirection == 1) {
-        return 'LIFTING UP ↑';
-      } else if (_motionDirection == -1) {
-        return 'LOWERING DOWN ↓';
-      } else {
-        return 'MOTION DETECTED';
-      }
-    }
-  
-    Color _getStatusColor() {
-      if (_isDumbbellExercise && !_isEquipmentDetected) {
-        return Colors.red;
-      } else if (_motionIntensity < 0.3) {
-        return Colors.white70;
-      } else {
-        return Colors.green;
-      }
-    }
+        ],
+      ),
+
+    );
   }
+}
