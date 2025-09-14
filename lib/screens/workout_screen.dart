@@ -27,39 +27,45 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> _checkIfUserHasPlan() async {
     setState(() {
       checkingPlan = true;
+      workoutPlan = null; // Clear any existing workout plan
     });
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/check_workout_plan.php"),
+        Uri.parse("http://192.168.100.11/repEatApi/check_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        print("Check plan response: $data"); // Add this for debugging
 
         if (data["success"] == true) {
           if (data["has_plan"] == true) {
             _loadWorkoutPlan();
           } else {
             setState(() {
+              workoutPlan = null; // Clear any existing workout plan
               checkingPlan = false;
             });
           }
         } else {
           setState(() {
+            workoutPlan = null; // Clear any existing workout plan
             checkingPlan = false;
             errorMessage = data["message"] ?? "Error checking workout plan";
           });
         }
       } else {
         setState(() {
+          workoutPlan = null; // Clear any existing workout plan
           checkingPlan = false;
           errorMessage = "Server error: ${response.statusCode}";
         });
       }
     } catch (e) {
       setState(() {
+        workoutPlan = null; // Clear any existing workout plan
         checkingPlan = false;
         errorMessage = "Exception: $e";
       });
@@ -73,12 +79,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/get_workout_plan.php"),
+        Uri.parse("http://192.168.100.11/repEatApi/get_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        print("Load plan response: $data"); // Add this for debugging
 
         if (data["success"] == true) {
           setState(() {
@@ -87,18 +94,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           });
         } else {
           setState(() {
+            workoutPlan = null; // Clear the workout plan
             checkingPlan = false;
             errorMessage = data["message"] ?? "Error loading workout plan";
           });
         }
       } else {
         setState(() {
+          workoutPlan = null; // Clear the workout plan
           checkingPlan = false;
           errorMessage = "Server error: ${response.statusCode}";
         });
       }
     } catch (e) {
       setState(() {
+        workoutPlan = null; // Clear the workout plan
         checkingPlan = false;
         errorMessage = "Exception: $e";
       });
@@ -117,7 +127,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/generate_workout.php"),
+        Uri.parse("http://192.168.100.11/repEatApi/generate_workout.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 30));
 
@@ -149,11 +159,66 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
+  // Add this method to update progress on the server
+  Future<void> _updateProgressOnServer(int currentWeekIndex, int currentDayIndex, bool completedToday) async {
+    try {
+      final response = await http.post(
+        Uri.parse("http://192.168.100.11/repEatApi/update_workout_progress.php"),
+        body: {
+          "user_id": widget.userId.toString(),
+          "current_week_index": currentWeekIndex.toString(),
+          "current_day_index": currentDayIndex.toString(),
+          "completed_today": completedToday.toString(),
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data["success"] != true) {
+          print("Failed to update progress: ${data["message"]}");
+        }
+      }
+    } catch (e) {
+      print("Error updating progress: $e");
+    }
+  }
+
+// Update the _updateProgress method
+  void _updateProgress() {
+    final currentWeekIndex = workoutPlan!["currentWeekIndex"] ?? 0;
+    final currentDayIndex = workoutPlan!["currentDayIndex"] ?? 0;
+    final completedToday = workoutPlan!["completedToday"] ?? false;
+
+    if (completedToday) {
+      // Move to next day
+      int newDayIndex = currentDayIndex + 1;
+      int newWeekIndex = currentWeekIndex;
+
+      // If we've completed all days in the week, move to next week
+      if (newDayIndex >= 7) {
+        newDayIndex = 0;
+        newWeekIndex = (currentWeekIndex + 1).clamp(0, 3);
+      }
+
+      setState(() {
+        workoutPlan!["currentDayIndex"] = newDayIndex;
+        workoutPlan!["currentWeekIndex"] = newWeekIndex;
+        workoutPlan!["completedToday"] = false;
+      });
+
+      // Save the updated progress to the database
+      _updateProgressOnServer(newWeekIndex, newDayIndex, false);
+    }
+  }
+
   Widget _buildWorkoutPlan() {
     if (workoutPlan == null) return Container();
 
     final goal = workoutPlan!["goal"];
     final isWeightLoss = goal == "weight_loss";
+    final currentWeekIndex = workoutPlan!["currentWeekIndex"] ?? 0;
+    final currentDayIndex = workoutPlan!["currentDayIndex"] ?? 0;
+    final completedToday = workoutPlan!["completedToday"] ?? false;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,6 +319,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         Expanded(
           child: DefaultTabController(
             length: 4,
+            initialIndex: currentWeekIndex.clamp(0, 3), // Start at current week
             child: Column(
               children: [
                 Container(
@@ -276,10 +342,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     indicatorPadding: const EdgeInsets.symmetric(horizontal: 8),
                     labelColor: Colors.deepPurple,
                     unselectedLabelColor: Colors.grey[600],
-                    labelStyle: TextStyle(
+                    labelStyle: const TextStyle(
                       fontWeight: FontWeight.bold,
                     ),
-                    unselectedLabelStyle: TextStyle(
+                    unselectedLabelStyle: const TextStyle(
                       fontWeight: FontWeight.normal,
                     ),
                     tabs: const [
@@ -297,16 +363,35 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                       final weekKey = "Week ${weekIndex + 1}";
                       final weekData = workoutPlan!["weekly_plan"][weekKey];
 
+                      // Use the correct day names that match the API response
                       final allDays = [
-                        "Monday", "Tuesday", "Wednesday", "Thursday",
-                        "Friday", "Saturday", "Sunday"
+                        "Day 1", "Day 2", "Day 3", "Day 4",
+                        "Day 5", "Day 6", "Day 7"
                       ];
+
+                      // Check if this week is locked
+                      // Week is locked if it's a future week (weekIndex > currentWeekIndex)
+                      final isWeekLocked = weekIndex > currentWeekIndex;
 
                       return ListView(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         children: allDays.map((dayName) {
-                          final exercises = weekData[dayName] ?? ["Rest Day"];
-                          final isRestDay = exercises[0] == "Rest Day";
+                          // Check if weekData contains the dayName key
+                          final dayData = weekData[dayName];
+                          final isRestDay = dayData != null && dayData is List && dayData.isNotEmpty && dayData[0] == "Rest Day";
+                          final exercises = isRestDay ? ["Rest Day"] : (dayData ?? ["Rest Day"]);
+
+                          final dayIndex = allDays.indexOf(dayName);
+                          final isToday = weekIndex == currentWeekIndex && dayIndex == currentDayIndex;
+                          final isPastDay = weekIndex < currentWeekIndex ||
+                              (weekIndex == currentWeekIndex && dayIndex < currentDayIndex);
+
+                          // Day is locked if:
+                          // 1. The week is locked
+                          // 2. OR it's a future day in the current week (except Day 1 of Week 1)
+                          final isLocked = isWeekLocked ||
+                              (weekIndex == currentWeekIndex && dayIndex > currentDayIndex && !completedToday &&
+                                  !(weekIndex == 0 && dayIndex == 0)); // Day 1 of Week 1 is always available
 
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
@@ -322,13 +407,17 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                     dayName,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey[800],
+                                      color: isLocked ? Colors.grey : Colors.grey[800],
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Icon(
-                                    isRestDay ? Icons.hotel : Icons.fitness_center,
-                                    color: isRestDay ? Colors.green[600] : Colors.blue[600],
+                                    isRestDay
+                                        ? Icons.hotel
+                                        : isLocked ? Icons.lock : Icons.fitness_center,
+                                    color: isRestDay
+                                        ? Colors.green[600]
+                                        : isLocked ? Colors.grey : Colors.blue[600],
                                     size: 20,
                                   )
                                 ],
@@ -345,50 +434,67 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                       ),
                                     ),
                                   )
+                                else if (isLocked)
+                                  Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Text(
+                                      isWeekLocked
+                                          ? "Complete Week ${currentWeekIndex + 1} to unlock Week ${weekIndex + 1}."
+                                          : "Complete previous days to unlock this day.",
+                                      style: TextStyle(
+                                        color: Colors.red[400],
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  )
                                 else
-                                  ...exercises.map<Widget>((exercise) {
-                                    return ListTile(
-                                      leading: Icon(
-                                        Icons.fitness_center,
-                                        size: 20,
+                                  ...exercises.map((exercise) => ListTile(
+                                    leading: Icon(
+                                      Icons.fitness_center,
+                                      size: 20,
+                                      color: Colors.deepPurple[400],
+                                    ),
+                                    title: Text(
+                                      exercise,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey[800],
+                                      ),
+                                    ),
+                                    // Only show camera icon for exercises (not rest days)
+                                    trailing: !isRestDay ? IconButton(
+                                      icon: Icon(
+                                        Icons.camera_alt,
                                         color: Colors.deepPurple[400],
+                                        size: 20,
                                       ),
-                                      title: Text(
-                                        exercise,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.grey[800],
-                                        ),
-                                      ),
-                                      trailing: IconButton(
-                                        icon: Icon(
-                                          Icons.camera_alt,
-                                          color: Colors.deepPurple[400],
-                                          size: 20,
-                                        ),
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) => CameraWorkoutScreen(
-                                                userId: widget.userId,
-                                                exercise: exercise,
-                                                reps: int.parse(workoutPlan!["reps"].toString()),
-                                                sets: int.parse(workoutPlan!["sets"].toString()),
-                                                onExerciseCompleted: (completed) {
-                                                  if (completed) {
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      SnackBar(content: Text('✅ $exercise completed!')),
-                                                    );
-                                                  }
-                                                },
-                                              ),
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => CameraWorkoutScreen(
+                                              userId: widget.userId,
+                                              exercise: exercise,
+                                              reps: int.parse(workoutPlan!["reps"].toString()),
+                                              sets: int.parse(workoutPlan!["sets"].toString()),
+                                              onExerciseCompleted: (completed) {
+                                                if (completed) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(content: Text('✅ $exercise completed!')),
+                                                  );
+                                                  setState(() {
+                                                    workoutPlan!["completedToday"] = true;
+                                                    // Update current day and week indices if needed
+                                                    _updateProgress();
+                                                  });
+                                                }
+                                              },
                                             ),
-                                          );
-                                        },
-                                      ),
-                                    );
-                                  }).toList(),
+                                          ),
+                                        );
+                                      },
+                                    ) : null, // No trailing widget for rest days
+                                  )).toList(),
                               ],
                             ),
                           );
@@ -404,6 +510,40 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       ],
     );
   }
+
+// Helper method to check if a week is completed
+  bool _isWeekCompleted(int currentWeekIndex, int currentDayIndex, bool completedToday) {
+    // A week is completed if we're on a new week (currentWeekIndex has advanced)
+    // or if we've completed all 7 days of the current week
+    return currentDayIndex == 6 && completedToday;
+  }
+
+// // Helper method to update progress after completing a workout
+//   void _updateProgress() {
+//     final currentWeekIndex = workoutPlan!["currentWeekIndex"] ?? 0;
+//     final currentDayIndex = workoutPlan!["currentDayIndex"] ?? 0;
+//     final completedToday = workoutPlan!["completedToday"] ?? false;
+//
+//     if (completedToday) {
+//       // Move to next day
+//       int newDayIndex = currentDayIndex + 1;
+//       int newWeekIndex = currentWeekIndex;
+//
+//       // If we've completed all days in the week, move to next week
+//       if (newDayIndex >= 7) {
+//         newDayIndex = 0;
+//         newWeekIndex = (currentWeekIndex + 1).clamp(0, 3);
+//       }
+//
+//       setState(() {
+//         workoutPlan!["currentDayIndex"] = newDayIndex;
+//         workoutPlan!["currentWeekIndex"] = newWeekIndex;
+//         workoutPlan!["completedToday"] = false;
+//       });
+//
+//       // TODO: Save the updated progress to your database
+//     }
+//   }
 
   Widget _buildInfoColumn(String title, String value) {
     return Column(

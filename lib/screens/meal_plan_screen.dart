@@ -41,7 +41,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
 
     try {
       final userUrl = Uri.parse(
-          'http://192.168.100.78/repEatApi/get_profile.php?user_id=${widget.userId}');
+          'http://192.168.100.11/repEatApi/get_profile.php?user_id=${widget.userId}');
       final userResponse = await http.get(userUrl);
       if (userResponse.statusCode == 200) {
         final jsonData = jsonDecode(userResponse.body);
@@ -57,7 +57,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       }
 
       final mealPlanUrl = Uri.parse(
-          'http://192.168.100.78/repEatApi/get_saved_meal_plan.php?user_id=${widget.userId}');
+          'http://192.168.100.11/repEatApi/get_saved_meal_plan.php?user_id=${widget.userId}');
       final mealResponse = await http.get(mealPlanUrl);
       if (mealResponse.statusCode == 200) {
         final mealData = jsonDecode(mealResponse.body);
@@ -144,7 +144,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
 
   Future<void> _saveMealPlanToServer(dynamic mealPlanData) async {
     try {
-      final url = Uri.parse('http://192.168.100.78/repEatApi/save_meal_plan.php');
+      final url = Uri.parse('http://192.168.100.11/repEatApi/save_meal_plan.php');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
