@@ -32,7 +32,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.11/repEatApi/check_workout_plan.php"),
+        Uri.parse("http://192.168.100.78/repEatApi/check_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
 
@@ -79,7 +79,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.11/repEatApi/get_workout_plan.php"),
+        Uri.parse("http://192.168.100.78/repEatApi/get_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
 
@@ -127,7 +127,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.11/repEatApi/generate_workout.php"),
+        Uri.parse("http://192.168.100.78/repEatApi/generate_workout.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 30));
 
@@ -163,7 +163,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> _updateProgressOnServer(int currentWeekIndex, int currentDayIndex, bool completedToday) async {
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.11/repEatApi/update_workout_progress.php"),
+        Uri.parse("http://192.168.100.78/repEatApi/update_workout_progress.php"),
         body: {
           "user_id": widget.userId.toString(),
           "current_week_index": currentWeekIndex.toString(),

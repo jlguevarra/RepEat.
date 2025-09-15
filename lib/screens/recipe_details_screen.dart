@@ -76,7 +76,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   Future<void> _checkIfFavorite() async {
     try {
       final url = Uri.parse(
-        'http://192.168.100.11/repEatApi/get_favorites.php?user_id=${widget.userId}',
+        'http://192.168.100.78/repEatApi/get_favorites.php?user_id=${widget.userId}',
       );
 
       final response = await http.get(url);
@@ -106,7 +106,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     try {
       if (isFavorite) {
         // Remove from favorites
-        final url = Uri.parse('http://192.168.100.11/repEatApi/remove_favorite.php');
+        final url = Uri.parse('http://192.168.100.78/repEatApi/remove_favorite.php');
         final response = await http.delete(
           url,
           headers: {'Content-Type': 'application/json'},
@@ -127,7 +127,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
         }
       } else {
         // Add to favorites
-        final url = Uri.parse('http://192.168.100.11/repEatApi/add_favorite.php');
+        final url = Uri.parse('http://192.168.100.78/repEatApi/add_favorite.php');
         final response = await http.post(
           url,
           headers: {'Content-Type': 'application/json'},
