@@ -21,6 +21,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late String _greeting;
 
   bool _isRefreshing = false;
+
   bool _isLoading = true;
   late DateTime _lastRefreshDate;
   double get goalProgress {
@@ -127,7 +128,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadDashboardData() async {
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/dashboard.php"),
+        Uri.parse("http://192.168.100.11/repEatApi/dashboard.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
 
@@ -139,15 +140,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           return;
         }
 
+        // In your _loadDashboardData method, update the setState part:
         setState(() {
           workoutsCompleted = data['workoutsCompleted'] ?? 0;
           caloriesBurned = data['caloriesBurned'] ?? 0;
           streakDays = data['streakDays'] ?? 0;
-
           weight = (data['weight'] as num?)?.toDouble() ?? 0.0;
-          List<Map<String, dynamic>> weeklyActivity = [];
-          weeklyProgress = List<Map<String, dynamic>>.from(data['weeklyProgress'] ?? []);
+          workoutsThisWeek = data['workoutsThisWeek'] ?? 0;
+          weeklyGoal = data['weeklyGoal'] ?? 5;
+
+          // Make sure to process weeklyActivity correctly
+          weeklyActivity = List<Map<String, dynamic>>.from(data['weeklyActivity'] ?? []);
+
+          // Process upcomingWorkouts correctly
           upcomingWorkouts = List<Map<String, dynamic>>.from(data['upcomingWorkouts'] ?? []);
+
           _isLoading = false;
         });
       } else {
@@ -222,7 +229,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 8),
 
-            // ✅ Animated progress bar
+            // Animated progress bar
             TweenAnimationBuilder<double>(
               tween: Tween<double>(begin: 0, end: goalProgress),
               duration: const Duration(milliseconds: 800),
@@ -237,7 +244,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             const SizedBox(height: 6),
 
-            // ✅ Animated text
+            // Animated text
             TweenAnimationBuilder<double>(
               tween: Tween<double>(begin: 0, end: workoutsThisWeek.toDouble()),
               duration: const Duration(milliseconds: 800),
@@ -475,50 +482,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               )
             else
               Column(
-                children: upcomingWorkouts.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final workout = entry.value;
+                children: upcomingWorkouts.map((workout) {
+                  // Get the exercises list from the workout
+                  final exercises = workout['title'] is List
+                      ? List<String>.from(workout['title'])
+                      : [];
 
-                  // Safely handle date with null check
-                  final dateString = workout['time']?.toString();
-                  if (dateString == null || dateString.isEmpty) {
-                    return const SizedBox.shrink(); // Skip invalid entries
-                  }
-
-                  DateTime date;
-                  try {
-                    date = DateTime.parse(dateString).toLocal(); // ✅ Adjust to local time
-                  } catch (e) {
-                    return const SizedBox.shrink(); // Skip invalid date formats
-                  }
-
-                  final isToday = DateUtils.isSameDay(date, DateTime.now());
-                  final isTomorrow = DateUtils.isSameDay(
-                      date,
-                      DateTime.now().add(const Duration(days: 1))
-                  );
-
-                  String dayLabel;
-                  if (isToday) {
-                    dayLabel = "Today";
-                  } else if (isTomorrow) {
-                    dayLabel = "Tomorrow";
-                  } else {
-                    dayLabel = DateFormat('EEEE').format(date);
-                  }
-
-                  // Safely handle workout titles (array of exercises)
-                  List<String> workoutExercises = [];
-                  final exercisesData = workout['title'];
-
-                  if (exercisesData is List) {
-                    workoutExercises = exercisesData.whereType<String>().where((exercise) => exercise.isNotEmpty).toList();
-                  } else if (exercisesData is String && exercisesData.isNotEmpty) {
-                    workoutExercises = [exercisesData];
-                  }
-
-                  // Skip if no valid exercises
-                  if (workoutExercises.isEmpty) {
+                  // Skip if no exercises
+                  if (exercises.isEmpty) {
                     return const SizedBox.shrink();
                   }
 
@@ -540,39 +511,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: Colors.deepPurple,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Text(
-                                  dayLabel,
-                                  style: const TextStyle(
+                                child: const Text(
+                                  "Today",
+                                  style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                DateFormat('MMM d').format(date),
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 12,
-                                ),
-                              ),
                             ],
                           ),
                           const SizedBox(height: 12),
 
-                          // Display exercises with proper alignment
+                          // Display exercises
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: workoutExercises.map((exercise) => Padding(
+                            children: exercises.map((exercise) => Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -610,6 +570,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
+
+
+
   Widget _workoutItem(String title, String time) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
