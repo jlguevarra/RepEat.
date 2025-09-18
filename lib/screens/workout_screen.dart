@@ -18,6 +18,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Map<String, dynamic>? workoutPlan;
   String? errorMessage;
 
+  // Store current week and day indices
+  int currentWeekIndex = 0;
+  int currentDayIndex = 0;
+
   // State to track completion of individual exercises for the current day.
   final Set<String> _completedExercises = <String>{};
 
@@ -77,6 +81,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         if (data["success"] == true) {
           setState(() {
             workoutPlan = data;
+            // Store current indices from the plan
+            currentWeekIndex = data["currentWeekIndex"] ?? 0;
+            currentDayIndex = data["currentDayIndex"] ?? 0;
           });
         } else {
           setState(() => errorMessage = data["message"]);
@@ -137,8 +144,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   void _completeDayAndProceed() {
     if (workoutPlan == null) return;
-    int currentWeekIndex = workoutPlan!["currentWeekIndex"];
-    int currentDayIndex = workoutPlan!["currentDayIndex"];
     int newDayIndex = currentDayIndex + 1;
     int newWeekIndex = currentWeekIndex;
     if (newDayIndex >= 7) {
@@ -150,8 +155,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   void _checkIfDayIsComplete() {
     if (workoutPlan == null) return;
-    int currentWeekIndex = workoutPlan!["currentWeekIndex"];
-    int currentDayIndex = workoutPlan!["currentDayIndex"];
     String weekKey = "Week ${currentWeekIndex + 1}";
     String dayKey = "Day ${currentDayIndex + 1}";
     List<dynamic> allExercisesForToday = workoutPlan!["weekly_plan"][weekKey][dayKey] ?? [];
@@ -179,8 +182,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     if (workoutPlan == null) return Container();
     final goal = workoutPlan!["goal"];
     final isWeightLoss = goal == "weight_loss";
-    final currentWeekIndex = workoutPlan!["currentWeekIndex"] ?? 0;
-    final currentDayIndex = workoutPlan!["currentDayIndex"] ?? 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,6 +301,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                                   exercise: exercise,
                                                   reps: int.parse(workoutPlan!["reps"].toString()),
                                                   sets: int.parse(workoutPlan!["sets"].toString()),
+                                                  planDay: 'Week ${currentWeekIndex + 1} - Day ${currentDayIndex + 1}',
                                                   onExerciseCompleted: (completed, completedExercise) {
                                                     if (completed) {
                                                       setState(() => _completedExercises.add(completedExercise));

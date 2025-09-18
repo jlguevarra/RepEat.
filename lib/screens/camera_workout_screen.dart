@@ -9,11 +9,13 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 
+// First, modify the constructor to accept planDay
 class CameraWorkoutScreen extends StatefulWidget {
   final int userId;
   final String exercise;
   final int reps;
   final int sets;
+  final String planDay; // NEW: Add planDay parameter
   final Function(bool, String)? onExerciseCompleted;
 
   const CameraWorkoutScreen({
@@ -22,6 +24,7 @@ class CameraWorkoutScreen extends StatefulWidget {
     required this.exercise,
     required this.reps,
     required this.sets,
+    required this.planDay, // NEW: Required planDay
     this.onExerciseCompleted,
   });
 
@@ -379,6 +382,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     try {
       await http.post(
         Uri.parse('http://192.168.100.11/repEatApi/save_workout_session.php'),
+        headers: {'Content-Type': 'application/json'}, // Add headers
         body: jsonEncode({
           'user_id': widget.userId,
           'exercise': widget.exercise,
@@ -386,13 +390,13 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
           'target_reps': widget.reps * widget.sets,
           'duration_seconds': _durationSeconds,
           'date': DateTime.now().toIso8601String(),
+          'plan_day': widget.planDay, // NEW: Include plan_day
         }),
       ).timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint("Could not save workout data: $e");
     }
   }
-
   void _restartWorkout() {
     setState(() {
       _repCount = 0;
