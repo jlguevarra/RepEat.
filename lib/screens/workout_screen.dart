@@ -3,9 +3,40 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'camera_workout_screen.dart';
 
+// NEW: Data map for exercise GIFs.
+// Replace these placeholder URLs with your actual GIF links.
+final Map<String, String> exerciseGifs = {
+  // Push
+  "Dumbbell Bench Press": "https://media1.tenor.com/m/nxJqRDCmt0MAAAAC/supino-reto.gif",
+  "Dumbbell Shoulder Press": "https://media1.tenor.com/m/9LkujMB7lc8AAAAd/5dumbbell-shoulders-press.gif",
+  "Dumbbell Flyes": "https://media1.tenor.com/m/oJXOnsC72qMAAAAC/crussifixo-no-banco-com-halteres.gif",
+  "Dumbbell Triceps Extension": "https://media1.tenor.com/m/GRMSvKqfksMAAAAC/triceps.gif",
+  "Dumbbell Pullover": "https://media1.tenor.com/m/ASmGv8sPjZcAAAAC/%D0%BF%D1%83%D0%BB%D0%BE%D0%B2%D0%B5%D1%80.gif",
+
+  // Pull
+  "Dumbbell Rows": "https://media1.tenor.com/m/XehF1R8EzM4AAAAC/dumbbell-row.gif",
+  "Dumbbell Bicep Curls": "https://media1.tenor.com/m/6WP4hNz7RmgAAAAd/dumbbells-bicep-curl.gif",
+  "Dumbbell Hammer Curls": "https://media1.tenor.com/m/iO6D-DBFRTcAAAAd/dumbell-hammer-curls.gif",
+  "Dumbbell Shrugs": "https://media1.tenor.com/m/uMNZPBaaTPYAAAAC/dumbbell-shrug.gif",
+  "Dumbbell Reverse Flyes": "https://media1.tenor.com/m/HTvjufujuJAAAAAC/rear-raise-rear.gif",
+
+  // Legs
+  "Dumbbell Squats": "https://media1.tenor.com/m/kyOyzUcfIpMAAAAC/dumbbell-romanian.gif",
+  "Dumbbell Lunges": "https://media1.tenor.com/m/wTulE6li6AEAAAAC/afundo-com-halteres.gif",
+  "Dumbbell Deadlifts": "https://media1.tenor.com/m/kyOyzUcfIpMAAAAd/dumbbell-romanian.gif",
+  "Dumbbell Calf Raises": "https://media1.tenor.com/m/7lh5yt8AO0gAAAAd/gym.gif",
+  "Dumbbell Step-ups": "https://media1.tenor.com/m/y-KRvIGHjjQAAAAd/step-up-step-up-mancuerna.gif",
+
+  // Core
+  "Dumbbell Russian Twists": "https://media1.tenor.com/m/Fmh1xemYphAAAAAd/dumbbellrussiantwists.gif",
+  "Dumbbell Side Bends": "https://gymvisual.com/img/p/2/5/8/2/9/25829.gif",
+  "Dumbbell Wood Chops": "https://media1.tenor.com/m/6v0-nud5nJUAAAAC/dumbbell-chop.gif",
+  "Dumbbell Sit-ups": "https://gymvisual.com/img/p/1/9/8/2/4/19824.gif",
+  "Dumbbell Windmills": "https://gymvisual.com/img/p/2/0/3/0/9/20309.gif",
+};
+
 class WorkoutScreen extends StatefulWidget {
   final int userId;
-
   const WorkoutScreen({super.key, required this.userId});
 
   @override
@@ -17,12 +48,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   bool checkingPlan = true;
   Map<String, dynamic>? workoutPlan;
   String? errorMessage;
-
-  // Store current week and day indices
   int currentWeekIndex = 0;
   int currentDayIndex = 0;
-
-  // State to track completion of individual exercises for the current day.
   final Set<String> _completedExercises = <String>{};
 
   @override
@@ -31,18 +58,52 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     _checkIfUserHasPlan();
   }
 
+  // NEW: Function to show the exercise info dialog
+  void _showExerciseInfoDialog(String exerciseName) {
+    final String? gifUrl = exerciseGifs[exerciseName];
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(exerciseName),
+        content: gifUrl != null
+            ? Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Proper Form:"),
+            const SizedBox(height: 16),
+            Image.network(
+              gifUrl,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return const Center(child: CircularProgressIndicator());
+              },
+              errorBuilder: (context, error, stackTrace) =>
+              const Text("Could not load demonstration."),
+            ),
+          ],
+        )
+            : const Text("No demonstration available for this exercise yet."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("Close"),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _checkIfUserHasPlan() async {
     setState(() {
       checkingPlan = true;
       workoutPlan = null;
     });
-
     try {
       final response = await http.post(
         Uri.parse("http://192.168.100.78/repEatApi/check_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
-
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data["success"] == true && data["has_plan"] == true) {
@@ -67,21 +128,18 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> _loadWorkoutPlan() async {
     setState(() {
       isLoading = true;
-      _completedExercises.clear(); // Clear progress when loading new state
+      _completedExercises.clear();
     });
-
     try {
       final response = await http.post(
         Uri.parse("http://192.168.100.78/repEatApi/get_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
-
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data["success"] == true) {
           setState(() {
             workoutPlan = data;
-            // Store current indices from the plan
             currentWeekIndex = data["currentWeekIndex"] ?? 0;
             currentDayIndex = data["currentDayIndex"] ?? 0;
           });
@@ -108,11 +166,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         Uri.parse("http://192.168.100.78/repEatApi/generate_workout.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 30));
-
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data["success"] == true) {
-          await _loadWorkoutPlan(); // Reload to get the full plan structure
+          await _loadWorkoutPlan();
         } else {
           setState(() => errorMessage = data["message"]);
         }
@@ -136,7 +193,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           "current_day_index": newDayIndex.toString(),
         },
       );
-      await _loadWorkoutPlan(); // Refresh the plan from the server
+      await _loadWorkoutPlan();
     } catch (e) {
       print("Error updating progress: $e");
     }
@@ -289,30 +346,44 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                           style: TextStyle(
                                               decoration: isExerciseCompleted ? TextDecoration.lineThrough : TextDecoration.none,
                                               color: isExerciseCompleted ? Colors.grey : Colors.grey[800])),
-                                      trailing: IconButton(
-                                        icon: Icon(isExerciseCompleted ? Icons.check_circle : Icons.camera_alt, color: isExerciseCompleted ? Colors.green : Colors.deepPurple[400]),
-                                        onPressed: () {
-                                          if (isToday && !isExerciseCompleted) {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => CameraWorkoutScreen(
-                                                  userId: widget.userId,
-                                                  exercise: exercise,
-                                                  reps: int.parse(workoutPlan!["reps"].toString()),
-                                                  sets: int.parse(workoutPlan!["sets"].toString()),
-                                                  planDay: 'Week ${currentWeekIndex + 1} - Day ${currentDayIndex + 1}',
-                                                  onExerciseCompleted: (completed, completedExercise) {
-                                                    if (completed) {
-                                                      setState(() => _completedExercises.add(completedExercise));
-                                                      _checkIfDayIsComplete();
-                                                    }
-                                                  },
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        },
+                                      // MODIFIED: Added a Row to hold both buttons
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // NEW: Info button
+                                          IconButton(
+                                            icon: Icon(Icons.info_outline, color: Colors.blueAccent),
+                                            tooltip: "Show Instructions",
+                                            onPressed: () => _showExerciseInfoDialog(exercise),
+                                          ),
+                                          // Existing camera/check button
+                                          IconButton(
+                                            icon: Icon(isExerciseCompleted ? Icons.check_circle : Icons.camera_alt, color: isExerciseCompleted ? Colors.green : Colors.deepPurple[400]),
+                                            tooltip: isExerciseCompleted ? "Completed" : "Start Workout",
+                                            onPressed: () {
+                                              if (isToday && !isExerciseCompleted) {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) => CameraWorkoutScreen(
+                                                      userId: widget.userId,
+                                                      exercise: exercise,
+                                                      reps: int.parse(workoutPlan!["reps"].toString()),
+                                                      sets: int.parse(workoutPlan!["sets"].toString()),
+                                                      planDay: 'Week ${currentWeekIndex + 1} - Day ${currentDayIndex + 1}',
+                                                      onExerciseCompleted: (completed, completedExercise) {
+                                                        if (completed) {
+                                                          setState(() => _completedExercises.add(completedExercise));
+                                                          _checkIfDayIsComplete();
+                                                        }
+                                                      },
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                          ),
+                                        ],
                                       ),
                                     );
                                   }).toList(),
