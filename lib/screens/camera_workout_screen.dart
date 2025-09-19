@@ -381,7 +381,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   Future<void> _saveWorkoutData() async {
     try {
       await http.post(
-        Uri.parse('http://192.168.100.11/repEatApi/save_workout_session.php'),
+        Uri.parse('http://192.168.100.78/repEatApi/save_workout_session.php'),
         headers: {'Content-Type': 'application/json'}, // Add headers
         body: jsonEncode({
           'user_id': widget.userId,
