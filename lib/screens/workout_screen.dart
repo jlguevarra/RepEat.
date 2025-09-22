@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'camera_workout_screen.dart';
 
-// NEW: Data map for exercise GIFs.
-// Replace these placeholder URLs with your actual GIF links.
+// Data map for exercise GIFs.
 final Map<String, String> exerciseGifs = {
   // Push
   "Dumbbell Bench Press": "https://media1.tenor.com/m/nxJqRDCmt0MAAAAC/supino-reto.gif",
@@ -58,7 +57,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     _checkIfUserHasPlan();
   }
 
-  // NEW: Function to show the exercise info dialog
   void _showExerciseInfoDialog(String exerciseName) {
     final String? gifUrl = exerciseGifs[exerciseName];
 
@@ -125,6 +123,31 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
+  // NEW: Function to get completed exercises from the database
+  Future<void> _fetchCompletedExercises() async {
+    final String planDay = 'Week ${currentWeekIndex + 1} - Day ${currentDayIndex + 1}';
+    try {
+      final response = await http.post(
+        Uri.parse("http://192.168.100.78/repEatApi/get_completed_exercises.php"),
+        body: jsonEncode({
+          "user_id": widget.userId,
+          "plan_day": planDay,
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (mounted && response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          setState(() {
+            _completedExercises.addAll(List<String>.from(data['data']));
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching completed exercises: $e");
+    }
+  }
+
   Future<void> _loadWorkoutPlan() async {
     setState(() {
       isLoading = true;
@@ -143,6 +166,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             currentWeekIndex = data["currentWeekIndex"] ?? 0;
             currentDayIndex = data["currentDayIndex"] ?? 0;
           });
+          // MODIFIED: Fetch completion status after loading the plan
+          await _fetchCompletedExercises();
         } else {
           setState(() => errorMessage = data["message"]);
         }
@@ -346,17 +371,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                           style: TextStyle(
                                               decoration: isExerciseCompleted ? TextDecoration.lineThrough : TextDecoration.none,
                                               color: isExerciseCompleted ? Colors.grey : Colors.grey[800])),
-                                      // MODIFIED: Added a Row to hold both buttons
                                       trailing: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          // NEW: Info button
                                           IconButton(
                                             icon: Icon(Icons.info_outline, color: Colors.blueAccent),
                                             tooltip: "Show Instructions",
                                             onPressed: () => _showExerciseInfoDialog(exercise),
                                           ),
-                                          // Existing camera/check button
                                           IconButton(
                                             icon: Icon(isExerciseCompleted ? Icons.check_circle : Icons.camera_alt, color: isExerciseCompleted ? Colors.green : Colors.deepPurple[400]),
                                             tooltip: isExerciseCompleted ? "Completed" : "Start Workout",

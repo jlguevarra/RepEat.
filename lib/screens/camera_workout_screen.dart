@@ -65,6 +65,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   int _restSeconds = 0;
   Timer? _restTimer;
   bool _showSuccessAnimation = false;
+  double _caloriesBurned = 0.0;
 
   // Pose Detection Variables
   late PoseDetector _poseDetector;
@@ -84,12 +85,43 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   double _previousHeelY = 0.0;
   int _consecutiveGoodFrames = 0;
 
+  // Constants for Calorie Calculation
+  // UPDATED: Now a state variable with a default, fetched from API.
+  double _userWeightKg = 70.0;
+  // Average MET value for general dumbbell/resistance training
+  final double _metValue = 4.0;
+
   @override
   void initState() {
     super.initState();
+    _fetchUserWeight(); // NEW: Fetch weight when screen loads
     _initializeDetectors();
     _initializeCamera();
     _showExerciseInstructions();
+  }
+
+  // NEW: Function to fetch user's weight from your PHP API
+  Future<void> _fetchUserWeight() async {
+    try {
+      final uri = Uri.parse('http://192.168.100.78/repEatApi/get_profile.php?user_id=${widget.userId}');
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data']['current_weight'] != null) {
+          final weight = double.tryParse(data['data']['current_weight'].toString());
+          if (weight != null && weight > 0) {
+            if (mounted) {
+              setState(() {
+                _userWeightKg = weight;
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch user weight, using default. Error: $e");
+    }
   }
 
   void _initializeDetectors() {
@@ -145,7 +177,12 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     _workoutTimer?.cancel();
     _workoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!_workoutCompleted && !_isRestPeriod && mounted) {
-        setState(() => _durationSeconds++);
+        setState(() {
+          _durationSeconds++;
+          // Calories are now calculated with fetched user weight
+          final caloriesPerSecond = (_metValue * 3.5 * _userWeightKg) / (200 * 60);
+          _caloriesBurned += caloriesPerSecond;
+        });
       }
     });
   }
@@ -268,8 +305,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     }
   }
 
-  // --- ANALYZER FUNCTIONS ---
-
+  // --- ANALYZER FUNCTIONS (No changes in this section) ---
   void _analyzeBicepCurl(Pose pose, MotionType motionType) {
     final elbow = pose.landmarks[PoseLandmarkType.leftElbow] ?? pose.landmarks[PoseLandmarkType.rightElbow];
     final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
@@ -604,6 +640,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
           'duration_seconds': _durationSeconds,
           'date': DateTime.now().toIso8601String(),
           'plan_day': widget.planDay,
+          'calories_burned': _caloriesBurned.round(),
         }),
       ).timeout(const Duration(seconds: 10));
     } catch (e) {
@@ -643,6 +680,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     }
     final format = InputImageFormatValue.fromRawValue(image.format.raw) ?? InputImageFormat.nv21;
     final allBytes = image.planes.fold<List<int>>(<int>[], (p, e) => p..addAll(e.bytes));
+    // FIXED: Corrected UintList to Uint8List
     final bytes = Uint8List.fromList(allBytes);
     final metadata = InputImageMetadata(
         size: Size(image.width.toDouble(), image.height.toDouble()),
@@ -667,6 +705,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       _showSuccessAnimation = false;
       _durationSeconds = 0;
       _restSeconds = 0;
+      _caloriesBurned = 0.0;
       _isRestPeriod = false;
       _isUpPhase = false;
       _isDownPhase = true;
@@ -701,7 +740,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
           ? Stack(
         fit: StackFit.expand,
         children: [
-          // This ensures the camera preview is not stretched and fills the screen.
           FittedBox(
             fit: BoxFit.cover,
             child: SizedBox(
@@ -737,20 +775,39 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             margin: const EdgeInsets.only(top: 10),
             decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(15)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.timer, color: Colors.white, size: 20),
-              const SizedBox(width: 6),
-              Text('${_durationSeconds ~/ 60}:${(_durationSeconds % 60).toString().padLeft(2, '0')}', style: const TextStyle(color: Colors.white, fontSize: 16)),
-              const SizedBox(width: 20),
-              const Icon(Icons.fitness_center, color: Colors.white, size: 20),
-              const SizedBox(width: 6),
-              Text('Set $_currentSet/${widget.sets}', style: const TextStyle(color: Colors.white, fontSize: 16)),
-              if (_isRestPeriod)
-                Padding(
-                  padding: const EdgeInsets.only(left: 20),
-                  child: Text('Rest: $_restSeconds s', style: const TextStyle(color: Colors.yellow, fontSize: 16)),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 16.0,
+              runSpacing: 8.0,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.timer, color: Colors.white, size: 20),
+                    const SizedBox(width: 6),
+                    Text('${_durationSeconds ~/ 60}:${(_durationSeconds % 60).toString().padLeft(2, '0')}', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                  ],
                 ),
-            ]),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.fitness_center, color: Colors.white, size: 20),
+                    const SizedBox(width: 6),
+                    Text('Set $_currentSet/${widget.sets}', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                  ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 20),
+                    const SizedBox(width: 6),
+                    Text('${_caloriesBurned.toStringAsFixed(1)} kcal', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                  ],
+                ),
+                if (_isRestPeriod)
+                  Text('Rest: $_restSeconds s', style: const TextStyle(color: Colors.yellow, fontSize: 16)),
+              ],
+            ),
           ),
           if (_formStatus.isNotEmpty)
             Container(
