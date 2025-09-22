@@ -42,7 +42,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     try {
       final userUrl = Uri.parse(
           'http://192.168.100.78/repEatApi/get_profile.php?user_id=${widget.userId}');
-      final userResponse = await http.get(userUrl);
+      final userResponse = await http.get(userUrl).timeout(const Duration(seconds: 10));
       if (userResponse.statusCode == 200) {
         final jsonData = jsonDecode(userResponse.body);
         if (jsonData['success'] == true) {
@@ -58,7 +58,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
 
       final mealPlanUrl = Uri.parse(
           'http://192.168.100.78/repEatApi/get_saved_meal_plan.php?user_id=${widget.userId}');
-      final mealResponse = await http.get(mealPlanUrl);
+      final mealResponse = await http.get(mealPlanUrl).timeout(const Duration(seconds: 10));
       if (mealResponse.statusCode == 200) {
         final mealData = jsonDecode(mealResponse.body);
         if (mealData['success'] == true && mealData['data'] != null) {
@@ -76,7 +76,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          apiError = e.toString();
+          apiError = "Failed to load data. Please check your connection.";
         });
       }
     } finally {
@@ -119,7 +119,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       final url =
       Uri.https('api.spoonacular.com', '/mealplanner/generate', queryParams);
 
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);
         setState(() {
@@ -131,7 +131,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       }
     } catch (e) {
       setState(() {
-        apiError = e.toString();
+        apiError = "Failed to generate plan. The API might be busy. Please try again later.";
       });
     } finally {
       if (mounted) {
@@ -188,78 +188,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     return goalMap[normalized] ?? 2000;
   }
 
-  Widget buildMealCard(String mealType, dynamic mealData) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
-      color: Colors.white,
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(_getMealIcon(mealType), color: Colors.deepPurple),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    mealType,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              mealData['title'] ?? 'No title',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => RecipeDetailsScreen(
-                        recipeId: mealData['id'],
-                        recipeTitle: mealData['title'],
-                        userId: widget.userId,
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.restaurant_menu, color: Colors.white),
-                label: const Text(
-                  'View Recipe Details',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   IconData _getMealIcon(String mealType) {
     if (mealType.toLowerCase().contains('breakfast')) return Icons.breakfast_dining;
     if (mealType.toLowerCase().contains('lunch')) return Icons.lunch_dining;
@@ -267,46 +195,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     return Icons.restaurant;
   }
 
-  Widget _buildNutritionInfo() {
-    if (mealPlan == null || mealPlan!['nutrients'] == null) return const SizedBox();
-
-    final nutrients = mealPlan!['nutrients'];
-    return Card(
-      elevation: 4,
-      margin: const EdgeInsets.only(top: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Nutrition Summary",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 12),
-            _buildNutritionRow("Calories", "${caloriesFormat.format(nutrients['calories'])} kcal"),
-            _buildNutritionRow("Protein", "${nutrients['protein']}g"),
-            _buildNutritionRow("Fat", "${nutrients['fat']}g"),
-            _buildNutritionRow("Carbohydrates", "${nutrients['carbohydrates']}g"),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNutritionRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-          Text(value, style: const TextStyle(color: Colors.deepPurple)),
-        ],
-      ),
-    );
-  }
-
-  /// ✅ Extract meals from API response (keep original order)
   List<dynamic> _extractMealsFromMealPlan() {
     if (mealPlan == null) return [];
 
@@ -324,7 +212,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     }
   }
 
-  /// ✅ Assign meal type by index
   String _getMealTypeByIndex(int index) {
     if (index == 0) return 'Breakfast';
     if (index == 1) return 'Lunch';
@@ -349,18 +236,18 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F9FB),
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text(
           "Meal Plan",
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: Colors.white, // ✅ Make title white
+            color: Colors.white,
           ),
         ),
         backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white, // ✅ Makes icons and back button white
-        elevation: 0, // Optional: Flat style like profile screen
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.favorite_border, size: 28),
@@ -376,76 +263,51 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           ),
         ],
       ),
-
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.deepPurple))
-          : apiError != null
-          ? _buildErrorState(apiError!)
-          : userData == null
-          ? const Center(child: Text("No user data found"))
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: RefreshIndicator(
+        onRefresh: initializeMealPlan,
+        color: Colors.deepPurple,
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator(color: Colors.deepPurple))
+            : apiError != null
+            ? _buildErrorState(apiError!)
+            : userData == null
+            ? const Center(child: Text("No user data found"))
+            : ListView(
+          padding: const EdgeInsets.all(16.0),
           children: [
-            const SizedBox(height: 20),
-            Center(
-              child: FilledButton.icon(
-                onPressed: isGeneratingMeal ? null : generateMealPlan,
-                icon: isGeneratingMeal
-                    ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-                    : const Icon(Icons.restaurant_menu),
-                label: Text(isGeneratingMeal
-                    ? 'Generating...'
-                    : 'Generate ${timeFrame == 'day' ? 'Daily' : 'Weekly'} Meal Plan'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
             if (mealPlan != null) ...[
               Text(
                 timeFrame == 'day'
                     ? "Your Daily Meal Plan"
                     : "Your Weekly Meal Plan",
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF333333)),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
+              _buildNutritionSummary(),
+              const SizedBox(height: 16),
               ..._extractMealsFromMealPlan()
                   .asMap()
                   .entries
                   .map<Widget>((entry) {
                 final index = entry.key;
                 final meal = entry.value;
-                return buildMealCard(_getMealTypeByIndex(index), meal);
+                return _buildMealCard(_getMealTypeByIndex(index), meal);
               })
                   .toList(),
-              _buildNutritionInfo(),
             ] else
-              _buildEmptyState(),
+              _buildIntroState(),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _navigateToChatScreen,
         backgroundColor: Colors.deepPurple,
-        icon: const Icon(Icons.chat, color: Colors.white, size: 26),
+        icon: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 24),
         label: const Text(
           "AI Assistant",
           style: TextStyle(
             color: Colors.white,
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -453,31 +315,259 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
   }
 
-  Widget _buildErrorState(String message) {
-    return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.error_outline, color: Colors.red, size: 48),
-        const SizedBox(height: 12),
-        const Text("Something went wrong",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
-      ]),
+  // --- Redesigned Widgets ---
+
+  Widget _buildIntroState() {
+    String goal = userData?['goal']?.replaceAll('_', ' ') ?? 'Not set';
+    String diet = userData?['diet_preference'] ?? 'Not set';
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(Icons.restaurant_menu, color: Colors.deepPurple, size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              "Ready for Your Personal Meal Plan?",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "We'll generate a delicious meal plan tailored to your preferences.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 24),
+            _buildPreferenceChip('Goal: ${toTitleCase(goal)}', Icons.flag),
+            const SizedBox(height: 8),
+            _buildPreferenceChip('Diet: ${toTitleCase(diet)}', Icons.local_dining),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: isGeneratingMeal ? null : generateMealPlan,
+              icon: isGeneratingMeal
+                  ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+                  : const Icon(Icons.auto_awesome),
+              label: Text(isGeneratingMeal ? 'Generating...' : 'Generate My Plan'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildPreferenceChip(String label, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.deepPurple.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: Colors.deepPurple, size: 20),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.deepPurple)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMealCard(String mealType, dynamic mealData) {
+    final String imageUrl = "https://spoonacular.com/recipeImages/${mealData['id']}-${'312x231'}.${mealData['imageType']}";
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 10.0),
+      elevation: 2,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            children: [
+              Image.network(
+                imageUrl,
+                height: 150,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                const SizedBox(height: 150, child: Icon(Icons.image_not_supported, size: 50, color: Colors.grey)),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return SizedBox(
+                    height: 150,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                            : null,
+                        color: Colors.deepPurple,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Chip(
+                  label: Text(mealType, style: const TextStyle(color: Colors.white)),
+                  backgroundColor: Colors.black.withOpacity(0.6),
+                  avatar: Icon(_getMealIcon(mealType), color: Colors.white, size: 18),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  mealData['title'] ?? 'No title',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.timer_outlined, color: Colors.grey[600], size: 20),
+                    const SizedBox(width: 4),
+                    Text('${mealData['readyInMinutes'] ?? '?'} min', style: TextStyle(color: Colors.grey[800])),
+                    const SizedBox(width: 16),
+                    Icon(Icons.people_outline, color: Colors.grey[600], size: 20),
+                    const SizedBox(width: 4),
+                    Text('${mealData['servings'] ?? '?'} servings', style: TextStyle(color: Colors.grey[800])),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.deepPurple,
+                      side: const BorderSide(color: Colors.deepPurple),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => RecipeDetailsScreen(
+                            recipeId: mealData['id'],
+                            recipeTitle: mealData['title'],
+                            userId: widget.userId,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.arrow_forward),
+                    label: const Text('View Recipe', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNutritionSummary() {
+    if (mealPlan == null || mealPlan!['nutrients'] == null) return const SizedBox();
+
+    final nutrients = mealPlan!['nutrients'];
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text(
+              "${caloriesFormat.format(nutrients['calories'])} kcal",
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Colors.deepPurple),
+            ),
+            const Text("Total Estimated Calories", style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildNutrientIndicator("Protein", "${nutrients['protein']}g", Colors.blue),
+                _buildNutrientIndicator("Carbs", "${nutrients['carbohydrates']}g", Colors.orange),
+                _buildNutrientIndicator("Fat", "${nutrients['fat']}g", Colors.pink),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNutrientIndicator(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+            ),
+            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(color: Colors.grey, fontSize: 14)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorState(String message) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
-        child: Column(children: const [
-          Icon(Icons.fastfood_outlined, color: Colors.grey, size: 48),
-          SizedBox(height: 12),
-          Text("No meal plan yet. Tap 'Generate' to get started!",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 16)),
+        padding: const EdgeInsets.all(24.0),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const Icon(Icons.cloud_off, color: Colors.redAccent, size: 60),
+          const SizedBox(height: 16),
+          const Text("Something went wrong", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(message, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+              onPressed: initializeMealPlan,
+              icon: const Icon(Icons.refresh),
+              label: const Text("Try Again"),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white
+              )
+          )
         ]),
       ),
     );
+  }
+
+  String toTitleCase(String text) {
+    if (text.isEmpty) return '';
+    return text.split(' ').map((word) => word[0].toUpperCase() + word.substring(1).toLowerCase()).join(' ');
   }
 }

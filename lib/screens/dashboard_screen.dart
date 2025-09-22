@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'calendar_screen.dart';
+import 'calendar_screen.dart'; // Make sure this import path is correct
 
 class DashboardScreen extends StatefulWidget {
   final int userId;
@@ -40,9 +40,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // Colors for theming
   final Color _primaryColor = Colors.deepPurple;
-  final Color _secondaryColor = Color(0xFF6C63FF);
-  final Color _accentColor = Color(0xFF00BFA6);
-  final Color _backgroundColor = Color(0xFFF8F9FA);
+  final Color _secondaryColor = const Color(0xFF6C63FF);
+  final Color _accentColor = const Color(0xFF00BFA6);
+  final Color _backgroundColor = const Color(0xFFF8F9FA);
 
   @override
   void initState() {
@@ -141,7 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircularProgressIndicator(color: _primaryColor),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               Text('Loading your fitness journey...',
                   style: TextStyle(color: Colors.grey.shade600)),
             ],
@@ -154,16 +154,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       backgroundColor: _backgroundColor,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text("Dashboard"),
+        // MODIFICATION: Added TextStyle to the title
+        title: const Text(
+          "Dashboard",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: _primaryColor,
         elevation: 0,
         centerTitle: false,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh, color: Colors.white),
-            onPressed: _refreshData,
-          ),
-        ],
+        // MODIFICATION: Removed the refresh button from the actions list
+        actions: const [],
       ),
       body: RefreshIndicator(
         onRefresh: _refreshData,
@@ -204,7 +207,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           BoxShadow(
             color: Colors.deepPurple.withOpacity(0.3),
             blurRadius: 10,
-            offset: Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -218,7 +221,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Expanded(
                   child: Text(
                     _greeting,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -226,16 +229,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 Container(
-                  padding: EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.waving_hand, color: Colors.white),
+                  child: const Icon(Icons.waving_hand, color: Colors.white),
                 ),
               ],
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
               _motivationalQuote,
               style: TextStyle(
@@ -244,7 +247,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 fontStyle: FontStyle.italic,
               ),
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             Text(
               DateFormat('EEEE, MMMM d').format(DateTime.now()),
               style: TextStyle(
@@ -263,7 +266,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: Colors.black12,
             blurRadius: 10,
@@ -279,7 +282,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Row(
               children: [
                 Icon(Icons.flag, color: _primaryColor, size: 20),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text(
                   "Weekly Goal Progress",
                   style: TextStyle(
@@ -288,9 +291,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: Colors.grey.shade800,
                   ),
                 ),
-                Spacer(),
+                const Spacer(),
                 Text(
-                  "${workoutsThisWeek}/$weeklyGoal",
+                  "$workoutsThisWeek/$weeklyGoal",
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -299,7 +302,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ],
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Stack(
               children: [
                 Container(
@@ -328,7 +331,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ],
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
               goalProgress >= 1
                   ? "🎉 Goal achieved! Keep it up!"
@@ -379,8 +382,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return GridView.builder(
       shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 8,  // Reduced from 12
         mainAxisSpacing: 8,   // Reduced from 12
@@ -393,7 +396,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12), // Reduced from 16
-            boxShadow: [
+            boxShadow: const [
               BoxShadow(
                 color: Colors.black12,
                 blurRadius: 6, // Reduced from 8
@@ -408,7 +411,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.center, // Changed to center
               children: [
                 Container(
-                  padding: EdgeInsets.all(6), // Reduced from 8
+                  padding: const EdgeInsets.all(6), // Reduced from 8
                   decoration: BoxDecoration(
                     color: stat['color'] as Color? ?? _primaryColor,
                     shape: BoxShape.circle,
@@ -416,7 +419,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Icon(stat['icon'] as IconData?,
                       color: Colors.white, size: 16), // Reduced from 20
                 ),
-                SizedBox(height: 6), // Reduced from 12
+                const SizedBox(height: 6), // Reduced from 12
                 Text(
                   stat['value'] as String,
                   style: TextStyle(
@@ -425,7 +428,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: Colors.grey.shade800,
                   ),
                 ),
-                SizedBox(height: 2), // Reduced from 4
+                const SizedBox(height: 2), // Reduced from 4
                 Text.rich(
                   TextSpan(
                     children: [
@@ -461,7 +464,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: Colors.black12,
             blurRadius: 8,
@@ -477,7 +480,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Row(
               children: [
                 Icon(Icons.calendar_today, color: _primaryColor, size: 20),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text(
                   "Weekly Activity",
                   style: TextStyle(
@@ -486,7 +489,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: Colors.grey.shade800,
                   ),
                 ),
-                Spacer(),
+                const Spacer(),
                 Text(
                   "This Week",
                   style: TextStyle(
@@ -496,12 +499,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ],
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             SizedBox(
               height: 180,
               child: ListView(
                 scrollDirection: Axis.horizontal, // Changed to horizontal scroll
-                padding: EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 children: weeklyActivity.asMap().entries.map((entry) {
                   final dayData = entry.value;
                   final String day = dayData['day'] ?? '';
@@ -511,7 +514,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   return Container(
                     width: 50, // Fixed width for each day column
-                    margin: EdgeInsets.symmetric(horizontal: 4),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -545,9 +548,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           )
                               : null,
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Container(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4), // Reduced padding
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), // Reduced padding
                           decoration: BoxDecoration(
                             color: isActive ? _primaryColor : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
@@ -567,7 +570,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 }).toList(),
               ),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -587,8 +590,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                icon: Icon(Icons.calendar_month, size: 20),
-                label: Text("View Full Calendar"),
+                icon: const Icon(Icons.calendar_month, size: 20),
+                label: const Text("View Full Calendar"),
               ),
             ),
           ],
@@ -602,7 +605,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: Colors.black12,
             blurRadius: 8,
@@ -618,7 +621,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Row(
               children: [
                 Icon(Icons.upcoming, color: _primaryColor, size: 20),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text(
                   "Upcoming Workouts",
                   style: TextStyle(
@@ -629,7 +632,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ],
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
 
             if (upcomingWorkouts.isEmpty)
               _emptyStateWidget(
@@ -644,7 +647,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ? List<String>.from(workout['title'])
                       : [];
 
-                  if (exercises.isEmpty) return SizedBox.shrink();
+                  if (exercises.isEmpty) return const SizedBox.shrink();
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -683,9 +686,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                 ),
                               ),
-                              Spacer(),
+                              const Spacer(),
                               Icon(Icons.access_time, size: 16, color: Colors.grey.shade500),
-                              SizedBox(width: 4),
+                              const SizedBox(width: 4),
                               Text(
                                 "45 min",
                                 style: TextStyle(
@@ -695,7 +698,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                             ],
                           ),
-                          SizedBox(height: 12),
+                          const SizedBox(height: 12),
                           ...exercises.map((exercise) => Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Row(
@@ -704,13 +707,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 Container(
                                   width: 6,
                                   height: 6,
-                                  margin: EdgeInsets.only(top: 8),
+                                  margin: const EdgeInsets.only(top: 8),
                                   decoration: BoxDecoration(
                                     color: _primaryColor,
                                     shape: BoxShape.circle,
                                   ),
                                 ),
-                                SizedBox(width: 12),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
                                     exercise,
@@ -724,9 +727,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ],
                             ),
                           )).toList(),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Divider(color: Colors.grey.shade200),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Row(
                             children: [
                               Expanded(
@@ -738,12 +741,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
                                     ),
-                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
                                   ),
-                                  child: Text("Start Workout"),
+                                  child: const Text("Start Workout"),
                                 ),
                               ),
-                              SizedBox(width: 8),
+                              const SizedBox(width: 8),
                               IconButton(
                                 onPressed: () {},
                                 icon: Icon(Icons.more_vert, color: Colors.grey.shade500),
@@ -772,7 +775,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             size: 48,
             color: Colors.grey.shade300,
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Text(
             title,
             style: TextStyle(
@@ -781,7 +784,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               fontWeight: FontWeight.w500,
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
             subtitle,
             style: TextStyle(
@@ -790,7 +793,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             textAlign: TextAlign.center,
           ),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () {
               Navigator.push(
@@ -807,10 +810,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            child: Text("Plan Workout"),
+            child: const Text("Plan Workout"),
           ),
         ],
       ),
     );
   }
 }
+
+// NOTE: You'll need a 'calendar_screen.dart' file with a GymPlannerScreen widget
+// for the navigation to work. Here's a placeholder you can use:
+
+/*
+// In calendar_screen.dart
+import 'package:flutter/material.dart';
+
+class GymPlannerScreen extends StatelessWidget {
+  final int userId;
+  const GymPlannerScreen({super.key, required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Full Calendar")),
+      body: const Center(
+        child: Text("Calendar/Planner Screen"),
+      ),
+    );
+  }
+}
+*/
