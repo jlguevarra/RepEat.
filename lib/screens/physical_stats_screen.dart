@@ -32,7 +32,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   bool isEditing = false;
   int? userId;
 
-  // Add this field to track injury validation
   bool _injuryValid = true;
 
   final List<String> injuryCategories = [
@@ -53,9 +52,8 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     _loadData();
   }
 
-  // Custom Snackbar method - Improved Design
   void _showCustomSnackBar(String message, bool isSuccess) {
-    if (!mounted) return; // Guard against state changes if widget is disposed
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -94,7 +92,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Unsaved Changes'),
-        content: const Text('You have unsaved changes. Are you sure you want to leave?'),
+        content: const Text('You have unsaved injury changes. Are you sure you want to leave?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -165,14 +163,10 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     }
   }
 
+  // MODIFIED: Only checks for changes in injury information
   bool get hasChanges {
-    return currentWeightController.text.trim() != originalCurrentWeight ||
-        targetWeightController.text.trim() != originalTargetWeight ||
-        heightController.text.trim() != originalHeight ||
-        hasInjury != originalHasInjury ||
-        (hasInjury && selectedInjuryCategory != originalInjuryDetails) ||
-        updatedGoal != originalGoal ||
-        (!_injuryValid && hasInjury); // Add this line
+    return hasInjury != originalHasInjury ||
+        (hasInjury && selectedInjuryCategory != originalInjuryDetails);
   }
 
   void _calculateBMI() {
@@ -212,65 +206,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   }
 
   Future<void> _saveData() async {
-    // Validate all fields first
-    if (currentWeightController.text.trim().isEmpty ||
-        targetWeightController.text.trim().isEmpty ||
-        heightController.text.trim().isEmpty) {
-      _showCustomSnackBar('All fields are required.', false);
-      return;
-    }
-
-    // Validate numeric inputs with realistic ranges
-    final currentWeight = double.tryParse(currentWeightController.text.trim());
-    final targetWeight = double.tryParse(targetWeightController.text.trim());
-    final height = double.tryParse(heightController.text.trim());
-
-    if (currentWeight == null || targetWeight == null || height == null) {
-      _showCustomSnackBar('Please enter valid numbers for weight and height.', false);
-      return;
-    }
-
-    // Realistic validation for weight (minimum 10kg, maximum 500kg)
-    if (currentWeight < 10 || currentWeight > 500) {
-      _showCustomSnackBar('Current weight must be between 10kg and 500kg.', false);
-      return;
-    }
-
-    // Realistic validation for target weight (minimum 10kg, maximum 500kg)
-    if (targetWeight < 10 || targetWeight > 500) {
-      _showCustomSnackBar('Target weight must be between 10kg and 500kg.', false);
-      return;
-    }
-
-    // Realistic validation for height (minimum 50cm, maximum 300cm)
-    if (height < 50 || height > 300) {
-      _showCustomSnackBar('Height must be between 50cm and 300cm.', false);
-      return;
-    }
-
-    // Ensure target weight is reasonable compared to current weight
-    if (targetWeight < 10) {
-      _showCustomSnackBar('Target weight must be at least 10kg.', false);
-      return;
-    }
-
-    // Ensure target weight is not significantly lower than current weight
-    if (targetWeight < currentWeight * 0.7) {
-      _showCustomSnackBar('Target weight cannot be less than 70% of current weight.', false);
-      return;
-    }
-
-    // Ensure target weight is not significantly higher than current weight
-    if (targetWeight > currentWeight * 1.5) {
-      _showCustomSnackBar('Target weight cannot be more than 150% of current weight.', false);
-      return;
-    }
-
-    // Ensure current weight is not equal to target weight (they must be different)
-    if (currentWeight == targetWeight) {
-      _showCustomSnackBar('Current weight and target weight must be different.', false);
-      return;
-    }
+    // MODIFIED: Removed validation for weight and height as they are not editable.
 
     // Validate injury selection if injury is present
     if (hasInjury && selectedInjuryCategory == 'None') {
@@ -281,7 +217,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       setState(() => _injuryValid = true);
     }
 
-    // Update BMI before saving
+    // Update BMI before saving (in case it wasn't calculated, although fields are read-only)
     _calculateBMI();
 
     setState(() => isSaving = true);
@@ -306,13 +242,9 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
         _showCustomSnackBar(data['message'] ?? 'Physical stats updated successfully!', true);
         if (mounted) {
           setState(() {
-            originalCurrentWeight = currentWeightController.text.trim();
-            originalTargetWeight = targetWeightController.text.trim();
-            originalHeight = heightController.text.trim();
+            // Update original values to reflect saved state
             originalHasInjury = hasInjury;
             originalInjuryDetails = hasInjury ? selectedInjuryCategory : 'None';
-            originalBodyType = bmiCategory;
-            originalGoal = updatedGoal;
             isEditing = false;
           });
         }
@@ -338,7 +270,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Cancel changes?'),
-        content: const Text('Any unsaved changes will be lost. Are you sure?'),
+        content: const Text('Any unsaved injury changes will be lost. Are you sure?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -354,13 +286,9 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
     if (result == true && mounted) {
       setState(() {
-        currentWeightController.text = originalCurrentWeight;
-        targetWeightController.text = originalTargetWeight;
-        heightController.text = originalHeight;
+        // MODIFIED: Only revert injury information
         hasInjury = originalHasInjury;
         selectedInjuryCategory = originalHasInjury ? originalInjuryDetails : 'None';
-        bmiCategory = originalBodyType;
-        updatedGoal = originalGoal;
         isEditing = false;
       });
     }
@@ -423,7 +351,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                     isEditing = true;
                   });
                 },
-                tooltip: 'Edit',
+                tooltip: 'Edit Injury Info', // MODIFIED: Tooltip text for clarity
               ),
           ],
         ),
@@ -433,7 +361,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Section
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -467,7 +394,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                 ),
                 const SizedBox(height: 30),
 
-                // Weight Section - Improved Design (Card)
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
@@ -514,24 +440,10 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                   const SizedBox(height: 8),
                                   TextFormField(
                                     controller: currentWeightController,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    readOnly: !isEditing,
+                                    // MODIFIED: Always read-only
+                                    readOnly: true,
                                     style: const TextStyle(color: Colors.black87),
-                                    decoration: _inputDecoration().copyWith(
-                                      hintText: isEditing ? 'e.g., 70' : null,
-                                    ),
-                                    onChanged: (value) {
-                                      if (isEditing) _calculateBMI();
-                                    },
-                                    validator: (value) {
-                                      if (isEditing && (value == null || value.isEmpty)) {
-                                        return 'Required';
-                                      }
-                                      if (isEditing && double.tryParse(value!) == null) {
-                                        return 'Enter a valid number';
-                                      }
-                                      return null;
-                                    },
+                                    decoration: _inputDecoration(),
                                   ),
                                 ],
                               ),
@@ -552,28 +464,10 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                   const SizedBox(height: 8),
                                   TextFormField(
                                     controller: targetWeightController,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    readOnly: !isEditing,
+                                    // MODIFIED: Always read-only
+                                    readOnly: true,
                                     style: const TextStyle(color: Colors.black87),
-                                    decoration: _inputDecoration().copyWith(
-                                      hintText: isEditing ? 'e.g., 75' : null,
-                                    ),
-                                    onChanged: (value) {
-                                      if (isEditing) {
-                                        _calculateBMI();
-                                        // Force rebuild to update save button state
-                                        if (mounted) setState(() {});
-                                      }
-                                    },
-                                    validator: (value) {
-                                      if (isEditing && (value == null || value.isEmpty)) {
-                                        return 'Required';
-                                      }
-                                      if (isEditing && double.tryParse(value!) == null) {
-                                        return 'Enter a valid number';
-                                      }
-                                      return null;
-                                    },
+                                    decoration: _inputDecoration(),
                                   ),
                                 ],
                               ),
@@ -586,7 +480,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Height & BMI Section - Improved Design (Card)
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
@@ -633,24 +526,10 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                   const SizedBox(height: 8),
                                   TextFormField(
                                     controller: heightController,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    readOnly: !isEditing,
+                                    // MODIFIED: Always read-only
+                                    readOnly: true,
                                     style: const TextStyle(color: Colors.black87),
-                                    decoration: _inputDecoration().copyWith(
-                                      hintText: isEditing ? 'e.g., 175' : null,
-                                    ),
-                                    onChanged: (value) {
-                                      if (isEditing) _calculateBMI();
-                                    },
-                                    validator: (value) {
-                                      if (isEditing && (value == null || value.isEmpty)) {
-                                        return 'Required';
-                                      }
-                                      if (isEditing && double.tryParse(value!) == null) {
-                                        return 'Enter a valid number';
-                                      }
-                                      return null;
-                                    },
+                                    decoration: _inputDecoration(),
                                   ),
                                 ],
                               ),
@@ -676,12 +555,14 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(color: Colors.grey.shade300),
                                     ),
-                                    child: Text(
-                                      bmiCategory,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
+                                    child: Center(
+                                      child: Text(
+                                        bmiCategory,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -696,7 +577,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Injury Section - Improved Design (Card)
+                // Injury Section - This remains editable
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
@@ -763,7 +644,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                               hasInjury = val;
                               if (!hasInjury) {
                                 selectedInjuryCategory = 'None';
-                                setState(() => _injuryValid = true); // Reset validation when injury is turned off
+                                setState(() => _injuryValid = true);
                               }
                             });
                           }
@@ -784,24 +665,32 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                               if (val != null) {
                                 setState(() {
                                   selectedInjuryCategory = val;
-                                  _injuryValid = true; // Mark as valid when selection is made
+                                  _injuryValid = true;
                                 });
                               }
                             }
                                 : null,
-                            decoration: _inputDecoration(),
+                            decoration: _inputDecoration().copyWith(
+                                errorBorder: _injuryValid ? null : OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Colors.red, width: 2),
+                                )
+                            ),
                             validator: (value) =>
-                            hasInjury && (value == null || value.isEmpty)
+                            hasInjury && (value == null || value == 'None')
                                 ? 'Please select an injury'
                                 : null,
                           ),
                         ] else if (hasInjury && !isEditing) ...[
                           const SizedBox(height: 8),
-                          Text(
-                            "Injury Details: ${selectedInjuryCategory.isNotEmpty ? selectedInjuryCategory : 'None'}",
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Colors.black87,
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                            child: Text(
+                              "Injury Details: ${selectedInjuryCategory.isNotEmpty ? selectedInjuryCategory : 'None'}",
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.black87,
+                              ),
                             ),
                           ),
                         ],
@@ -812,7 +701,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
                 const SizedBox(height: 30),
 
-                // Save Button (only visible when editing)
                 if (isEditing)
                   Center(
                     child: SizedBox(
@@ -855,7 +743,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     );
   }
 
-  // Get color based on BMI category
   Color _getBMIColor(String category) {
     switch (category) {
       case 'Underweight':
@@ -871,7 +758,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     }
   }
 
-  // Improved Input Decoration
   InputDecoration _inputDecoration() {
     return InputDecoration(
       filled: true,
