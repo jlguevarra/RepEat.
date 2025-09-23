@@ -25,7 +25,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   String? apiError;
 
   static const String openRouterApiKey =
-      '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';
+      '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';
 
   @override
   void initState() {
@@ -249,6 +249,14 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          // MODIFIED: Added regenerate button, which only shows if a plan exists
+          if (mealPlan != null)
+            IconButton(
+              icon: const Icon(Icons.refresh, size: 28),
+              // Disable button while generating to prevent multiple requests
+              onPressed: isGeneratingMeal ? null : generateMealPlan,
+              tooltip: 'Regenerate Plan',
+            ),
           IconButton(
             icon: const Icon(Icons.favorite_border, size: 28),
             onPressed: () {
