@@ -123,7 +123,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
-  // NEW: Function to get completed exercises from the database
   Future<void> _fetchCompletedExercises() async {
     final String planDay = 'Week ${currentWeekIndex + 1} - Day ${currentDayIndex + 1}';
     try {
@@ -166,7 +165,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             currentWeekIndex = data["currentWeekIndex"] ?? 0;
             currentDayIndex = data["currentDayIndex"] ?? 0;
           });
-          // MODIFIED: Fetch completion status after loading the plan
           await _fetchCompletedExercises();
         } else {
           setState(() => errorMessage = data["message"]);
@@ -220,7 +218,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       );
       await _loadWorkoutPlan();
     } catch (e) {
-      print("Error updating progress: $e");
+      debugPrint("Error updating progress: $e");
     }
   }
 
@@ -340,11 +338,16 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                           elevation: 1,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           child: ExpansionTile(
+                            // ==================== MODIFIED SECTION START ====================
                             title: Row(children: [
                               Text(dayName, style: TextStyle(fontWeight: FontWeight.w600, color: isLocked ? Colors.grey : Colors.grey[800])),
                               const SizedBox(width: 8),
-                              Icon(isRestDay ? Icons.hotel : isLocked ? Icons.lock : Icons.fitness_center, color: isRestDay ? Colors.green[600] : isLocked ? Colors.grey : Colors.blue[600], size: 20)
+                              Icon(isRestDay ? Icons.hotel : isLocked ? Icons.lock : Icons.fitness_center, color: isRestDay ? Colors.green[600] : isLocked ? Colors.grey : Colors.blue[600], size: 20),
+                              const Spacer(), // Pushes the new icon to the right
+                              if (isPastDay)
+                                const Icon(Icons.check_circle, color: Colors.green, size: 20),
                             ]),
+                            // ===================== MODIFIED SECTION END =====================
                             children: [
                               if (isRestDay && isToday)
                                 Padding(
@@ -375,7 +378,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           IconButton(
-                                            icon: Icon(Icons.info_outline, color: Colors.blueAccent),
+                                            icon: const Icon(Icons.info_outline, color: Colors.blueAccent),
                                             tooltip: "Show Instructions",
                                             onPressed: () => _showExerciseInfoDialog(exercise),
                                           ),

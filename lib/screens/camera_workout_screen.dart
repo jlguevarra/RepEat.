@@ -12,7 +12,6 @@ import 'package:permission_handler/permission_handler.dart';
 // Enum to categorize the type of motion for different exercises.
 enum MotionType {
   unclassified,
-  elbowFlexion,       // Curls, Triceps Extensions
   squat,              // Squats, Lunges, Step-ups
   hipHinge,           // Deadlifts
   horizontalPress,    // Bench Press, Flyes
@@ -29,6 +28,9 @@ enum MotionType {
   tricepsExtension,   // Triceps Extensions
   lateralRaise,       // Reverse Flyes
 }
+
+// State machine for tracking the phase of a repetition.
+enum RepState { starting, down, up }
 
 class CameraWorkoutScreen extends StatefulWidget {
   final int userId;
@@ -52,7 +54,8 @@ class CameraWorkoutScreen extends StatefulWidget {
   State<CameraWorkoutScreen> createState() => _CameraWorkoutScreenState();
 }
 
-class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
+// Added WidgetsBindingObserver to handle app lifecycle changes.
+class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsBindingObserver {
   // General State Variables
   CameraController? _cameraController;
   bool _isInitialized = false;
@@ -60,12 +63,13 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   int _currentSet = 1;
   bool _workoutCompleted = false;
   int _durationSeconds = 0;
-  Timer? _workoutTimer;
+  Timer? _masterTimer;
   bool _isRestPeriod = false;
   int _restSeconds = 0;
   Timer? _restTimer;
   bool _showSuccessAnimation = false;
   double _caloriesBurned = 0.0;
+  bool _isSaving = false;
 
   // Pose Detection Variables
   late PoseDetector _poseDetector;
@@ -73,34 +77,48 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   DateTime? _lastRepTime;
   String _formStatus = "Position yourself in frame";
   Color _formStatusColor = Colors.white;
+  bool _isPoseVisible = false;
 
   // Rep state variables
-  bool _isUpPhase = false;
-  bool _isDownPhase = true;
-  bool _isFormCorrectForCurrentRep = true;
+  RepState _repState = RepState.starting;
   double _previousAngle = 0.0;
-  double _previousWristY = 0.0;
-  double _previousElbowY = 0.0;
-  double _previousShoulderY = 0.0;
-  double _previousHeelY = 0.0;
-  int _consecutiveGoodFrames = 0;
+  double _previousVerticalPosition = 0.0;
 
   // Constants for Calorie Calculation
-  // UPDATED: Now a state variable with a default, fetched from API.
   double _userWeightKg = 70.0;
-  // Average MET value for general dumbbell/resistance training
   final double _metValue = 4.0;
 
   @override
   void initState() {
     super.initState();
-    _fetchUserWeight(); // NEW: Fetch weight when screen loads
+    WidgetsBinding.instance.addObserver(this); // Register the lifecycle observer.
+    _fetchUserWeight();
     _initializeDetectors();
     _initializeCamera();
     _showExerciseInstructions();
   }
 
-  // NEW: Function to fetch user's weight from your PHP API
+  // Handles app lifecycle state changes to prevent camera freezes.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final CameraController? cameraController = _cameraController;
+
+    if (cameraController == null || !cameraController.value.isInitialized) {
+      return;
+    }
+
+    if (state == AppLifecycleState.inactive) {
+      cameraController.dispose();
+      if (mounted) {
+        setState(() {
+          _isInitialized = false;
+        });
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      _initializeCamera();
+    }
+  }
+
   Future<void> _fetchUserWeight() async {
     try {
       final uri = Uri.parse('http://192.168.100.79/repEatApi/get_profile.php?user_id=${widget.userId}');
@@ -110,12 +128,8 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         final data = json.decode(response.body);
         if (data['success'] == true && data['data']['current_weight'] != null) {
           final weight = double.tryParse(data['data']['current_weight'].toString());
-          if (weight != null && weight > 0) {
-            if (mounted) {
-              setState(() {
-                _userWeightKg = weight;
-              });
-            }
+          if (weight != null && weight > 0 && mounted) {
+            setState(() => _userWeightKg = weight);
           }
         }
       }
@@ -161,11 +175,13 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     try {
       final cameras = await availableCameras();
       final camera = cameras.firstWhere((cam) => cam.lensDirection == CameraLensDirection.front, orElse: () => cameras.first);
+
       _cameraController = CameraController(camera, ResolutionPreset.medium, enableAudio: false);
+
       await _cameraController!.initialize();
       if (mounted) {
         setState(() => _isInitialized = true);
-        _startWorkoutTimer();
+        _startMasterTimer();
         _startPoseDetection();
       }
     } catch (e) {
@@ -173,13 +189,12 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     }
   }
 
-  void _startWorkoutTimer() {
-    _workoutTimer?.cancel();
-    _workoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!_workoutCompleted && !_isRestPeriod && mounted) {
+  void _startMasterTimer() {
+    _masterTimer?.cancel();
+    _masterTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_isPoseVisible && !_isRestPeriod && !_workoutCompleted && mounted) {
         setState(() {
           _durationSeconds++;
-          // Calories are now calculated with fetched user weight
           final caloriesPerSecond = (_metValue * 3.5 * _userWeightKg) / (200 * 60);
           _caloriesBurned += caloriesPerSecond;
         });
@@ -195,15 +210,23 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         setState(() => _restSeconds--);
       } else {
         timer.cancel();
-        if (mounted) setState(() => _isRestPeriod = false);
       }
     });
   }
 
+  void _startNextSet() {
+    setState(() {
+      _isRestPeriod = false;
+      _repState = RepState.starting;
+      _formStatus = "Begin next set!";
+      _formStatusColor = Colors.white;
+    });
+  }
+
   void _startPoseDetection() {
-    if (_cameraController == null) return;
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
     _cameraController!.startImageStream((CameraImage image) {
-      if (_isDetecting || _workoutCompleted || _isRestPeriod || !mounted) return;
+      if (_isDetecting || _workoutCompleted || !mounted) return;
       _isDetecting = true;
       _processCameraImage(image);
     });
@@ -213,14 +236,19 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     try {
       final inputImage = _convertCameraImage(image);
       if (inputImage == null) {
-        if (mounted) _isDetecting = false;
+        if (mounted) {
+          _isDetecting = false;
+          setState(() => _isPoseVisible = false);
+        }
         return;
       }
       final poses = await _poseDetector.processImage(inputImage);
       if (poses.isNotEmpty && mounted) {
-        _analyzePose(poses.first);
+        if (!_isPoseVisible) setState(() => _isPoseVisible = true);
+        if (!_isRestPeriod) _analyzePose(poses.first);
       } else if (mounted) {
         setState(() {
+          _isPoseVisible = false;
           _formStatus = "No person detected";
           _formStatusColor = Colors.orange;
         });
@@ -267,37 +295,23 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         _analyzeSquat(pose);
         break;
       case MotionType.hipHinge:
-        _analyzeHipHinge(pose);
+        _analyzeGenericVerticalMovement(pose);
         break;
       case MotionType.horizontalPress:
-        _analyzeBenchPress(pose);
+        _analyzeShoulderPress(pose); // Similar logic
         break;
       case MotionType.verticalPress:
         _analyzeShoulderPress(pose);
         break;
       case MotionType.horizontalPull:
-        _analyzeRows(pose);
-        break;
       case MotionType.shoulderElevation:
-        _analyzeShrugs(pose);
-        break;
       case MotionType.legExtension:
-        _analyzeCalfRaises(pose);
-        break;
       case MotionType.torsoRotation:
-        _analyzeTorsoRotation(pose);
-        break;
       case MotionType.lateralBend:
-        _analyzeSideBends(pose);
-        break;
       case MotionType.coreFlexion:
-        _analyzeSitups(pose);
-        break;
       case MotionType.shoulderArc:
-        _analyzePullovers(pose);
-        break;
       case MotionType.lateralRaise:
-        _analyzeLateralRaises(pose);
+        _analyzeGenericVerticalMovement(pose);
         break;
       default:
         _analyzeGenericMovement(pose);
@@ -305,29 +319,20 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     }
   }
 
-  // --- ANALYZER FUNCTIONS (No changes in this section) ---
   void _analyzeBicepCurl(Pose pose, MotionType motionType) {
     final elbow = pose.landmarks[PoseLandmarkType.leftElbow] ?? pose.landmarks[PoseLandmarkType.rightElbow];
     final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
     final wrist = pose.landmarks[PoseLandmarkType.leftWrist] ?? pose.landmarks[PoseLandmarkType.rightWrist];
     if (shoulder == null || elbow == null || wrist == null) return;
-    final elbowStability = (elbow.x - shoulder.x).abs() < 0.1;
-    if (!elbowStability) {
-      _updateFormStatus("Keep elbows stable", Colors.orange);
-      _isFormCorrectForCurrentRep = false;
-      return;
-    }
+
     final angle = _calculateAngle(shoulder, elbow, wrist);
-    if (angle < 40 && !_isUpPhase && _previousAngle > 60) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    } else if (angle > 140 && !_isDownPhase && _previousAngle < 120) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
+    if (angle < 60 && _repState == RepState.starting) {
+      _updateFormStatus("Good form!", Colors.green);
+      setState(() => _repState = RepState.up);
+    } else if (angle > 140 && _repState == RepState.up) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
     }
-    _previousAngle = angle;
   }
 
   void _analyzeTricepsExtension(Pose pose) {
@@ -335,85 +340,31 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
     final wrist = pose.landmarks[PoseLandmarkType.leftWrist] ?? pose.landmarks[PoseLandmarkType.rightWrist];
     if (shoulder == null || elbow == null || wrist == null) return;
-    if (elbow.y > shoulder.y) {
-      _updateFormStatus("Keep elbow up", Colors.orange);
-      _isFormCorrectForCurrentRep = false;
-      return;
-    }
+
     final angle = _calculateAngle(shoulder, elbow, wrist);
-    if (angle > 160 && !_isDownPhase && _previousAngle < 140) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
-    } else if (angle < 90 && !_isUpPhase && _previousAngle > 110) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
+    if (angle > 160 && _repState == RepState.down) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    } else if (angle < 90 && _repState == RepState.starting) {
+      _updateFormStatus("Good Form!", Colors.green);
+      setState(() => _repState = RepState.down);
     }
-    _previousAngle = angle;
   }
 
   void _analyzeSquat(Pose pose) {
     final hip = pose.landmarks[PoseLandmarkType.leftHip] ?? pose.landmarks[PoseLandmarkType.rightHip];
     final knee = pose.landmarks[PoseLandmarkType.leftKnee] ?? pose.landmarks[PoseLandmarkType.rightKnee];
     final ankle = pose.landmarks[PoseLandmarkType.leftAnkle] ?? pose.landmarks[PoseLandmarkType.rightAnkle];
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    if (hip == null || knee == null || ankle == null || shoulder == null) return;
+    if (hip == null || knee == null || ankle == null) return;
+
     final kneeAngle = _calculateAngle(hip, knee, ankle);
-    final backAngle = _calculateAngle(shoulder, hip, knee);
-    if (backAngle < 160) {
-      _updateFormStatus("Keep back straight", Colors.orange);
-      _isFormCorrectForCurrentRep = false;
+    if (kneeAngle < 100 && _repState == RepState.starting) {
+      _updateFormStatus("Go deeper!", Colors.orange);
+      setState(() => _repState = RepState.down);
+    } else if (kneeAngle > 160 && _repState == RepState.down) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
     }
-    if (kneeAngle > 160 && !_isDownPhase && _previousAngle < 140) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
-    } else if (kneeAngle < 100 && !_isUpPhase && _previousAngle > 120) {
-      if (backAngle >= 160) {
-        _isUpPhase = true;
-        _isDownPhase = false;
-        _isFormCorrectForCurrentRep = true;
-      }
-    }
-    _previousAngle = kneeAngle;
-  }
-
-  void _analyzeHipHinge(Pose pose) {
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    final hip = pose.landmarks[PoseLandmarkType.leftHip] ?? pose.landmarks[PoseLandmarkType.rightHip];
-    final knee = pose.landmarks[PoseLandmarkType.leftKnee] ?? pose.landmarks[PoseLandmarkType.rightKnee];
-    if (shoulder == null || hip == null || knee == null) return;
-    final hipAngle = _calculateAngle(shoulder, hip, knee);
-    if (hipAngle > 160 && !_isDownPhase) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
-    } else if (hipAngle < 90 && !_isUpPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    }
-  }
-
-  void _analyzeBenchPress(Pose pose) {
-    final elbow = pose.landmarks[PoseLandmarkType.leftElbow] ?? pose.landmarks[PoseLandmarkType.rightElbow];
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    final wrist = pose.landmarks[PoseLandmarkType.leftWrist] ?? pose.landmarks[PoseLandmarkType.rightWrist];
-    final hip = pose.landmarks[PoseLandmarkType.leftHip] ?? pose.landmarks[PoseLandmarkType.rightHip];
-    final knee = pose.landmarks[PoseLandmarkType.leftKnee] ?? pose.landmarks[PoseLandmarkType.rightKnee];
-    if (shoulder == null || elbow == null || wrist == null || hip == null || knee == null) return;
-    final angle = _calculateAngle(shoulder, elbow, wrist);
-    if (angle < 90 && !_isDownPhase) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
-    } else if (angle > 160 && !_isUpPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    }
-    _previousAngle = angle;
   }
 
   void _analyzeShoulderPress(Pose pose) {
@@ -421,165 +372,52 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
     final wrist = pose.landmarks[PoseLandmarkType.leftWrist] ?? pose.landmarks[PoseLandmarkType.rightWrist];
     if (shoulder == null || elbow == null || wrist == null) return;
+
     final angle = _calculateAngle(shoulder, elbow, wrist);
-    if (angle < 80 && !_isDownPhase) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
-    } else if (angle > 160 && !_isUpPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    }
-    _previousAngle = angle;
-  }
-
-  void _analyzeRows(Pose pose) {
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    final elbow = pose.landmarks[PoseLandmarkType.leftElbow] ?? pose.landmarks[PoseLandmarkType.rightElbow];
-    final wrist = pose.landmarks[PoseLandmarkType.leftWrist] ?? pose.landmarks[PoseLandmarkType.rightWrist];
-    final hip = pose.landmarks[PoseLandmarkType.leftHip] ?? pose.landmarks[PoseLandmarkType.rightHip];
-    final knee = pose.landmarks[PoseLandmarkType.leftKnee] ?? pose.landmarks[PoseLandmarkType.rightKnee];
-    if (shoulder == null || elbow == null || wrist == null || hip == null || knee == null) return;
-    if (wrist.y < hip.y && !_isUpPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    } else if (wrist.y > hip.y + 0.1 && !_isDownPhase) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
-    }
-    _previousWristY = wrist.y;
-  }
-
-  void _analyzeShrugs(Pose pose) {
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    if (shoulder == null) return;
-    if (shoulder.y < _previousShoulderY - 0.05 && !_isUpPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    } else if (shoulder.y > _previousShoulderY && !_isDownPhase) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
-    }
-    _previousShoulderY = shoulder.y;
-  }
-
-  void _analyzeCalfRaises(Pose pose) {
-    final heel = pose.landmarks[PoseLandmarkType.leftHeel] ?? pose.landmarks[PoseLandmarkType.rightHeel];
-    if (heel == null) return;
-    if (heel.y < _previousHeelY - 0.05 && !_isUpPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    } else if (heel.y > _previousHeelY && !_isDownPhase) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
-    }
-    _previousHeelY = heel.y;
-  }
-
-  void _analyzeTorsoRotation(Pose pose) {
-    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
-    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
-    if (leftShoulder == null || rightShoulder == null) return;
-    if (leftShoulder.x < rightShoulder.x - 0.1 && !_isUpPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    } else if (leftShoulder.x > rightShoulder.x && !_isDownPhase) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
+    if (angle > 160 && _repState == RepState.down) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    } else if (angle < 80 && _repState == RepState.starting) {
+      _updateFormStatus("Good form!", Colors.green);
+      setState(() => _repState = RepState.down);
     }
   }
 
-  void _analyzeSideBends(Pose pose) {
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    final hip = pose.landmarks[PoseLandmarkType.leftHip] ?? pose.landmarks[PoseLandmarkType.rightHip];
-    if (shoulder == null || hip == null) return;
-    if ((shoulder.x - hip.x).abs() > 0.1 && !_isUpPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    } else if ((shoulder.x - hip.x).abs() < 0.05 && !_isDownPhase) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
-    }
-  }
+  void _analyzeGenericVerticalMovement(Pose pose) {
+    final head = pose.landmarks[PoseLandmarkType.nose];
+    final ankle = pose.landmarks[PoseLandmarkType.leftAnkle] ?? pose.landmarks[PoseLandmarkType.rightAnkle];
+    if (head == null || ankle == null) return;
 
-  void _analyzeSitups(Pose pose) {
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    final hip = pose.landmarks[PoseLandmarkType.leftHip] ?? pose.landmarks[PoseLandmarkType.rightHip];
-    final knee = pose.landmarks[PoseLandmarkType.leftKnee] ?? pose.landmarks[PoseLandmarkType.rightKnee];
-    if (shoulder == null || hip == null || knee == null) return;
-    final angle = _calculateAngle(shoulder, hip, knee);
-    if (angle < 90 && !_isUpPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    } else if (angle > 160 && !_isDownPhase) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
+    double verticalPosition = (head.y + ankle.y) / 2;
+    if (_repState == RepState.starting) {
+      setState(() {
+        _repState = RepState.down;
+        _previousVerticalPosition = verticalPosition;
+      });
+    } else if (verticalPosition < _previousVerticalPosition - 10 && _repState == RepState.down) {
+      setState(() {
+        _repState = RepState.up;
+        _previousVerticalPosition = verticalPosition;
+      });
+    } else if (verticalPosition > _previousVerticalPosition + 10 && _repState == RepState.up) {
+      _countRep();
+      setState(() {
+        _repState = RepState.down;
+        _previousVerticalPosition = verticalPosition;
+      });
     }
-  }
-
-  void _analyzePullovers(Pose pose) {
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    final elbow = pose.landmarks[PoseLandmarkType.leftElbow] ?? pose.landmarks[PoseLandmarkType.rightElbow];
-    final hip = pose.landmarks[PoseLandmarkType.leftHip] ?? pose.landmarks[PoseLandmarkType.rightHip];
-    if (shoulder == null || elbow == null || hip == null) return;
-    final angle = _calculateAngle(elbow, shoulder, hip);
-    if (angle > 160 && !_isUpPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    } else if (angle < 90 && !_isDownPhase) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
-    }
-  }
-
-  void _analyzeLateralRaises(Pose pose) {
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    final elbow = pose.landmarks[PoseLandmarkType.leftElbow] ?? pose.landmarks[PoseLandmarkType.rightElbow];
-    if (shoulder == null || elbow == null) return;
-    if (elbow.y < shoulder.y && !_isUpPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      _isFormCorrectForCurrentRep = true;
-    } else if (elbow.y > shoulder.y && !_isDownPhase) {
-      if (_isFormCorrectForCurrentRep) _countRep();
-      _isDownPhase = true;
-      _isUpPhase = false;
-    }
-    _previousElbowY = elbow.y;
   }
 
   void _analyzeGenericMovement(Pose pose) {
-    _isFormCorrectForCurrentRep = true;
-    if (_isDownPhase) {
-      _isUpPhase = true;
-      _isDownPhase = false;
-      if (_isFormCorrectForCurrentRep) _countRep();
-    } else {
-      _isUpPhase = false;
-      _isDownPhase = true;
-    }
+    _updateFormStatus("Analysis not implemented.", Colors.red);
   }
 
-  // --- Core Logic ---
   void _countRep() {
-    if (_workoutCompleted || _isRestPeriod) return;
+    if (_workoutCompleted || _isRestPeriod || _repCount >= widget.reps) return;
+
     final now = DateTime.now();
-    if (_lastRepTime != null && now.difference(_lastRepTime!).inMilliseconds < 1000) return;
+    if (_lastRepTime != null && now.difference(_lastRepTime!).inMilliseconds < 500) return;
+
     if (mounted) {
       setState(() {
         _repCount++;
@@ -604,30 +442,38 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   }
 
   void _startRestPeriod() {
-    _isUpPhase = false;
-    _isDownPhase = true;
-    _isFormCorrectForCurrentRep = true;
+    _repState = RepState.starting;
     setState(() {
       _isRestPeriod = true;
       _currentSet++;
       _repCount = 0;
+      _formStatus = "Set completed! Rest period";
+      _formStatusColor = Colors.yellow;
     });
-    _updateFormStatus("Set completed! Rest period", Colors.yellow);
     _startRestTimer();
   }
 
   void _completeWorkout() {
+    if (_isSaving) return;
+    _isSaving = true;
+
     if (mounted) setState(() => _showSuccessAnimation = true);
-    _workoutTimer?.cancel();
+    _masterTimer?.cancel();
     _restTimer?.cancel();
     if (widget.onExerciseCompleted != null) widget.onExerciseCompleted!(true, widget.exercise);
-    _saveWorkoutData();
+    _saveWorkoutData(isFullWorkout: true);
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) Navigator.of(context).pop();
     });
   }
 
-  Future<void> _saveWorkoutData() async {
+  Future<void> _saveWorkoutData({bool isFullWorkout = false}) async {
+    int totalCompletedReps = isFullWorkout
+        ? widget.reps * widget.sets
+        : (_currentSet - 1) * widget.reps + _repCount;
+
+    if (totalCompletedReps == 0) return;
+
     try {
       await http.post(
         Uri.parse('http://192.168.100.79/repEatApi/save_workout_session.php'),
@@ -635,7 +481,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
         body: jsonEncode({
           'user_id': widget.userId,
           'exercise': widget.exercise,
-          'completed_reps': widget.reps * widget.sets,
+          'completed_reps': totalCompletedReps,
           'target_reps': widget.reps * widget.sets,
           'duration_seconds': _durationSeconds,
           'date': DateTime.now().toIso8601String(),
@@ -646,6 +492,32 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     } catch (e) {
       debugPrint("Could not save workout data: $e");
     }
+  }
+
+  // MODIFIED: This dialog now shows "Continue" and "Discard" options.
+  Future<bool> _showExitConfirmationDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('End Workout?'),
+        content: const Text('Your progress will be discarded if you exit.'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false), // Returns false to onWillPop, stays on screen
+            child: const Text('Continue'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () {
+              if (mounted) Navigator.of(context).pop(true); // Returns true to onWillPop, exits screen
+            },
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   void _updateFormStatus(String text, Color color) {
@@ -663,24 +535,14 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
     final sensorOrientation = camera.sensorOrientation;
     InputImageRotation rotation;
     switch (sensorOrientation) {
-      case 0:
-        rotation = InputImageRotation.rotation0deg;
-        break;
-      case 90:
-        rotation = InputImageRotation.rotation90deg;
-        break;
-      case 180:
-        rotation = InputImageRotation.rotation180deg;
-        break;
-      case 270:
-        rotation = InputImageRotation.rotation270deg;
-        break;
-      default:
-        rotation = InputImageRotation.rotation0deg;
+      case 0: rotation = InputImageRotation.rotation0deg; break;
+      case 90: rotation = InputImageRotation.rotation90deg; break;
+      case 180: rotation = InputImageRotation.rotation180deg; break;
+      case 270: rotation = InputImageRotation.rotation270deg; break;
+      default: rotation = InputImageRotation.rotation0deg;
     }
     final format = InputImageFormatValue.fromRawValue(image.format.raw) ?? InputImageFormat.nv21;
     final allBytes = image.planes.fold<List<int>>(<int>[], (p, e) => p..addAll(e.bytes));
-    // FIXED: Corrected UintList to Uint8List
     final bytes = Uint8List.fromList(allBytes);
     final metadata = InputImageMetadata(
         size: Size(image.width.toDouble(), image.height.toDouble()),
@@ -707,62 +569,64 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
       _restSeconds = 0;
       _caloriesBurned = 0.0;
       _isRestPeriod = false;
-      _isUpPhase = false;
-      _isDownPhase = true;
-      _isFormCorrectForCurrentRep = true;
+      _repState = RepState.starting;
       _formStatus = "Workout restarted!";
       _formStatusColor = Colors.white;
       _previousAngle = 0.0;
-      _consecutiveGoodFrames = 0;
+      _previousVerticalPosition = 0.0;
+      _isSaving = false;
     });
-    _startWorkoutTimer();
+    _startMasterTimer();
   }
 
   @override
   void dispose() {
-    _cameraController?.stopImageStream().catchError((e) => debugPrint("Error: $e"));
+    WidgetsBinding.instance.removeObserver(this); // Unregister the lifecycle observer.
     _cameraController?.dispose();
     _poseDetector.close();
-    _workoutTimer?.cancel();
+    _masterTimer?.cancel();
     _restTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.exercise),
-        backgroundColor: Colors.deepPurple,
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _restartWorkout)],
-      ),
-      body: _isInitialized && _cameraController != null && _cameraController!.value.isInitialized
-          ? Stack(
-        fit: StackFit.expand,
-        children: [
-          FittedBox(
-            fit: BoxFit.cover,
-            child: SizedBox(
-              width: _cameraController!.value.previewSize!.height,
-              height: _cameraController!.value.previewSize!.width,
-              child: CameraPreview(_cameraController!),
-            ),
-          ),
-          _buildUIOverlays(),
-          if (_showSuccessAnimation)
-            Container(
-              color: Colors.black.withOpacity(0.7),
-              child: const Center(
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 100),
-                  SizedBox(height: 20),
-                  Text('Workout Completed!', style: TextStyle(color: Colors.white, fontSize: 24)),
-                ]),
+    return WillPopScope(
+      onWillPop: _showExitConfirmationDialog,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.exercise),
+          backgroundColor: Colors.deepPurple,
+          actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _restartWorkout)],
+        ),
+        body: _isInitialized && _cameraController != null && _cameraController!.value.isInitialized
+            ? Stack(
+          fit: StackFit.expand,
+          children: [
+            FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: _cameraController!.value.previewSize!.height,
+                height: _cameraController!.value.previewSize!.width,
+                child: CameraPreview(_cameraController!),
               ),
             ),
-        ],
-      )
-          : const Center(child: CircularProgressIndicator()),
+            _buildUIOverlays(),
+            if (_showSuccessAnimation)
+              Container(
+                color: Colors.black.withOpacity(0.7),
+                child: const Center(
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.check_circle, color: Colors.green, size: 100),
+                    SizedBox(height: 20),
+                    Text('Workout Completed!', style: TextStyle(color: Colors.white, fontSize: 24)),
+                  ]),
+                ),
+              ),
+          ],
+        )
+            : const Center(child: CircularProgressIndicator()),
+      ),
     );
   }
 
@@ -780,36 +644,27 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
               spacing: 16.0,
               runSpacing: 8.0,
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.timer, color: Colors.white, size: 20),
-                    const SizedBox(width: 6),
-                    Text('${_durationSeconds ~/ 60}:${(_durationSeconds % 60).toString().padLeft(2, '0')}', style: const TextStyle(color: Colors.white, fontSize: 16)),
-                  ],
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.fitness_center, color: Colors.white, size: 20),
-                    const SizedBox(width: 6),
-                    Text('Set $_currentSet/${widget.sets}', style: const TextStyle(color: Colors.white, fontSize: 16)),
-                  ],
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 20),
-                    const SizedBox(width: 6),
-                    Text('${_caloriesBurned.toStringAsFixed(1)} kcal', style: const TextStyle(color: Colors.white, fontSize: 16)),
-                  ],
-                ),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.timer, color: Colors.white, size: 20),
+                  const SizedBox(width: 6),
+                  Text('${_durationSeconds ~/ 60}:${(_durationSeconds % 60).toString().padLeft(2, '0')}', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                ]),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.fitness_center, color: Colors.white, size: 20),
+                  const SizedBox(width: 6),
+                  Text('Set $_currentSet/${widget.sets}', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                ]),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 20),
+                  const SizedBox(width: 6),
+                  Text('${_caloriesBurned.toStringAsFixed(1)} kcal', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                ]),
                 if (_isRestPeriod)
                   Text('Rest: $_restSeconds s', style: const TextStyle(color: Colors.yellow, fontSize: 16)),
               ],
             ),
           ),
-          if (_formStatus.isNotEmpty)
+          if (_formStatus.isNotEmpty && !_isRestPeriod)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
@@ -827,7 +682,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 20.0),
                   child: ElevatedButton(
-                    onPressed: () => setState(() => _isRestPeriod = false),
+                    onPressed: _startNextSet,
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                     child: const Text('START NEXT SET'),
                   ),
