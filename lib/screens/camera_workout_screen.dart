@@ -103,7 +103,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   // NEW: Function to fetch user's weight from your PHP API
   Future<void> _fetchUserWeight() async {
     try {
-      final uri = Uri.parse('http://192.168.100.78/repEatApi/get_profile.php?user_id=${widget.userId}');
+      final uri = Uri.parse('http://192.168.100.79/repEatApi/get_profile.php?user_id=${widget.userId}');
       final response = await http.get(uri).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -630,7 +630,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   Future<void> _saveWorkoutData() async {
     try {
       await http.post(
-        Uri.parse('http://192.168.100.78/repEatApi/save_workout_session.php'),
+        Uri.parse('http://192.168.100.79/repEatApi/save_workout_session.php'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'user_id': widget.userId,

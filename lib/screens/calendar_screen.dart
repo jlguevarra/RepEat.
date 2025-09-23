@@ -95,7 +95,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
   // Add recommendation loading method
   Future<void> _loadRecommendations() async {
     final response = await http.get(
-        Uri.parse('http://192.168.100.78/repEatApi/get_onboarding_data.php?user_id=${widget.userId}')
+        Uri.parse('http://192.168.100.79/repEatApi/get_onboarding_data.php?user_id=${widget.userId}')
     );
 
     if (response.statusCode == 200) {
@@ -114,7 +114,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse('http://192.168.100.78/repEatApi/get_workouts.php?user_id=${widget.userId}');
+      final url = Uri.parse('http://192.168.100.79/repEatApi/get_workouts.php?user_id=${widget.userId}');
       final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -185,8 +185,8 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
       };
 
       final endpoint = _formMode == 'add'
-          ? 'http://192.168.100.78/repEatApi/save_workout.php'
-          : 'http://192.168.100.78/repEatApi/update_workout.php';
+          ? 'http://192.168.100.79/repEatApi/save_workout.php'
+          : 'http://192.168.100.79/repEatApi/update_workout.php';
 
       final response = await http.post(
         Uri.parse(endpoint),
@@ -218,7 +218,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.78/repEatApi/toggle_workout_completion.php'),
+        Uri.parse('http://192.168.100.79/repEatApi/toggle_workout_completion.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'workout_id': workoutId,
@@ -247,7 +247,7 @@ class _GymPlannerScreenState extends State<GymPlannerScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.78/repEatApi/delete_workout.php'),
+        Uri.parse('http://192.168.100.79/repEatApi/delete_workout.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'workout_id': workoutId}),
       );

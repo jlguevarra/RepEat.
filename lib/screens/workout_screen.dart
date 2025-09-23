@@ -99,7 +99,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     });
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/check_workout_plan.php"),
+        Uri.parse("http://192.168.100.79/repEatApi/check_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
@@ -128,7 +128,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final String planDay = 'Week ${currentWeekIndex + 1} - Day ${currentDayIndex + 1}';
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/get_completed_exercises.php"),
+        Uri.parse("http://192.168.100.79/repEatApi/get_completed_exercises.php"),
         body: jsonEncode({
           "user_id": widget.userId,
           "plan_day": planDay,
@@ -155,7 +155,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     });
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/get_workout_plan.php"),
+        Uri.parse("http://192.168.100.79/repEatApi/get_workout_plan.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
@@ -188,7 +188,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     setState(() => isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/generate_workout.php"),
+        Uri.parse("http://192.168.100.79/repEatApi/generate_workout.php"),
         body: {"user_id": widget.userId.toString()},
       ).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
@@ -211,7 +211,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> _updateProgressOnServer(int newWeekIndex, int newDayIndex) async {
     try {
       await http.post(
-        Uri.parse("http://192.168.100.78/repEatApi/update_workout_progress.php"),
+        Uri.parse("http://192.168.100.79/repEatApi/update_workout_progress.php"),
         body: {
           "user_id": widget.userId.toString(),
           "current_week_index": newWeekIndex.toString(),
