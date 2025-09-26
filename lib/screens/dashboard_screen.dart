@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'calendar_screen.dart'; // Make sure this import path is correct
+import 'notes_calendar_screen.dart'; // MODIFIED: Import the new calendar screen
 
 class DashboardScreen extends StatefulWidget {
   final int userId;
@@ -154,7 +154,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       backgroundColor: _backgroundColor,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        // MODIFICATION: Added TextStyle to the title
         title: const Text(
           "Dashboard",
           style: TextStyle(
@@ -165,7 +164,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: _primaryColor,
         elevation: 0,
         centerTitle: false,
-        // MODIFICATION: Removed the refresh button from the actions list
         actions: const [],
       ),
       body: RefreshIndicator(
@@ -186,7 +184,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _weeklyActivitySection(),
               const SizedBox(height: 20),
               _upcomingWorkoutsSection(),
-              const SizedBox(height: 20), // Added extra spacing at bottom
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -385,9 +383,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        crossAxisSpacing: 8,  // Reduced from 12
-        mainAxisSpacing: 8,   // Reduced from 12
-        childAspectRatio: 1.0, // Reduced from 1.2
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 1.0,
       ),
       itemCount: stats.length,
       itemBuilder: (context, index) {
@@ -395,47 +393,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(12), // Reduced from 16
+            borderRadius: BorderRadius.circular(12),
             boxShadow: const [
               BoxShadow(
                 color: Colors.black12,
-                blurRadius: 6, // Reduced from 8
+                blurRadius: 6,
                 offset: Offset(0, 2),
               ),
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(10), // Reduced from 16
+            padding: const EdgeInsets.all(10),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center, // Changed to center
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(6), // Reduced from 8
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: stat['color'] as Color? ?? _primaryColor,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(stat['icon'] as IconData?,
-                      color: Colors.white, size: 16), // Reduced from 20
+                      color: Colors.white, size: 16),
                 ),
-                const SizedBox(height: 6), // Reduced from 12
+                const SizedBox(height: 6),
                 Text(
                   stat['value'] as String,
                   style: TextStyle(
-                    fontSize: 18, // Reduced from 24
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.grey.shade800,
                   ),
                 ),
-                const SizedBox(height: 2), // Reduced from 4
+                const SizedBox(height: 2),
                 Text.rich(
                   TextSpan(
                     children: [
                       TextSpan(
                         text: stat['title'] as String,
                         style: TextStyle(
-                          fontSize: 10, // Reduced from 12
+                          fontSize: 10,
                           color: Colors.grey.shade600,
                           fontWeight: FontWeight.w500,
                         ),
@@ -443,13 +441,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       TextSpan(
                         text: ' • ${stat['subtitle']}',
                         style: TextStyle(
-                          fontSize: 8, // Reduced from 10
+                          fontSize: 8,
                           color: Colors.grey.shade500,
                         ),
                       ),
                     ],
                   ),
-                  textAlign: TextAlign.center, // Added center alignment
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -503,7 +501,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             SizedBox(
               height: 180,
               child: ListView(
-                scrollDirection: Axis.horizontal, // Changed to horizontal scroll
+                scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 children: weeklyActivity.asMap().entries.map((entry) {
                   final dayData = entry.value;
@@ -513,15 +511,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   final bool isActive = dayData['isActive'] ?? false;
 
                   return Container(
-                    width: 50, // Fixed width for each day column
+                    width: 50,
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        // Activity bars with different heights based on exercise count
                         Container(
                           height: exercises.isEmpty ? 20 : (20 + exercises.length * 15).toDouble(),
-                          width: 12, // Reduced width to prevent overflow
+                          width: 12,
                           decoration: BoxDecoration(
                             gradient: isRestDay
                                 ? null
@@ -540,7 +537,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Text(
                               "R",
                               style: TextStyle(
-                                fontSize: 8, // Smaller font
+                                fontSize: 8,
                                 color: Colors.grey.shade500,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -550,7 +547,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), // Reduced padding
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                           decoration: BoxDecoration(
                             color: isActive ? _primaryColor : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
@@ -558,7 +555,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           child: Text(
                             day,
                             style: TextStyle(
-                              fontSize: 10, // Smaller font
+                              fontSize: 10,
                               color: isActive ? Colors.white : Colors.grey.shade600,
                               fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
                             ),
@@ -578,7 +575,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => GymPlannerScreen(userId: widget.userId),
+                      // MODIFIED: Navigate to the new NotesCalendarScreen
+                      builder: (_) => NotesCalendarScreen(userId: widget.userId),
                     ),
                   );
                 },
@@ -799,7 +797,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => GymPlannerScreen(userId: widget.userId),
+                  // MODIFIED: Navigate to the new NotesCalendarScreen
+                  builder: (_) => NotesCalendarScreen(userId: widget.userId),
                 ),
               );
             },
@@ -817,26 +816,3 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
-
-// NOTE: You'll need a 'calendar_screen.dart' file with a GymPlannerScreen widget
-// for the navigation to work. Here's a placeholder you can use:
-
-/*
-// In calendar_screen.dart
-import 'package:flutter/material.dart';
-
-class GymPlannerScreen extends StatelessWidget {
-  final int userId;
-  const GymPlannerScreen({super.key, required this.userId});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Full Calendar")),
-      body: const Center(
-        child: Text("Calendar/Planner Screen"),
-      ),
-    );
-  }
-}
-*/

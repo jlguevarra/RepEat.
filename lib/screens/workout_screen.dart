@@ -43,8 +43,11 @@ class WorkoutScreen extends StatefulWidget {
 }
 
 class _WorkoutScreenState extends State<WorkoutScreen> {
+  // State variables
   bool isLoading = false;
-  bool checkingPlan = true;
+  bool isCheckingPlan = false;
+  bool isCheckingInjury = true; // Start by checking injury status
+  String? injuryDetails;
   Map<String, dynamic>? workoutPlan;
   String? errorMessage;
   int currentWeekIndex = 0;
@@ -54,7 +57,48 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   @override
   void initState() {
     super.initState();
-    _checkIfUserHasPlan();
+    // The initial action is to check the user's injury status
+    _checkInjuryStatus();
+  }
+
+  /// Fetches the user's profile to check for any listed injuries.
+  Future<void> _checkInjuryStatus() async {
+    setState(() {
+      isCheckingInjury = true;
+      errorMessage = null; // Reset error on new check
+    });
+    try {
+      final response = await http.get(
+        Uri.parse("http://192.168.100.79/repEatApi/get_profile.php?user_id=${widget.userId}"),
+      ).timeout(const Duration(seconds: 10));
+
+      if (mounted) {
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['success'] == true && data['data'] != null) {
+            setState(() {
+              injuryDetails = data['data']['injury_details'];
+            });
+            // If there's no injury, proceed to check for a workout plan
+            if (injuryDetails == 'None') {
+              _checkIfUserHasPlan();
+            }
+          } else {
+            setState(() => errorMessage = data['message'] ?? 'Failed to load profile.');
+          }
+        } else {
+          setState(() => errorMessage = "Server error: ${response.statusCode}");
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => errorMessage = "Connection error. Please check your network.");
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isCheckingInjury = false);
+      }
+    }
   }
 
   void _showExerciseInfoDialog(String exerciseName) {
@@ -94,7 +138,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   Future<void> _checkIfUserHasPlan() async {
     setState(() {
-      checkingPlan = true;
+      isCheckingPlan = true;
       workoutPlan = null;
     });
     try {
@@ -107,17 +151,17 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         if (data["success"] == true && data["has_plan"] == true) {
           _loadWorkoutPlan();
         } else {
-          setState(() => checkingPlan = false);
+          setState(() => isCheckingPlan = false);
         }
       } else {
         setState(() {
-          checkingPlan = false;
+          isCheckingPlan = false;
           errorMessage = "Server error: ${response.statusCode}";
         });
       }
     } catch (e) {
       setState(() {
-        checkingPlan = false;
+        isCheckingPlan = false;
         errorMessage = "Exception: $e";
       });
     }
@@ -177,7 +221,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     } finally {
       setState(() {
         isLoading = false;
-        checkingPlan = false;
+        isCheckingPlan = false;
       });
     }
   }
@@ -338,16 +382,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                           elevation: 1,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           child: ExpansionTile(
-                            // ==================== MODIFIED SECTION START ====================
                             title: Row(children: [
                               Text(dayName, style: TextStyle(fontWeight: FontWeight.w600, color: isLocked ? Colors.grey : Colors.grey[800])),
                               const SizedBox(width: 8),
                               Icon(isRestDay ? Icons.hotel : isLocked ? Icons.lock : Icons.fitness_center, color: isRestDay ? Colors.green[600] : isLocked ? Colors.grey : Colors.blue[600], size: 20),
-                              const Spacer(), // Pushes the new icon to the right
-                              if (isPastDay)
-                                const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                              const Spacer(),
+                              if (isPastDay) const Icon(Icons.check_circle, color: Colors.green, size: 20),
                             ]),
-                            // ===================== MODIFIED SECTION END =====================
                             children: [
                               if (isRestDay && isToday)
                                 Padding(
@@ -361,8 +402,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                 const ListTile(title: Text("Rest and Recovery Day", style: TextStyle(fontStyle: FontStyle.italic)))
                               else if (isLocked || isPastDay)
                                   ListTile(
-                                    title: Text(isPastDay ? "This day is already complete." : "Complete previous days to unlock.",
-                                        style: TextStyle(color: isPastDay ? Colors.green : Colors.red[400], fontStyle: FontStyle.italic)),
+                                    title: Text(isPastDay ? "This day is already complete." : "Complete previous days to unlock.", style: TextStyle(color: isPastDay ? Colors.green : Colors.red[400], fontStyle: FontStyle.italic)),
                                     onTap: isPastDay ? _showWorkoutCompletedDialog : null,
                                   )
                                 else
@@ -370,10 +410,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                     final bool isExerciseCompleted = _completedExercises.contains(exercise);
                                     return ListTile(
                                       leading: Icon(Icons.fitness_center, size: 20, color: Colors.deepPurple[400]),
-                                      title: Text(exercise,
-                                          style: TextStyle(
-                                              decoration: isExerciseCompleted ? TextDecoration.lineThrough : TextDecoration.none,
-                                              color: isExerciseCompleted ? Colors.grey : Colors.grey[800])),
+                                      title: Text(exercise, style: TextStyle(decoration: isExerciseCompleted ? TextDecoration.lineThrough : TextDecoration.none, color: isExerciseCompleted ? Colors.grey : Colors.grey[800])),
                                       trailing: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
@@ -427,6 +464,49 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
 
+  /// A widget to display a prominent warning message if the user has an injury.
+  Widget _buildInjuryWarning() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(30),
+        margin: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.red[50],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.red[200]!),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.healing, color: Colors.red[700], size: 60),
+            const SizedBox(height: 20),
+            Text(
+              "Please Take Care",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.red[800],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 15),
+            Text(
+              "We've noticed you have an injury listed: \n\"$injuryDetails\"\n\nFor your safety, the workout plan and camera features are temporarily disabled.",
+              style: TextStyle(fontSize: 16, color: Colors.red[700]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              "Please update your profile to 'None' once you have fully recovered.",
+              style: TextStyle(fontSize: 14, color: Colors.grey[600], fontStyle: FontStyle.italic),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildInfoColumn(String title, String value) {
     return Column(children: [
       Text(title, style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500)),
@@ -437,29 +517,32 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (checkingPlan) {
-      return Scaffold(
-        appBar: AppBar(backgroundColor: Colors.deepPurple, title: const Text("Workout Plan", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white))),
-        body: const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [CircularProgressIndicator(), SizedBox(height: 16), Text("Checking your workout plan...")])),
-      );
-    }
+    Widget bodyContent;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-          backgroundColor: Colors.deepPurple,
-          title: const Text("Workout Plan", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-          centerTitle: false,
-          elevation: 0),
-      body: isLoading
-          ? Center(
+    // 1. Show loading indicator while checking for injuries
+    if (isCheckingInjury) {
+      bodyContent = const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [CircularProgressIndicator(), SizedBox(height: 16), Text("Checking your profile...")]));
+    }
+    // 2. If an injury is found, display the warning message
+    else if (injuryDetails != null && injuryDetails != 'None') {
+      bodyContent = _buildInjuryWarning();
+    }
+    // 3. Show loading indicator while checking for a workout plan
+    else if (isCheckingPlan) {
+      bodyContent = const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [CircularProgressIndicator(), SizedBox(height: 16), Text("Checking your workout plan...")]));
+    }
+    // 4. Show loading indicator while the plan is being generated
+    else if (isLoading) {
+      bodyContent = Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.deepPurple)),
             const SizedBox(height: 20),
             Text("Creating your personalized plan...", style: TextStyle(fontSize: 18, color: Colors.grey[700], fontWeight: FontWeight.w500))
-          ]))
-          : (workoutPlan == null && errorMessage == null)
-          ? SingleChildScrollView(
+          ]));
+    }
+    // 5. If no plan exists, show the generation screen
+    else if (workoutPlan == null && errorMessage == null) {
+      bodyContent = SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(children: [
             Container(
@@ -521,8 +604,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     ]))),
             const SizedBox(height: 20),
             Text("This will create a personalized 4-week plan that you can follow", style: TextStyle(fontSize: 12, color: Colors.grey[600]), textAlign: TextAlign.center)
-          ]))
-          : Column(children: [
+          ]));
+    }
+    // 6. Otherwise, show the workout plan or an error message
+    else {
+      bodyContent = Column(children: [
         if (errorMessage != null)
           Container(
               width: double.infinity,
@@ -535,7 +621,17 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 Expanded(child: Text(errorMessage!, style: TextStyle(color: Colors.red[700], fontSize: 14)))
               ])),
         if (workoutPlan != null) Expanded(child: _buildWorkoutPlan())
-      ]),
+      ]);
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      appBar: AppBar(
+          backgroundColor: Colors.deepPurple,
+          title: const Text("Workout Plan", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+          centerTitle: false,
+          elevation: 0),
+      body: bodyContent,
     );
   }
 
