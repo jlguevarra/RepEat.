@@ -124,7 +124,6 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
       appBar: AppBar(
         title: const Text('My Calendar'),
         actions: [
-          // MODIFICATION: Added "Go to Today" button
           IconButton(
             icon: const Icon(Icons.today),
             onPressed: () {
@@ -204,7 +203,8 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
   Widget _buildReminderTile(Reminder reminder) {
     return Card(
       child: ListTile(
-        leading: const Icon(Icons.notifications_active, color: Colors.orange),
+        // MODIFICATION: Changed the icon to represent a note
+        leading: Icon(Icons.note_alt_outlined, color: Theme.of(context).primaryColor),
         title: Text(reminder.title, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: reminder.notes.isNotEmpty ? Text(reminder.notes) : null,
         onTap: () => _showReminderModal(reminder: reminder),
@@ -326,11 +326,27 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
     }
   }
 
+  // MODIFICATION: Changed to a modern, floating snackbar with an icon
   void _showSnackbar(String message, {bool isError = false}) {
     if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: isError ? Colors.red : Colors.green,
+      content: Row(
+        children: [
+          Icon(
+            isError ? Icons.error_outline : Icons.check_circle_outline,
+            color: Colors.white,
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(message)),
+        ],
+      ),
+      backgroundColor: isError ? Colors.red.shade600 : Colors.green.shade600,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10.0),
+      ),
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
     ));
   }
 }

@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'notes_calendar_screen.dart'; // MODIFIED: Import the new calendar screen
+import 'notes_calendar_screen.dart';
+import 'workout_screen.dart'; // Import the workout screen
 
 class DashboardScreen extends StatefulWidget {
   final int userId;
@@ -107,9 +108,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           streakDays = data['streakDays'] ?? 0;
           weight = (data['weight'] as num?)?.toDouble() ?? 0.0;
           workoutsThisWeek = data['workoutsThisWeek'] ?? 0;
-          weeklyGoal = data['weeklyGoal'] ?? 5;
-          weeklyActivity = List<Map<String, dynamic>>.from(data['weeklyActivity'] ?? []);
-          upcomingWorkouts = List<Map<String, dynamic>>.from(data['upcomingWorkouts'] ?? []);
+          weeklyGoal = data['weeklyGoal'] ?? 28;
+          weeklyActivity =
+          List<Map<String, dynamic>>.from(data['weeklyActivity'] ?? []);
+          upcomingWorkouts =
+          List<Map<String, dynamic>>.from(data['upcomingWorkouts'] ?? []);
           _isLoading = false;
         });
       } else {
@@ -282,7 +285,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Icon(Icons.flag, color: _primaryColor, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  "Weekly Goal Progress",
+                  "4-Week Plan Progress", // MODIFIED: Title changed here
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -291,7 +294,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  "$workoutsThisWeek/$weeklyGoal",
+                  "$workoutsThisWeek/$weeklyGoal days",
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -314,16 +317,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   tween: Tween<double>(begin: 0, end: goalProgress),
                   duration: const Duration(milliseconds: 1000),
                   curve: Curves.easeOut,
-                  builder: (context, value, _) => Container(
-                    height: 12,
-                    width: MediaQuery.of(context).size.width * value * 0.7,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [_secondaryColor, _accentColor],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
+                  builder: (context, value, _) => FractionallySizedBox(
+                    widthFactor: value,
+                    child: Container(
+                      height: 12,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [_secondaryColor, _accentColor],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      borderRadius: BorderRadius.circular(6),
                     ),
                   ),
                 ),
@@ -332,7 +337,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 8),
             Text(
               goalProgress >= 1
-                  ? "🎉 Goal achieved! Keep it up!"
+                  ? "🎉 Plan complete! Great job!"
                   : "${((goalProgress) * 100).toStringAsFixed(0)}% complete",
               style: TextStyle(
                 fontSize: 12,
@@ -517,7 +522,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         Container(
-                          height: exercises.isEmpty ? 20 : (20 + exercises.length * 15).toDouble(),
+                          height: exercises.isEmpty
+                              ? 20
+                              : (20 + exercises.length * 15).toDouble(),
                           width: 12,
                           decoration: BoxDecoration(
                             gradient: isRestDay
@@ -525,7 +532,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 : LinearGradient(
                               colors: isActive
                                   ? [_secondaryColor, _primaryColor]
-                                  : [Colors.deepPurple.shade300, Colors.deepPurple.shade200],
+                                  : [
+                                Colors.deepPurple.shade300,
+                                Colors.deepPurple.shade200
+                              ],
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                             ),
@@ -547,7 +557,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 4),
                           decoration: BoxDecoration(
                             color: isActive ? _primaryColor : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
@@ -557,7 +568,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             style: TextStyle(
                               fontSize: 10,
                               color: isActive ? Colors.white : Colors.grey.shade600,
-                              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                              fontWeight:
+                              isActive ? FontWeight.bold : FontWeight.normal,
                             ),
                           ),
                         ),
@@ -575,7 +587,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      // MODIFIED: Navigate to the new NotesCalendarScreen
                       builder: (_) => NotesCalendarScreen(userId: widget.userId),
                     ),
                   );
@@ -583,7 +594,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _primaryColor,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  padding:
+                  const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -631,7 +643,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
             const SizedBox(height: 16),
-
             if (upcomingWorkouts.isEmpty)
               _emptyStateWidget(
                 icon: Icons.fitness_center,
@@ -644,8 +655,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   final exercises = workout['title'] is List
                       ? List<String>.from(workout['title'])
                       : [];
+                  final isRestDay = exercises.isNotEmpty && exercises[0] == "It is a rest day";
 
                   if (exercises.isEmpty) return const SizedBox.shrink();
+
+                  if(isRestDay) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                      child: Column(
+                        children: [
+                          Icon(Icons.hotel, size: 48, color: Colors.green[300]),
+                          const SizedBox(height: 16),
+                          Text("Today is a Rest Day", style: TextStyle(color: Colors.grey.shade600, fontSize: 16, fontWeight: FontWeight.w500)),
+                          const SizedBox(height: 8),
+                          Text("Relax, recover, and get ready for your next session!", style: TextStyle(color: Colors.grey.shade500, fontSize: 14), textAlign: TextAlign.center),
+                        ],
+                      ),
+                    );
+                  }
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -669,7 +696,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: _accentColor.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(16),
@@ -684,23 +712,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                 ),
                               ),
-                              const Spacer(),
-                              Icon(Icons.access_time, size: 16, color: Colors.grey.shade500),
-                              const SizedBox(width: 4),
-                              Text(
-                                "45 min",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
                             ],
                           ),
                           const SizedBox(height: 12),
-                          ...exercises.map((exercise) => Padding(
+                          ...exercises
+                              .map((exercise) => Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
                               children: [
                                 Container(
                                   width: 6,
@@ -724,7 +744,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                               ],
                             ),
-                          )).toList(),
+                          ))
+                              .toList(),
                           const SizedBox(height: 8),
                           Divider(color: Colors.grey.shade200),
                           const SizedBox(height: 8),
@@ -732,22 +753,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             children: [
                               Expanded(
                                 child: ElevatedButton(
-                                  onPressed: () {},
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => WorkoutScreen(
+                                            userId: widget.userId),
+                                      ),
+                                    );
+                                  },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: _primaryColor,
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
                                     ),
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 8),
                                   ),
                                   child: const Text("Start Workout"),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                onPressed: () {},
-                                icon: Icon(Icons.more_vert, color: Colors.grey.shade500),
                               ),
                             ],
                           ),
@@ -763,7 +788,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _emptyStateWidget({required IconData icon, required String title, required String subtitle}) {
+  Widget _emptyStateWidget(
+      {required IconData icon,
+        required String title,
+        required String subtitle}) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
@@ -797,7 +825,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  // MODIFIED: Navigate to the new NotesCalendarScreen
                   builder: (_) => NotesCalendarScreen(userId: widget.userId),
                 ),
               );
