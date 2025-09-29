@@ -1,14 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:intl/intl.dart';
 
 class ChatScreen extends StatefulWidget {
   final int userId;
   final Map<String, dynamic>? userData;
-  final String apiKey; // OpenRouter API Key
-  final String apiType; // Should now be 'openrouter'
+  final String apiKey; // This will be your Google Gemini API Key
+  final String apiType; // This should be 'gemini'
 
   const ChatScreen({
     super.key,
@@ -29,20 +28,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   List<Map<String, dynamic>> _chatMessages = [];
   bool isChatLoading = false;
-  bool _sentProfile = false;
 
-  // ✅ Single GPT model (OpenRouter)
-  final String _gptModel = 'openai/gpt-3.5-turbo'; // You can change to gpt-4 or others
+  // MODIFIED: This is the final, correct model name for YOUR account.
+  final String _geminiModel = 'gemini-flash-latest';
 
   late AnimationController _dotsController;
+  GenerativeModel? _model;
+  ChatSession? _chat;
 
   @override
   void initState() {
     super.initState();
     _chatMessages.add({
       'role': 'assistant',
-      'content':
-      'Hello! I\'m your nutrition expert assistant. How can I help you with your meal planning today?',
+      'content': 'Hello! I\'m your nutrition expert assistant. How can I help you?',
       'timestamp': DateTime.now(),
     });
 
@@ -50,6 +49,32 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat();
+
+    _initializeChat();
+  }
+
+  void _initializeChat() {
+    _model = GenerativeModel(
+      model: _geminiModel,
+      apiKey: widget.apiKey,
+      systemInstruction: Content.system(_buildSystemPrompt()),
+    );
+
+    _chat = _model!.startChat();
+  }
+
+  String _buildSystemPrompt() {
+    final profile = widget.userData;
+    if (profile == null) {
+      return 'You are a helpful and friendly nutrition expert for a fitness app called RepEat. Keep responses concise and informative.';
+    }
+    return '''
+You are a helpful and friendly nutrition expert for a fitness app called RepEat.
+Personalize all responses based on this user profile:
+- Goal: ${profile['goal'] ?? 'Not specified'}
+- Diet Preference: ${profile['diet_preference'] ?? 'Not specified'}
+- Allergies: ${profile['allergies']?.isNotEmpty == true ? profile['allergies'] : 'None'}
+''';
   }
 
   int _addAssistantPlaceholder() {
@@ -60,113 +85,33 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         'timestamp': DateTime.now(),
       });
     });
+    _scrollToBottom();
     return _chatMessages.length - 1;
   }
 
-  Future<void> _sendToAIWithStreaming(String message) async {
-    final int assistantIndex = _addAssistantPlaceholder();
+  Future<void> _streamResponseFromGemini(String message) async {
+    final assistantIndex = _addAssistantPlaceholder();
 
     try {
-      await _streamResponseFromOpenRouter(
-        message: message,
-        model: _gptModel,
-        assistantIndex: assistantIndex,
-      );
-    } catch (e) {
-      setState(() {
-        _chatMessages[assistantIndex]['content'] =
-        'The GPT model is currently unavailable. Please try again later.';
-      });
-    }
-  }
+      final stream = _chat!.sendMessageStream(Content.text(message));
+      StringBuffer responseBuffer = StringBuffer();
 
-  Future<void> _streamResponseFromOpenRouter({
-    required String message,
-    required String model,
-    required int assistantIndex,
-  }) async {
-    const String endpoint = 'https://openrouter.ai/api/v1/chat/completions';
-
-    final headers = {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ${widget.apiKey}',
-      'HTTP-Referer': 'https://your-app.com',
-      'X-Title': 'RepEat Nutrition Assistant',
-    };
-
-    final body = {
-      'model': model,
-      'stream': true,
-      'messages': [
-        {
-          'role': 'system',
-          'content':
-          'You are a helpful and friendly nutrition expert assistant for a fitness app called RepEat.'
-        },
-        {
-          'role': 'user',
-          'content': _sentProfile ? message : _buildChatPrompt(message)
-        }
-      ],
-      'temperature': 0.7,
-      'max_tokens': 1024,
-    };
-
-    final request = http.Request('POST', Uri.parse(endpoint))
-      ..headers.addAll(headers)
-      ..body = jsonEncode(body);
-
-    final streamed = await request.send();
-
-    if (streamed.statusCode != 200) {
-      throw Exception('Streaming failed: ${streamed.statusCode}');
-    }
-
-    _sentProfile = true;
-
-    final stream = streamed.stream.transform(utf8.decoder);
-
-    await for (final chunk in stream) {
-      for (var rawLine in chunk.split('\n')) {
-        final line = rawLine.trim();
-        if (line.isEmpty) continue;
-        if (!line.startsWith('data:')) continue;
-
-        final data = line.substring(5).trim();
-        if (data == '[DONE]') return;
-
-        try {
-          final Map<String, dynamic> jsonData = jsonDecode(data);
-          final delta = jsonData['choices']?[0]?['delta'];
-          final String? piece = delta?['content'];
-
-          if (piece != null && piece.isNotEmpty) {
-            setState(() {
-              _chatMessages[assistantIndex]['content'] += piece;
-            });
-            _scrollToBottom();
-          }
-        } catch (e) {
-          debugPrint('Streaming parse error: $e');
+      await for (final response in stream) {
+        final text = response.text;
+        if (text != null) {
+          responseBuffer.write(text);
+          setState(() {
+            _chatMessages[assistantIndex]['content'] = responseBuffer.toString();
+          });
+          _scrollToBottom();
         }
       }
+    } catch (e) {
+      setState(() {
+        _chatMessages[assistantIndex]['content'] = 'DEBUG INFO:\n${e.toString()}';
+      });
+      debugPrint('Gemini API Error: $e');
     }
-  }
-
-  String _buildChatPrompt(String message) {
-    if (widget.userData == null) return message;
-
-    return '''
-User Profile:
-- Goal: ${widget.userData!['goal'] ?? 'Not specified'}
-- Diet Preference: ${widget.userData!['diet_preference'] ?? 'Not specified'}
-- Allergies: ${widget.userData!['allergies']?.isNotEmpty == true ? widget.userData!['allergies'] : 'None'}
-
-User Question: "$message"
-
-Please provide helpful, accurate, and personalized nutrition advice based on the user's profile.
-Keep responses concise but informative (150-300 words). Focus on practical suggestions.
-''';
   }
 
   Future<void> _sendChatMessage(String message) async {
@@ -185,30 +130,22 @@ Keep responses concise but informative (150-300 words). Focus on practical sugge
     _scrollToBottom();
 
     try {
-      if (widget.apiType.toLowerCase() == 'openrouter') {
-        await _sendToAIWithStreaming(trimmed);
+      if (widget.apiType.toLowerCase() == 'gemini') {
+        await _streamResponseFromGemini(trimmed);
       } else {
-        setState(() {
-          _chatMessages.add({
-            'role': 'assistant',
-            'content': 'Unsupported API: ${widget.apiType}',
-            'timestamp': DateTime.now(),
-          });
-        });
-      }
-    } catch (e) {
-      setState(() {
         _chatMessages.add({
           'role': 'assistant',
-          'content': 'Error: ${e.toString()}',
-          'timestamp': DateTime.now(),
+          'content': 'Error: API type "${widget.apiType}" is not supported.',
+          'timestamp': DateTime.now()
         });
-      });
+      }
     } finally {
-      setState(() {
-        isChatLoading = false;
-      });
-      _scrollToBottom();
+      if (mounted) {
+        setState(() {
+          isChatLoading = false;
+        });
+        _scrollToBottom();
+      }
     }
   }
 
@@ -249,58 +186,67 @@ Keep responses concise but informative (150-300 words). Focus on practical sugge
     final isUser = message['role'] == 'user';
     final content = message['content'] ?? '';
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isUser)
-            CircleAvatar(
+    final alignment = isUser ? MainAxisAlignment.end : MainAxisAlignment.start;
+    final bubbleColor = isUser ? Colors.deepPurple : Colors.grey[200];
+    final textColor = isUser ? Colors.white : Colors.black;
+
+    return Row(
+      mainAxisAlignment: alignment,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!isUser)
+          const Padding(
+            padding: EdgeInsets.only(left: 8.0, right: 8.0),
+            child: CircleAvatar(
               radius: 16,
               backgroundColor: Colors.deepPurple,
               child:
-              const Icon(Icons.restaurant, size: 16, color: Colors.white),
+              Icon(Icons.restaurant, size: 16, color: Colors.white),
             ),
-          const SizedBox(width: 8),
-          Expanded(
+          ),
+        Flexible(
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: bubbleColor,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(16),
+                topRight: const Radius.circular(16),
+                bottomLeft: isUser ? const Radius.circular(16) : const Radius.circular(0),
+                bottomRight: isUser ? const Radius.circular(0) : const Radius.circular(16),
+              ),
+            ),
             child: Column(
-              crossAxisAlignment:
-              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isUser ? Colors.deepPurple : Colors.grey[200],
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: content.isEmpty
-                      ? _buildTypingIndicator()
-                      : Text(
-                    content,
-                    style: TextStyle(
-                      color: isUser ? Colors.white : Colors.black,
-                    ),
-                  ),
-                ),
+                content.isEmpty
+                    ? _buildTypingIndicator()
+                    : SelectableText(content, style: TextStyle(color: textColor)),
                 if (message['timestamp'] != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       DateFormat('HH:mm').format(message['timestamp']),
-                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isUser ? Colors.white70 : Colors.grey,
+                      ),
                     ),
                   ),
               ],
             ),
           ),
-          if (isUser) const SizedBox(width: 8),
-          if (isUser)
-            const CircleAvatar(
+        ),
+        if (isUser)
+          const Padding(
+            padding: EdgeInsets.only(right: 8.0, left: 8.0),
+            child: CircleAvatar(
               radius: 16,
               child: Icon(Icons.person, size: 16),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
@@ -317,19 +263,21 @@ Keep responses concise but informative (150-300 words). Focus on practical sugge
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AI Nutrition Assistant'),
+        title: const Text('AI Nutrition Assistant', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.deepPurple,
+        elevation: 1,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
+      backgroundColor: Colors.white,
       body: Column(
         children: [
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              padding: const EdgeInsets.only(top: 16),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: _chatMessages.length,
               itemBuilder: (context, index) {
                 return _buildMessageBubble(_chatMessages[index]);
@@ -362,6 +310,7 @@ Keep responses concise but informative (150-300 words). Focus on practical sugge
                           hintText: 'Ask about nutrition, recipe, etc...',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide.none,
                           ),
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,

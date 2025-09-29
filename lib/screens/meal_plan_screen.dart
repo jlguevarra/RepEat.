@@ -24,14 +24,31 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   final NumberFormat caloriesFormat = NumberFormat.decimalPattern();
   String? apiError;
 
-  static const String openRouterApiKey =
-      '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';
+  // MODIFIED: Use your new Google Gemini API key.
+  static const String geminiApiKey = 'AIzaSyC3IhY-aAkXfPKeteU0WKyQCJmr5TRsAuw'; // <-- PASTE YOUR FRESH KEY HERE
 
   @override
   void initState() {
     super.initState();
     initializeMealPlan();
   }
+
+  // MODIFIED: This function is now updated to launch the Gemini-powered ChatScreen.
+  void _navigateToChatScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          userId: widget.userId,
+          userData: userData,
+          apiKey: geminiApiKey, // Use the new Gemini key
+          apiType: 'gemini',     // Specify the API type as 'gemini'
+        ),
+      ),
+    );
+  }
+
+  // ... (All other code in this file remains exactly the same)
 
   Future<void> initializeMealPlan() async {
     setState(() {
@@ -106,7 +123,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         'targetCalories': mapGoalToCalories(goal).toString(),
         'diet': mapDietToSpoonacular(diet),
         'exclude': allergies,
-        'apiKey': 'f9cc3b3cd30e4007bf4da738d79d9680',
+        'apiKey': 'f9cc3b3cd30e4007bf4da738d79d9680', // Your Spoonacular API Key
       };
 
       if (timeFrame == 'week') {
@@ -219,20 +236,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     return 'Meal';
   }
 
-  void _navigateToChatScreen() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ChatScreen(
-          userId: widget.userId,
-          userData: userData,
-          apiKey: openRouterApiKey,
-          apiType: 'openrouter',
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -249,11 +252,9 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          // MODIFIED: Added regenerate button, which only shows if a plan exists
           if (mealPlan != null)
             IconButton(
               icon: const Icon(Icons.refresh, size: 28),
-              // Disable button while generating to prevent multiple requests
               onPressed: isGeneratingMeal ? null : generateMealPlan,
               tooltip: 'Regenerate Plan',
             ),
@@ -322,8 +323,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       ),
     );
   }
-
-  // --- Redesigned Widgets ---
 
   Widget _buildIntroState() {
     String goal = userData?['goal']?.replaceAll('_', ' ') ?? 'Not set';
