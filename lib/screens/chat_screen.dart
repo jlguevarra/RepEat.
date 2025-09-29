@@ -2,12 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:intl/intl.dart';
+import 'package:animate_do/animate_do.dart';
 
 class ChatScreen extends StatefulWidget {
   final int userId;
   final Map<String, dynamic>? userData;
-  final String apiKey; // This will be your Google Gemini API Key
-  final String apiType; // This should be 'gemini'
+  final String apiKey;
+  final String apiType;
 
   const ChatScreen({
     super.key,
@@ -21,6 +22,15 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
+class AppColors {
+  static const Color primaryColor = Colors.deepPurple;
+  static const Color backgroundColor = Color(0xFFF8F8F8);
+  static const Color userBubbleColor = Colors.deepPurple;
+  static const Color assistantBubbleColor = Colors.white;
+  static const Color textFieldColor = Colors.white;
+  static const Color hintColor = Colors.grey;
+}
+
 class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -29,9 +39,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   List<Map<String, dynamic>> _chatMessages = [];
   bool isChatLoading = false;
 
-  // MODIFIED: This is the final, correct model name for YOUR account.
-  final String _geminiModel = 'gemini-flash-latest';
-
+  final String _geminiModel = 'gemini-pro-latest';
   late AnimationController _dotsController;
   GenerativeModel? _model;
   ChatSession? _chat;
@@ -41,13 +49,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     super.initState();
     _chatMessages.add({
       'role': 'assistant',
-      'content': 'Hello! I\'m your nutrition expert assistant. How can I help you?',
+      'content':
+      'Hello! I\'m your nutrition expert assistant. How can I help with your meal planning?',
       'timestamp': DateTime.now(),
     });
 
     _dotsController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 1200),
     )..repeat();
 
     _initializeChat();
@@ -59,22 +68,30 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       apiKey: widget.apiKey,
       systemInstruction: Content.system(_buildSystemPrompt()),
     );
-
     _chat = _model!.startChat();
   }
 
+  // MODIFIED: Added instruction to prevent Markdown formatting
   String _buildSystemPrompt() {
     final profile = widget.userData;
-    if (profile == null) {
-      return 'You are a helpful and friendly nutrition expert for a fitness app called RepEat. Keep responses concise and informative.';
-    }
-    return '''
-You are a helpful and friendly nutrition expert for a fitness app called RepEat.
+    String basePrompt =
+        'You are a helpful and friendly nutrition expert for a fitness app called RepEat. Keep responses concise and informative.';
+
+    String profileInfo = '';
+    if (profile != null) {
+      profileInfo = '''
+
 Personalize all responses based on this user profile:
 - Goal: ${profile['goal'] ?? 'Not specified'}
 - Diet Preference: ${profile['diet_preference'] ?? 'Not specified'}
-- Allergies: ${profile['allergies']?.isNotEmpty == true ? profile['allergies'] : 'None'}
-''';
+- Allergies: ${profile['allergies']?.isNotEmpty == true ? profile['allergies'] : 'None'}''';
+    }
+
+    // This is the new, crucial instruction
+    String formattingRule =
+        '\n\nImportant: Do not use any Markdown formatting like asterisks for bolding or lists. Respond in plain, formal text only.';
+
+    return basePrompt + profileInfo + formattingRule;
   }
 
   int _addAssistantPlaceholder() {
@@ -91,11 +108,9 @@ Personalize all responses based on this user profile:
 
   Future<void> _streamResponseFromGemini(String message) async {
     final assistantIndex = _addAssistantPlaceholder();
-
     try {
       final stream = _chat!.sendMessageStream(Content.text(message));
       StringBuffer responseBuffer = StringBuffer();
-
       await for (final response in stream) {
         final text = response.text;
         if (text != null) {
@@ -108,7 +123,8 @@ Personalize all responses based on this user profile:
       }
     } catch (e) {
       setState(() {
-        _chatMessages[assistantIndex]['content'] = 'DEBUG INFO:\n${e.toString()}';
+        _chatMessages[assistantIndex]['content'] =
+        'Sorry, I\'m having a bit of trouble right now. Please try again.';
       });
       debugPrint('Gemini API Error: $e');
     }
@@ -128,7 +144,6 @@ Personalize all responses based on this user profile:
     });
 
     _scrollToBottom();
-
     try {
       if (widget.apiType.toLowerCase() == 'gemini') {
         await _streamResponseFromGemini(trimmed);
@@ -151,7 +166,8 @@ Personalize all responses based on this user profile:
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
+      if (_scrollController.hasClients &&
+          _scrollController.position.maxScrollExtent > 0) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
@@ -162,91 +178,151 @@ Personalize all responses based on this user profile:
   }
 
   Widget _buildTypingIndicator() {
-    return AnimatedBuilder(
-      animation: _dotsController,
-      builder: (context, child) {
-        int dotCount = ((DateTime.now().millisecond ~/ 300) % 4);
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(dotCount, (index) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 2),
-              child: Text(
-                '.',
-                style: TextStyle(fontSize: 18, color: Colors.grey),
+    return FadeIn(
+      duration: const Duration(milliseconds: 300),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (index) {
+          return AnimatedBuilder(
+            animation: _dotsController,
+            builder: (context, child) {
+              final double offset = -6.0 *
+                  (0.5 -
+                      (_dotsController.value - (0.33 * index))
+                          .abs()
+                          .clamp(0.0, 0.5) *
+                          2)
+                      .abs();
+              return Transform.translate(
+                offset: Offset(0, offset),
+                child: child,
+              );
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 3.0),
+              child: CircleAvatar(
+                radius: 3.5,
+                backgroundColor: AppColors.hintColor,
               ),
-            );
-          }),
-        );
-      },
+            ),
+          );
+        }),
+      ),
     );
   }
 
-  Widget _buildMessageBubble(Map<String, dynamic> message) {
+  Widget _buildMessageBubble(Map<String, dynamic> message, int index) {
     final isUser = message['role'] == 'user';
     final content = message['content'] ?? '';
 
-    final alignment = isUser ? MainAxisAlignment.end : MainAxisAlignment.start;
-    final bubbleColor = isUser ? Colors.deepPurple : Colors.grey[200];
-    final textColor = isUser ? Colors.white : Colors.black;
+    final bubbleAlignment =
+    isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final bubbleColor =
+    isUser ? AppColors.userBubbleColor : AppColors.assistantBubbleColor;
+    final textColor = isUser ? Colors.white : Colors.black87;
 
-    return Row(
-      mainAxisAlignment: alignment,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (!isUser)
-          const Padding(
-            padding: EdgeInsets.only(left: 8.0, right: 8.0),
-            child: CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.deepPurple,
-              child:
-              Icon(Icons.restaurant, size: 16, color: Colors.white),
-            ),
-          ),
-        Flexible(
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-            padding: const EdgeInsets.all(12),
+    final borderRadius = BorderRadius.only(
+      topLeft: const Radius.circular(20),
+      topRight: const Radius.circular(20),
+      bottomLeft:
+      isUser ? const Radius.circular(20) : const Radius.circular(4),
+      bottomRight:
+      isUser ? const Radius.circular(4) : const Radius.circular(20),
+    );
+
+    return FadeInUp(
+      from: 20,
+      duration: const Duration(milliseconds: 400),
+      child: Column(
+        crossAxisAlignment: bubbleAlignment,
+        children: [
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: bubbleColor,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(16),
-                topRight: const Radius.circular(16),
-                bottomLeft: isUser ? const Radius.circular(16) : const Radius.circular(0),
-                bottomRight: isUser ? const Radius.circular(0) : const Radius.circular(16),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                content.isEmpty
-                    ? _buildTypingIndicator()
-                    : SelectableText(content, style: TextStyle(color: textColor)),
-                if (message['timestamp'] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      DateFormat('HH:mm').format(message['timestamp']),
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: isUser ? Colors.white70 : Colors.grey,
-                      ),
-                    ),
-                  ),
+              borderRadius: borderRadius,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
               ],
             ),
-          ),
-        ),
-        if (isUser)
-          const Padding(
-            padding: EdgeInsets.only(right: 8.0, left: 8.0),
-            child: CircleAvatar(
-              radius: 16,
-              child: Icon(Icons.person, size: 16),
+            child: content.isEmpty
+                ? _buildTypingIndicator()
+                : SelectableText(
+              content,
+              style: TextStyle(color: textColor, fontSize: 16, height: 1.4),
             ),
           ),
-      ],
+          Padding(
+            padding: EdgeInsets.only(
+              left: isUser ? 0 : 20,
+              right: isUser ? 20 : 0,
+              bottom: 10,
+            ),
+            child: Text(
+              DateFormat('h:mm a').format(message['timestamp']),
+              style: const TextStyle(fontSize: 12, color: AppColors.hintColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundColor,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: TextField(
+                  focusNode: _inputFocus,
+                  controller: _chatController,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.send,
+                  minLines: 1,
+                  maxLines: 5,
+                  onSubmitted: (_) => _handleSendPressed(),
+                  decoration: const InputDecoration(
+                    contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    hintText: 'Ask a nutrition question...',
+                    border: InputBorder.none,
+                    hintStyle: TextStyle(color: AppColors.hintColor),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton(
+              icon: const Icon(Icons.send_rounded, size: 26),
+              color: AppColors.primaryColor,
+              onPressed: isChatLoading ? null : _handleSendPressed,
+              disabledColor: Colors.grey,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -262,79 +338,36 @@ Personalize all responses based on this user profile:
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
-        title: const Text('AI Nutrition Assistant', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.deepPurple,
+        title: const Text('AI Nutrition Assistant'),
+        titleTextStyle: const TextStyle(
+          color: Colors.black87,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
         elevation: 1,
+        shadowColor: Colors.black.withOpacity(0.1),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Colors.black54),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      backgroundColor: Colors.white,
       body: Column(
         children: [
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.only(top: 16),
               itemCount: _chatMessages.length,
               itemBuilder: (context, index) {
-                return _buildMessageBubble(_chatMessages[index]);
+                return _buildMessageBubble(_chatMessages[index], index);
               },
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              border: Border(top: BorderSide(color: Colors.grey[300]!)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      minHeight: 44,
-                      maxHeight: 100,
-                    ),
-                    child: Scrollbar(
-                      child: TextField(
-                        focusNode: _inputFocus,
-                        controller: _chatController,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        minLines: 1,
-                        maxLines: null,
-                        decoration: InputDecoration(
-                          hintText: 'Ask about nutrition, recipe, etc...',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor:
-                  isChatLoading ? Colors.grey : Colors.deepPurple,
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                    onPressed: isChatLoading ? null : _handleSendPressed,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildInputBar(),
         ],
       ),
     );
