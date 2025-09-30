@@ -1,13 +1,18 @@
+// camera_workout_screen.dart
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:ui';
+import 'dart:ui' as ui;
 import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
+
+// Import the PosePainter from its own file
+import 'pose_painter.dart';
 
 // Enum to categorize the type of motion for different exercises.
 enum MotionType {
@@ -87,6 +92,9 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   // Constants for Calorie Calculation
   double _userWeightKg = 70.0;
   final double _metValue = 4.0;
+
+  // Store current pose for overlay
+  Pose? _currentPose;
 
   @override
   void initState() {
@@ -245,10 +253,12 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       final poses = await _poseDetector.processImage(inputImage);
       if (poses.isNotEmpty && mounted) {
         if (!_isPoseVisible) setState(() => _isPoseVisible = true);
+        setState(() => _currentPose = poses.first); // Store current pose
         if (!_isRestPeriod) _analyzePose(poses.first);
       } else if (mounted) {
         setState(() {
           _isPoseVisible = false;
+          _currentPose = null; // Clear pose when not detected
           _formStatus = "No person detected";
           _formStatusColor = Colors.orange;
         });
@@ -319,10 +329,22 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     }
   }
 
+  // **REMOVED** the _getMirroredLandmark method entirely.
+
+  // **MODIFIED** to use raw landmark data.
   void _analyzeBicepCurl(Pose pose, MotionType motionType) {
-    final elbow = pose.landmarks[PoseLandmarkType.leftElbow] ?? pose.landmarks[PoseLandmarkType.rightElbow];
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    final wrist = pose.landmarks[PoseLandmarkType.leftWrist] ?? pose.landmarks[PoseLandmarkType.rightWrist];
+    final leftElbow = pose.landmarks[PoseLandmarkType.leftElbow];
+    final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
+    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
+    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
+
+    // Use the side that's more visible/available
+    final elbow = leftElbow ?? rightElbow;
+    final shoulder = leftShoulder ?? rightShoulder;
+    final wrist = leftWrist ?? rightWrist;
+
     if (shoulder == null || elbow == null || wrist == null) return;
 
     final angle = _calculateAngle(shoulder, elbow, wrist);
@@ -335,10 +357,19 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     }
   }
 
+  // **MODIFIED** to use raw landmark data.
   void _analyzeTricepsExtension(Pose pose) {
-    final elbow = pose.landmarks[PoseLandmarkType.leftElbow] ?? pose.landmarks[PoseLandmarkType.rightElbow];
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    final wrist = pose.landmarks[PoseLandmarkType.leftWrist] ?? pose.landmarks[PoseLandmarkType.rightWrist];
+    final leftElbow = pose.landmarks[PoseLandmarkType.leftElbow];
+    final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
+    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
+    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
+
+    final elbow = leftElbow ?? rightElbow;
+    final shoulder = leftShoulder ?? rightShoulder;
+    final wrist = leftWrist ?? rightWrist;
+
     if (shoulder == null || elbow == null || wrist == null) return;
 
     final angle = _calculateAngle(shoulder, elbow, wrist);
@@ -351,10 +382,19 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     }
   }
 
+  // **MODIFIED** to use raw landmark data.
   void _analyzeSquat(Pose pose) {
-    final hip = pose.landmarks[PoseLandmarkType.leftHip] ?? pose.landmarks[PoseLandmarkType.rightHip];
-    final knee = pose.landmarks[PoseLandmarkType.leftKnee] ?? pose.landmarks[PoseLandmarkType.rightKnee];
-    final ankle = pose.landmarks[PoseLandmarkType.leftAnkle] ?? pose.landmarks[PoseLandmarkType.rightAnkle];
+    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
+    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
+    final leftKnee = pose.landmarks[PoseLandmarkType.leftKnee];
+    final rightKnee = pose.landmarks[PoseLandmarkType.rightKnee];
+    final leftAnkle = pose.landmarks[PoseLandmarkType.leftAnkle];
+    final rightAnkle = pose.landmarks[PoseLandmarkType.rightAnkle];
+
+    final hip = leftHip ?? rightHip;
+    final knee = leftKnee ?? rightKnee;
+    final ankle = leftAnkle ?? rightAnkle;
+
     if (hip == null || knee == null || ankle == null) return;
 
     final kneeAngle = _calculateAngle(hip, knee, ankle);
@@ -367,10 +407,19 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     }
   }
 
+  // **MODIFIED** to use raw landmark data.
   void _analyzeShoulderPress(Pose pose) {
-    final elbow = pose.landmarks[PoseLandmarkType.leftElbow] ?? pose.landmarks[PoseLandmarkType.rightElbow];
-    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder] ?? pose.landmarks[PoseLandmarkType.rightShoulder];
-    final wrist = pose.landmarks[PoseLandmarkType.leftWrist] ?? pose.landmarks[PoseLandmarkType.rightWrist];
+    final leftElbow = pose.landmarks[PoseLandmarkType.leftElbow];
+    final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
+    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
+    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
+
+    final elbow = leftElbow ?? rightElbow;
+    final shoulder = leftShoulder ?? rightShoulder;
+    final wrist = leftWrist ?? rightWrist;
+
     if (shoulder == null || elbow == null || wrist == null) return;
 
     final angle = _calculateAngle(shoulder, elbow, wrist);
@@ -383,12 +432,16 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     }
   }
 
+  // **MODIFIED** to use raw landmark data.
   void _analyzeGenericVerticalMovement(Pose pose) {
-    final head = pose.landmarks[PoseLandmarkType.nose];
-    final ankle = pose.landmarks[PoseLandmarkType.leftAnkle] ?? pose.landmarks[PoseLandmarkType.rightAnkle];
-    if (head == null || ankle == null) return;
+    final nose = pose.landmarks[PoseLandmarkType.nose];
+    final leftAnkle = pose.landmarks[PoseLandmarkType.leftAnkle];
+    final rightAnkle = pose.landmarks[PoseLandmarkType.rightAnkle];
 
-    double verticalPosition = (head.y + ankle.y) / 2;
+    final ankle = leftAnkle ?? rightAnkle;
+    if (nose == null || ankle == null) return;
+
+    double verticalPosition = (nose.y + ankle.y) / 2;
     if (_repState == RepState.starting) {
       setState(() {
         _repState = RepState.down;
@@ -490,7 +543,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
         }),
       ).timeout(const Duration(seconds: 10));
     } catch (e) {
-      debugPrint("Could not save workout data: $e");
+      debugPrint("Could not save workout  $e");
     }
   }
 
@@ -575,6 +628,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       _previousAngle = 0.0;
       _previousVerticalPosition = 0.0;
       _isSaving = false;
+      _currentPose = null;
     });
     _startMasterTimer();
   }
@@ -609,6 +663,12 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
                 width: _cameraController!.value.previewSize!.height,
                 height: _cameraController!.value.previewSize!.width,
                 child: CameraPreview(_cameraController!),
+              ),
+            ),
+            // Skeletal overlay
+            Positioned.fill(
+              child: CustomPaint(
+                painter: PosePainter(_currentPose, _cameraController!.value.previewSize!),
               ),
             ),
             _buildUIOverlays(),
@@ -694,3 +754,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     );
   }
 }
+
+// **REMOVED** the duplicate PosePainter class from this file.
+// Make sure it is defined in `pose_painter.dart`.
