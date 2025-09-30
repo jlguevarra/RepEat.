@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Sep 23, 2025 at 07:33 AM
+-- Generation Time: Sep 30, 2025 at 03:33 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -104,7 +104,8 @@ CREATE TABLE `favorites` (
 
 INSERT INTO `favorites` (`id`, `user_id`, `recipe_id`, `recipe_title`, `recipe_image`, `saved_at`) VALUES
 (16, 36, 1697599, 'Baked Ziti with Ricotta and Italian Sausage', 'https://img.spoonacular.com/recipes/1697599-556x370.jpg', '2025-09-23 02:35:00'),
-(17, 36, 640592, 'Creamy Bacon Mac and Cheese', 'https://img.spoonacular.com/recipes/640592-556x370.jpg', '2025-09-23 03:43:56');
+(17, 36, 640592, 'Creamy Bacon Mac and Cheese', 'https://img.spoonacular.com/recipes/640592-556x370.jpg', '2025-09-23 03:43:56'),
+(18, 36, 655060, 'Peach & Brown Sugar Pancakes', '', '2025-09-26 08:57:20');
 
 -- --------------------------------------------------------
 
@@ -207,6 +208,21 @@ INSERT INTO `password_resets` (`id`, `email`, `code`, `used`, `created_at`) VALU
 (14, 'johnlloydguevarra2@gmail.com', '695816', 0, '2025-08-15 03:36:51'),
 (15, 'johnlloydguevarra2@gmail.com', '886541', 1, '2025-08-15 03:37:40'),
 (17, 'johnlloydguevarra0405@gmail.com', '441553', 0, '2025-08-18 06:44:11');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `reminders`
+--
+
+CREATE TABLE `reminders` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `notes` text DEFAULT NULL,
+  `reminder_date` date NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -359,15 +375,11 @@ CREATE TABLE `workout_sessions` (
 
 INSERT INTO `workout_sessions` (`id`, `user_id`, `plan_day`, `exercise_name`, `completed_reps`, `target_reps`, `duration_seconds`, `calories_burned`, `date`, `created_at`) VALUES
 (9, 36, 'Week 1 - Day 1', 'Dumbbell Triceps Extension', 32, 32, 162, 13, '2025-09-23', '2025-09-23 03:12:59'),
-(10, 36, 'Week 1 - Day 1', 'Dumbbell Triceps Extension', 32, 32, 162, 13, '2025-09-23', '2025-09-23 03:12:59'),
 (11, 36, 'Week 1 - Day 1', 'Dumbbell Bench Press', 32, 32, 151, 12, '2025-09-23', '2025-09-23 03:21:33'),
-(12, 36, 'Week 1 - Day 1', 'Dumbbell Bench Press', 32, 32, 151, 12, '2025-09-23', '2025-09-23 03:21:34'),
 (13, 36, 'Week 1 - Day 1', 'Dumbbell Flyes', 32, 32, 53, 4, '2025-09-23', '2025-09-23 03:26:48'),
-(14, 36, 'Week 1 - Day 1', 'Dumbbell Flyes', 32, 32, 53, 4, '2025-09-23', '2025-09-23 03:26:48'),
 (15, 36, 'Week 1 - Day 1', 'Dumbbell Shoulder Press', 32, 32, 48, 4, '2025-09-23', '2025-09-23 03:31:36'),
-(16, 36, 'Week 1 - Day 1', 'Dumbbell Shoulder Press', 32, 32, 48, 4, '2025-09-23', '2025-09-23 03:31:38'),
 (17, 36, 'Week 1 - Day 1', 'Dumbbell Pullover', 32, 32, 61, 5, '2025-09-23', '2025-09-23 03:36:39'),
-(18, 36, 'Week 1 - Day 1', 'Dumbbell Pullover', 32, 32, 61, 5, '2025-09-23', '2025-09-23 03:36:41');
+(21, 36, 'Week 1 - Day 3', 'Dumbbell Reverse Flyes', 32, 32, 100, 8, '2025-09-26', '2025-09-26 07:52:36');
 
 --
 -- Indexes for dumped tables
@@ -411,6 +423,13 @@ ALTER TABLE `onboarding_data`
 --
 ALTER TABLE `password_resets`
   ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `reminders`
+--
+ALTER TABLE `reminders`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
 
 --
 -- Indexes for table `users`
@@ -466,7 +485,7 @@ ALTER TABLE `email_verifications`
 -- AUTO_INCREMENT for table `favorites`
 --
 ALTER TABLE `favorites`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT for table `meal_plans`
@@ -485,6 +504,12 @@ ALTER TABLE `onboarding_data`
 --
 ALTER TABLE `password_resets`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+
+--
+-- AUTO_INCREMENT for table `reminders`
+--
+ALTER TABLE `reminders`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `users`
@@ -514,7 +539,7 @@ ALTER TABLE `workouts`
 -- AUTO_INCREMENT for table `workout_sessions`
 --
 ALTER TABLE `workout_sessions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- Constraints for dumped tables
@@ -531,6 +556,12 @@ ALTER TABLE `camera_workouts`
 --
 ALTER TABLE `favorites`
   ADD CONSTRAINT `favorites_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `reminders`
+--
+ALTER TABLE `reminders`
+  ADD CONSTRAINT `reminders_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `user_workout_plans`
