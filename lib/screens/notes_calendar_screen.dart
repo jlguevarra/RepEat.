@@ -76,8 +76,8 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
 
     try {
       final responses = await Future.wait([
-        http.get(Uri.parse('http://192.168.100.79/repEatApi/get_reminders.php?user_id=${widget.userId}')),
-        http.get(Uri.parse('http://192.168.100.79/repEatApi/get_holidays.php')), // Assumes this file exists
+        http.get(Uri.parse('http://192.168.100.11/repEatApi/get_reminders.php?user_id=${widget.userId}')),
+        http.get(Uri.parse('http://192.168.100.11/repEatApi/get_holidays.php')), // Assumes this file exists
       ]);
 
       // Process reminders
@@ -280,7 +280,7 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.79/repEatApi/save_reminder.php'),
+        Uri.parse('http://192.168.100.11/repEatApi/save_reminder.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'id': id,
@@ -309,7 +309,7 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.79/repEatApi/delete_reminder.php'),
+        Uri.parse('http://192.168.100.11/repEatApi/delete_reminder.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'id': id, 'user_id': widget.userId}),
       );

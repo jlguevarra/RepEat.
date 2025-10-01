@@ -153,7 +153,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   Future<void> _fetchUserGoals() async {
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.79/repEatApi/get_user_onboarding.php'),
+        Uri.parse('http://192.168.100.11/repEatApi/get_user_onboarding.php'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'user_id': widget.userId}),
       ).timeout(const Duration(seconds: 5));
@@ -568,7 +568,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> {
   Future<void> saveCameraWorkout() async {
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.79/repEatApi/camera_workout_screen.php'),
+        Uri.parse('http://192.168.100.11/repEatApi/camera_workout_screen.php'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'user_id': widget.userId,
