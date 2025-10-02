@@ -32,7 +32,6 @@ import 'dumbbell_hammer_curls_logic.dart';
 
 import 'pose_painter.dart';
 
-
 class CameraWorkoutScreen extends StatefulWidget {
   final int userId;
   final String exercise;
@@ -56,6 +55,47 @@ class CameraWorkoutScreen extends StatefulWidget {
 }
 
 class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsBindingObserver {
+  bool _isFormValidForCurrentExercise(String state) {
+    switch (widget.exercise.toLowerCase()) {
+      case "dumbbell shrugs":
+        return DumbbellShrugsLogic.isValidForm(state);
+       case "dumbbell squats":
+         return DumbbellSquatsLogic.isValidForm(state);
+         case "dumbbell bicep curls":
+         return DumbbellBicepCurlsLogic.isValidForm(state);
+         case "dumbbell shoulder press":
+         return DumbbellShoulderPressLogic.isValidForm(state);
+       case "dumbbell triceps extension":
+         return DumbbellTricepsExtensionLogic.isValidForm(state);
+       case "dumbbell russian twists":
+         return DumbbellRussianTwistsLogic.isValidForm(state);
+       case "dumbbell lunges":
+         return DumbbellLungesLogic.isValidForm(state);
+       case "dumbbell deadlifts":
+        return DumbbellDeadliftsLogic.isValidForm(state);
+       case "dumbbell hammer curls":
+         return DumbbellHammerCurlsLogic.isValidForm(state);
+       case "dumbbell flyes":
+         return DumbbellFlyesLogic.isValidForm(state);
+       case "dumbbell reverse flyes":
+         return DumbbellReverseFlyesLogic.isValidForm(state);
+       case "dumbbell step-ups":
+         return DumbbellStepUpsLogic.isValidForm(state);
+       case "dumbbell side bends":
+         return DumbbellSideBendsLogic.isValidForm(state);
+       case "dumbbell wood chops":
+         return DumbbellWoodChopsLogic.isValidForm(state);
+       case "dumbbell sit-ups":
+         return DumbbellSitupsLogic.isValidForm(state);
+       case "dumbbell windmills":
+         return DumbbellWindmillsLogic.isValidForm(state);
+       case "dumbbell pullover":
+         return DumbbellPulloverLogic.isValidForm(state);
+      default:
+        return true; // Default to true for unimplemented exercises
+    }
+  }
+
   // General State Variables
   CameraController? _cameraController;
   bool _isInitialized = false;
@@ -65,7 +105,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   int _durationSeconds = 0;
   Timer? _masterTimer;
   bool _isRestPeriod = false;
-  int _restSeconds = 0;
+  int _restSeconds = 60;
   Timer? _restTimer;
   bool _showSuccessAnimation = false;
   double _caloriesBurned = 0.0;
@@ -80,13 +120,10 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   bool _isPoseVisible = false;
   int _noPoseFrames = 0;
   final int _maxNoPoseFrames = 10;
-  // Exercise State Variables - ADD THESE
+
+  // Exercise State Variables
   String _currentExerciseState = "starting";
   String _previousExerciseState = "starting";
-
-  // Shrug-specific state
-  String _currentShrugState = "starting";
-  String _previousShrugState = "starting";
 
   // Constants for Calorie Calculation
   double _userWeightKg = 70.0;
@@ -103,6 +140,9 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     _initializeDetectors();
     _initializeCamera();
     _showExerciseInstructions();
+
+    // Start master timer immediately
+    _startMasterTimer();
   }
 
   @override
@@ -114,6 +154,8 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     }
 
     if (state == AppLifecycleState.inactive) {
+      _masterTimer?.cancel();
+      _restTimer?.cancel();
       cameraController.dispose();
       if (mounted) {
         setState(() {
@@ -122,6 +164,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       }
     } else if (state == AppLifecycleState.resumed) {
       _initializeCamera();
+      _startMasterTimer();
     }
   }
 
@@ -196,7 +239,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       await _cameraController!.initialize();
       if (mounted) {
         setState(() => _isInitialized = true);
-        _startMasterTimer();
         _startPoseDetection();
       }
     } catch (e) {
@@ -207,9 +249,26 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   void _startMasterTimer() {
     _masterTimer?.cancel();
     _masterTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_isPoseVisible && !_isRestPeriod && !_workoutCompleted && mounted) {
+      if (!mounted || _workoutCompleted) {
+        timer.cancel();
+        return;
+      }
+
+      // Always increment duration when not in rest period
+      if (!_isRestPeriod) {
         setState(() {
           _durationSeconds++;
+        });
+      }
+
+      // Calculate calories only when actively working out with good form
+      final shouldBurnCalories = _isPoseVisible &&
+          !_isRestPeriod &&
+          !_workoutCompleted &&
+          _isFormValidForCurrentExercise(_currentExerciseState);
+
+      if (shouldBurnCalories) {
+        setState(() {
           final caloriesPerSecond = (_metValue * 3.5 * _userWeightKg) / (200 * 60);
           _caloriesBurned += caloriesPerSecond;
         });
@@ -218,13 +277,24 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   }
 
   void _startRestTimer() {
-    _restSeconds = 60;
     _restTimer?.cancel();
+    _restSeconds = 60;
     _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_restSeconds > 0 && mounted) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (_restSeconds > 0) {
         setState(() => _restSeconds--);
       } else {
         timer.cancel();
+        if (mounted) {
+          setState(() {
+            _formStatus = "Rest period over! Start next set";
+            _formStatusColor = Colors.green;
+          });
+        }
       }
     });
   }
@@ -237,6 +307,8 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       _formStatus = "Begin next set!";
       _formStatusColor = Colors.white;
     });
+    // Restart master timer for the new set
+    _startMasterTimer();
   }
 
   void _startPoseDetection() {
@@ -266,7 +338,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
           setState(() => _isPoseVisible = true);
         }
         setState(() => _currentPose = poses.first);
-        if (!_isRestPeriod) _analyzePose(poses.first);
+        if (!_isRestPeriod && !_workoutCompleted) _analyzePose(poses.first);
       } else if (mounted) {
         _handleNoPoseDetection();
       }
@@ -287,17 +359,50 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       setState(() {
         _isPoseVisible = false;
         _currentPose = null;
-        _formStatus = "Stand in frame with dumbbells at your sides";
-        _formStatusColor = Colors.orange;
+        _formStatus = "No person detected.\nPosition yourself in frame.";
+        _formStatusColor = Colors.redAccent;
       });
     }
+  }
+
+  bool _detectDumbbells(Pose pose) {
+    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
+    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
+    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
+    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
+
+    if (leftWrist == null || rightWrist == null || leftHip == null || rightHip == null) {
+      return false;
+    }
+
+    // For shrugs, check if wrists are positioned near hips (dumbbell position)
+    final leftWristToHip = (leftWrist.x - leftHip.x).abs() + (leftWrist.y - leftHip.y).abs();
+    final rightWristToHip = (rightWrist.x - rightHip.x).abs() + (rightWrist.y - rightHip.y).abs();
+
+    return leftWristToHip < 0.3 && rightWristToHip < 0.3;
   }
 
   void _analyzePose(Pose pose) {
     String currentState = "starting";
     String previousState = _currentExerciseState;
 
+    // Check for dumbbells
+    bool hasDumbbells = _detectDumbbells(pose);
+
+    if (!hasDumbbells) {
+      _updateFormStatus("Hold dumbbells at your sides", false);
+      _currentExerciseState = "no_dumbbells";
+      return;
+    }
+
     switch (widget.exercise.toLowerCase()) {
+      case "dumbbell shrugs":
+        currentState = DumbbellShrugsLogic.analyzePose(pose, _updateFormStatus);
+        if (DumbbellShrugsLogic.shouldCountRep(currentState, previousState)) {
+          _countRep();
+        }
+        break;
+
       case "dumbbell bicep curls":
         currentState = DumbbellBicepCurlsLogic.analyzePose(pose, _updateFormStatus);
         if (DumbbellBicepCurlsLogic.shouldCountRep(currentState, previousState)) {
@@ -336,13 +441,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       case "dumbbell russian twists":
         currentState = DumbbellRussianTwistsLogic.analyzePose(pose, _updateFormStatus);
         if (DumbbellRussianTwistsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell shrugs":
-        currentState = DumbbellShrugsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellShrugsLogic.shouldCountRep(currentState, previousState)) {
           _countRep();
         }
         break;
@@ -438,10 +536,12 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
 
     _currentExerciseState = currentState;
   }
+
   void _countRep() {
     if (_workoutCompleted || _isRestPeriod || _repCount >= widget.reps) return;
 
     final now = DateTime.now();
+    // Prevent multiple counts within 1 second
     if (_lastRepTime != null && now.difference(_lastRepTime!).inMilliseconds < 1000) return;
 
     if (mounted) {
@@ -449,12 +549,17 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
         _repCount++;
         _lastRepTime = now;
       });
-      _updateFormStatus("REP COUNTED! Good shrug!", true);
+
+      // Show success message
+      _updateFormStatus("REP COUNTED! Good form!", true);
+
+      // Reset message after delay
       Future.delayed(const Duration(seconds: 1), () {
         if (mounted && _formStatus.contains("REP COUNTED")) {
-          _updateFormStatus("Continue shrugging", true);
+          _updateFormStatus("Continue exercise", true);
         }
       });
+
       _checkSetCompletion();
     }
   }
@@ -477,6 +582,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       _formStatus = "Set completed! Rest period";
       _formStatusColor = Colors.yellow;
     });
+    _masterTimer?.cancel(); // Pause main timer during rest
     _startRestTimer();
   }
 
@@ -531,14 +637,12 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Continue'),
+            child: const Text('Continue Workout'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () {
-              if (mounted) Navigator.of(context).pop(true);
-            },
-            child: const Text('Discard'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Exit Workout'),
           ),
         ],
       ),
@@ -585,7 +689,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       _workoutCompleted = false;
       _showSuccessAnimation = false;
       _durationSeconds = 0;
-      _restSeconds = 0;
+      _restSeconds = 60;
       _caloriesBurned = 0.0;
       _isRestPeriod = false;
       _currentExerciseState = "starting";
@@ -596,6 +700,8 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       _currentPose = null;
       _noPoseFrames = 0;
     });
+    _masterTimer?.cancel();
+    _restTimer?.cancel();
     _startMasterTimer();
   }
 
@@ -612,7 +718,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: _showExitConfirmationDialog,
+      onWillPop: _showExitConfirmationDialog, // Directly use your existing method
       child: Scaffold(
         appBar: AppBar(
           title: Text(widget.exercise),
@@ -623,19 +729,13 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
             ? Stack(
           fit: StackFit.expand,
           children: [
-            FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: _cameraController!.value.previewSize!.height,
-                height: _cameraController!.value.previewSize!.width,
-                child: CameraPreview(_cameraController!),
+            _buildCameraPreview(),
+            if (_currentPose != null)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: PosePainter(_currentPose, _cameraController!.value.previewSize!),
+                ),
               ),
-            ),
-            Positioned.fill(
-              child: CustomPaint(
-                painter: PosePainter(_currentPose, _cameraController!.value.previewSize!),
-              ),
-            ),
             _buildUIOverlays(),
             if (_showSuccessAnimation)
               Container(
@@ -655,67 +755,129 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     );
   }
 
+  Widget _buildCameraPreview() {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final previewSize = _cameraController!.value.previewSize!;
+    final screenSize = MediaQuery.of(context).size;
+    final aspectRatio = previewSize.height / previewSize.width;
+
+    return OverflowBox(
+      maxWidth: screenSize.width,
+      maxHeight: screenSize.height,
+      child: AspectRatio(
+        aspectRatio: aspectRatio,
+        child: CameraPreview(_cameraController!),
+      ),
+    );
+  }
+
   Widget _buildUIOverlays() {
     return SafeArea(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // 🔝 Top stats container
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             margin: const EdgeInsets.only(top: 10),
-            decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(15)),
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 16.0,
-              runSpacing: 8.0,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.timer, color: Colors.white, size: 20),
-                  const SizedBox(width: 6),
-                  Text('${_durationSeconds ~/ 60}:${(_durationSeconds % 60).toString().padLeft(2, '0')}', style: const TextStyle(color: Colors.white, fontSize: 16)),
-                ]),
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.fitness_center, color: Colors.white, size: 20),
-                  const SizedBox(width: 6),
-                  Text('Set $_currentSet/${widget.sets}', style: const TextStyle(color: Colors.white, fontSize: 16)),
-                ]),
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 20),
-                  const SizedBox(width: 6),
-                  Text('${_caloriesBurned.toStringAsFixed(1)} kcal', style: const TextStyle(color: Colors.white, fontSize: 16)),
-                ]),
+                _buildStatItem(Icons.timer, '${_durationSeconds ~/ 60}:${(_durationSeconds % 60).toString().padLeft(2, '0')}'),
+                _buildStatItem(Icons.fitness_center, 'Set $_currentSet/${widget.sets}'),
+                _buildStatItem(Icons.local_fire_department, '${_caloriesBurned.toStringAsFixed(1)} kcal'),
                 if (_isRestPeriod)
-                  Text('Rest: $_restSeconds s', style: const TextStyle(color: Colors.yellow, fontSize: 16)),
+                  _buildStatItem(Icons.timer_outlined, 'Rest: $_restSeconds s', color: Colors.yellow),
               ],
             ),
           ),
-          if (_formStatus.isNotEmpty)
+
+          // 🧍‍♂️ Form status or no pose warning
+          if (!_isPoseVisible)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
-              child: Text(_formStatus, style: TextStyle(color: _formStatusColor, fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 20.0),
-            child: Column(children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                child: Text('$_repCount / ${widget.reps}', style: const TextStyle(fontSize: 40, color: Colors.white, fontWeight: FontWeight.bold)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(20),
               ),
-              if (_isRestPeriod && _restSeconds == 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 20.0),
-                  child: ElevatedButton(
-                    onPressed: _startNextSet,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                    child: const Text('START NEXT SET'),
+              child: const Text(
+                "No dumbbells detected.\nMake sure your shoulders and head are clearly visible.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            )
+          else if (_formStatus.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                _formStatus,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _formStatusColor, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+
+          // 🔢 Bottom rep counter and controls
+          Padding(
+            padding: const EdgeInsets.only(bottom: 30.0),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$_repCount / ${widget.reps}',
+                    style: const TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 ),
-            ]),
+                const SizedBox(height: 20),
+                if (_isRestPeriod && _restSeconds == 0)
+                  ElevatedButton(
+                    onPressed: _startNextSet,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                    ),
+                    child: const Text('START NEXT SET', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatItem(IconData icon, String text, {Color color = Colors.white}) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(height: 4),
+        Text(
+          text,
+          style: TextStyle(
+            color: color,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -11,46 +11,105 @@ class DumbbellHammerCurlsLogic {
     final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
     final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
     final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
+    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
+    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
 
+    // Check if essential landmarks are visible
     if (leftShoulder == null || rightShoulder == null ||
-        leftElbow == null || rightElbow == null) {
-      updateFormStatus("Ensure arms and shoulders are visible", false);
+        leftElbow == null || rightElbow == null ||
+        leftWrist == null || rightWrist == null) {
+      updateFormStatus("Ensure both arms and shoulders are visible", false);
       return "no_pose";
     }
 
-    // Use the arm with better visibility
-    final elbow = leftElbow.y < rightElbow.y ? leftElbow : rightElbow;
-    final shoulder = leftElbow.y < rightElbow.y ? leftShoulder : rightShoulder;
-    final wrist = leftElbow.y < rightElbow.y ? leftWrist : rightWrist;
-
-    if (wrist == null) {
-      updateFormStatus("Ensure wrists are visible", false);
-      return "no_wrist";
+    // Check for proper hammer curl form
+    final formCheck = _checkHammerCurlForm(pose, updateFormStatus);
+    if (!formCheck.isValid) {
+      return formCheck.state;
     }
 
-    final angle = _calculateAngle(shoulder, elbow, wrist);
-    return _analyzeHammerCurlMovement(angle, updateFormStatus);
+    // Calculate angles for both arms
+    final leftAngle = _calculateElbowAngle(leftShoulder, leftElbow, leftWrist);
+    final rightAngle = _calculateElbowAngle(rightShoulder, rightElbow, rightWrist);
+
+    // Use the average angle for analysis
+    final avgAngle = (leftAngle + rightAngle) / 2;
+
+    // Analyze hammer curl movement
+    return _analyzeHammerCurlMovement(avgAngle, updateFormStatus);
   }
 
-  static double _calculateAngle(PoseLandmark a, PoseLandmark b, PoseLandmark c) {
-    final radians = (math.atan2(c.y - b.y, c.x - b.x) - math.atan2(a.y - b.y, a.x - b.x)).abs();
+  static FormCheckResult _checkHammerCurlForm(Pose pose, Function(String, bool) updateFormStatus) {
+    final leftElbow = pose.landmarks[PoseLandmarkType.leftElbow];
+    final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
+    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
+    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
+
+    // Check if elbows are staying close to body (no swinging)
+    final leftElbowToBody = (leftElbow!.x - leftHip!.x).abs();
+    final rightElbowToBody = (rightElbow!.x - rightHip!.x).abs();
+
+    if (leftElbowToBody > 0.3 || rightElbowToBody > 0.3) {
+      updateFormStatus("Keep elbows close to body - don't swing", false);
+      return FormCheckResult(false, "swinging_arms");
+    }
+
+    // Check if shoulders are stable (not shrugging or moving forward)
+    final leftShoulderStability = (leftShoulder!.y - leftHip.y).abs();
+    final rightShoulderStability = (rightShoulder!.y - rightHip.y).abs();
+
+    if (leftShoulderStability > 0.2 || rightShoulderStability > 0.2) {
+      updateFormStatus("Keep shoulders down and stable", false);
+      return FormCheckResult(false, "shoulder_movement");
+    }
+
+    // Check wrist alignment for hammer grip (wrists should be neutral)
+    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
+    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
+
+    if (leftWrist != null && rightWrist != null) {
+      final leftWristElbowDiff = (leftWrist.y - leftElbow.y).abs();
+      final rightWristElbowDiff = (rightWrist.y - rightElbow.y).abs();
+
+      // In proper hammer curl, wrists should maintain neutral position
+      if (leftWristElbowDiff > 0.4 || rightWristElbowDiff > 0.4) {
+        updateFormStatus("Keep wrists straight - neutral grip", false);
+        return FormCheckResult(false, "wrist_flexion");
+      }
+    }
+
+    return FormCheckResult(true, "good_form");
+  }
+
+  static double _calculateElbowAngle(PoseLandmark shoulder, PoseLandmark elbow, PoseLandmark wrist) {
+    final radians = math.atan2(wrist.y - elbow.y, wrist.x - elbow.x) -
+        math.atan2(shoulder.y - elbow.y, shoulder.x - elbow.x);
     double angle = (radians * 180.0 / math.pi).abs();
-    if (angle > 180.0) angle = 360.0 - angle;
+
+    // Normalize angle to be between 0 and 180
+    if (angle > 180.0) {
+      angle = 360.0 - angle;
+    }
     return angle;
   }
 
   static String _analyzeHammerCurlMovement(double angle, Function(String, bool) updateFormStatus) {
-    if (angle > 140) {
-      updateFormStatus("Arms extended - curl with neutral grip", true);
-      return "arms_extended";
-    } else if (angle > 90 && angle <= 140) {
-      updateFormStatus("Hammer curling - keep thumbs up", true);
-      return "curling_up";
-    } else if (angle > 60 && angle <= 90) {
-      updateFormStatus("Good! Squeeze at top", true);
+    if (angle > 160) {
+      updateFormStatus("Arms fully extended - start curling", true);
+      return "starting_position";
+    } else if (angle > 120) {
+      updateFormStatus("Hammer curling up - neutral grip", true);
+      return "curling_up_phase1";
+    } else if (angle > 90) {
+      updateFormStatus("Halfway up - keep elbows stationary", true);
+      return "curling_up_phase2";
+    } else if (angle > 70) {
+      updateFormStatus("Near top - squeeze brachialis", true);
       return "top_position";
-    } else if (angle <= 60) {
-      updateFormStatus("Full contraction! Lower slowly", true);
+    } else if (angle <= 70) {
+      updateFormStatus("Full contraction! Lower with control", true);
       return "full_contraction";
     }
 
@@ -58,6 +117,24 @@ class DumbbellHammerCurlsLogic {
   }
 
   static bool shouldCountRep(String currentState, String previousState) {
-    return previousState == "full_contraction" && currentState == "arms_extended";
+    // Count rep when returning to starting position after full contraction
+    // This ensures complete range of motion
+    return (previousState == "full_contraction" && currentState == "starting_position") ||
+        (previousState == "top_position" && currentState == "starting_position");
   }
+
+  static bool isValidForm(String state) {
+    return state == "starting_position" ||
+        state == "curling_up_phase1" ||
+        state == "curling_up_phase2" ||
+        state == "top_position" ||
+        state == "full_contraction";
+  }
+}
+
+class FormCheckResult {
+  final bool isValid;
+  final String state;
+
+  FormCheckResult(this.isValid, this.state);
 }
