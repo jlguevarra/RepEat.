@@ -62,7 +62,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.100.11/repEatApi/signup.php'), // Ensure this URL is correct for your network
+        Uri.parse('http://192.168.100.76/repEatApi/signup.php'), // Ensure this URL is correct for your network
         body: {
           'name': _nameCtrl.text.trim(),
           'email': _emailCtrl.text.trim(),
