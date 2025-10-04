@@ -266,21 +266,10 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                         Icons.timer,
                         'Ready in ${recipeDetails!['readyInMinutes']} minutes',
                       ),
-                    if (recipeDetails?['servings'] != null)
-                      _buildInfoRow(
-                        Icons.people,
-                        'Serves ${recipeDetails!['servings']}',
-                      ),
                     if (recipeDetails?['healthScore'] != null)
                       _buildInfoRow(
                         Icons.health_and_safety,
                         'Health Score: ${recipeDetails!['healthScore']}/100',
-                      ),
-                    if (recipeDetails?['dishTypes'] != null &&
-                        recipeDetails!['dishTypes'].isNotEmpty)
-                      _buildInfoRow(
-                        Icons.restaurant_menu,
-                        'Type: ${recipeDetails!['dishTypes'].join(', ')}',
                       ),
                   ],
                 ),
