@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Import this package for orientation control
 import 'package:http/http.dart' as http;
 import 'camera_workout_screen.dart';
 
@@ -517,6 +518,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // MODIFIED: Lock screen to portrait mode
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+
     Widget bodyContent;
 
     // 1. Show loading indicator while checking for injuries
