@@ -10,27 +10,32 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
-import 'dumbbell_bicep_curls_logic.dart';
-import 'dumbbell_shoulder_press_logic.dart';
-import 'dumbbell_squats_logic.dart';
-import 'dumbbell_rows_logic.dart';
-import 'dumbbell_triceps_extension_logic.dart';
-import 'dumbbell_russian_twists_logic.dart';
-import 'dumbbell_shrugs_logic.dart';
-import 'dumbbell_flyes_logic.dart';
-import 'dumbbell_reverse_flyes_logic.dart';
-import 'dumbbell_lunges_logic.dart';
-import 'dumbbell_deadlifts_logic.dart';
-import 'dumbbell_calf_raises_logic.dart';
-import 'dumbbell_step_ups_logic.dart';
-import 'dumbbell_side_bends_logic.dart';
-import 'dumbbell_wood_chops_logic.dart';
-import 'dumbbell_situps_logic.dart';
-import 'dumbbell_windmills_logic.dart';
-import 'dumbbell_pullover_logic.dart';
-import 'dumbbell_hammer_curls_logic.dart';
 
+// Import the PosePainter from its own file
 import 'pose_painter.dart';
+
+// Enum to categorize the type of motion for different exercises.
+enum MotionType {
+  unclassified,
+  squat,              // Squats, Lunges, Step-ups
+  hipHinge,           // Deadlifts
+  horizontalPress,    // Bench Press, Flyes
+  verticalPress,      // Shoulder Press
+  horizontalPull,     // Rows
+  shoulderElevation,  // Shrugs
+  legExtension,       // Calf Raises
+  torsoRotation,      // Russian Twists, Wood Chops
+  lateralBend,        // Side Bends
+  coreFlexion,        // Sit-ups
+  shoulderArc,        // Pullovers, Windmills
+  bicepCurl,          // Bicep Curls
+  hammerCurl,         // Hammer Curls
+  tricepsExtension,   // Triceps Extensions
+  lateralRaise,       // Reverse Flyes
+}
+
+// State machine for tracking the phase of a repetition.
+enum RepState { starting, down, up, left, right } // Added left/right for rotational exercises
 
 class CameraWorkoutScreen extends StatefulWidget {
   final int userId;
@@ -55,47 +60,6 @@ class CameraWorkoutScreen extends StatefulWidget {
 }
 
 class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsBindingObserver {
-  bool _isFormValidForCurrentExercise(String state) {
-    switch (widget.exercise.toLowerCase()) {
-      case "dumbbell shrugs":
-        return DumbbellShrugsLogic.isValidForm(state);
-       case "dumbbell squats":
-         return DumbbellSquatsLogic.isValidForm(state);
-         case "dumbbell bicep curls":
-         return DumbbellBicepCurlsLogic.isValidForm(state);
-         case "dumbbell shoulder press":
-         return DumbbellShoulderPressLogic.isValidForm(state);
-       case "dumbbell triceps extension":
-         return DumbbellTricepsExtensionLogic.isValidForm(state);
-       case "dumbbell russian twists":
-         return DumbbellRussianTwistsLogic.isValidForm(state);
-       case "dumbbell lunges":
-         return DumbbellLungesLogic.isValidForm(state);
-       case "dumbbell deadlifts":
-        return DumbbellDeadliftsLogic.isValidForm(state);
-       case "dumbbell hammer curls":
-         return DumbbellHammerCurlsLogic.isValidForm(state);
-       case "dumbbell flyes":
-         return DumbbellFlyesLogic.isValidForm(state);
-       case "dumbbell reverse flyes":
-         return DumbbellReverseFlyesLogic.isValidForm(state);
-       case "dumbbell step-ups":
-         return DumbbellStepUpsLogic.isValidForm(state);
-       case "dumbbell side bends":
-         return DumbbellSideBendsLogic.isValidForm(state);
-       case "dumbbell wood chops":
-         return DumbbellWoodChopsLogic.isValidForm(state);
-       case "dumbbell sit-ups":
-         return DumbbellSitupsLogic.isValidForm(state);
-       case "dumbbell windmills":
-         return DumbbellWindmillsLogic.isValidForm(state);
-       case "dumbbell pullover":
-         return DumbbellPulloverLogic.isValidForm(state);
-      default:
-        return true; // Default to true for unimplemented exercises
-    }
-  }
-
   // General State Variables
   CameraController? _cameraController;
   bool _isInitialized = false;
@@ -105,7 +69,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   int _durationSeconds = 0;
   Timer? _masterTimer;
   bool _isRestPeriod = false;
-  int _restSeconds = 60;
+  int _restSeconds = 0;
   Timer? _restTimer;
   bool _showSuccessAnimation = false;
   double _caloriesBurned = 0.0;
@@ -118,12 +82,13 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   String _formStatus = "Position yourself in frame";
   Color _formStatusColor = Colors.white;
   bool _isPoseVisible = false;
-  int _noPoseFrames = 0;
-  final int _maxNoPoseFrames = 10;
+  Size? _imageSize;
 
-  // Exercise State Variables
-  String _currentExerciseState = "starting";
-  String _previousExerciseState = "starting";
+  // Rep state variables
+  RepState _repState = RepState.starting;
+  double _previousAngle = 0.0;
+  double _previousVerticalPosition = 0.0;
+  double _previousHorizontalPosition = 0.0;
 
   // Constants for Calorie Calculation
   double _userWeightKg = 70.0;
@@ -140,31 +105,18 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     _initializeDetectors();
     _initializeCamera();
     _showExerciseInstructions();
-
-    // Start master timer immediately
-    _startMasterTimer();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final CameraController? cameraController = _cameraController;
-
-    if (cameraController == null || !cameraController.value.isInitialized) {
-      return;
-    }
+    if (cameraController == null || !cameraController.value.isInitialized) return;
 
     if (state == AppLifecycleState.inactive) {
-      _masterTimer?.cancel();
-      _restTimer?.cancel();
       cameraController.dispose();
-      if (mounted) {
-        setState(() {
-          _isInitialized = false;
-        });
-      }
+      if (mounted) setState(() => _isInitialized = false);
     } else if (state == AppLifecycleState.resumed) {
       _initializeCamera();
-      _startMasterTimer();
     }
   }
 
@@ -206,16 +158,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
               const SizedBox(height: 16),
               Text('${widget.sets} sets × ${widget.reps} reps', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
-              const Text(
-                'For Dumbbell Shrugs:\n\n'
-                    '1. Stand upright with dumbbells at your sides\n'
-                    '2. Keep your arms straight\n'
-                    '3. Shrug your shoulders upward toward your ears\n'
-                    '4. Hold at the top, then lower slowly\n'
-                    '5. Ensure your shoulders and head are clearly visible',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14),
-              ),
+              const Text('Position yourself clearly in the frame. Reps will count when proper form is detected.', textAlign: TextAlign.center),
             ],
           ),
           actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('START', style: TextStyle(fontSize: 18)))],
@@ -239,6 +182,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       await _cameraController!.initialize();
       if (mounted) {
         setState(() => _isInitialized = true);
+        _startMasterTimer();
         _startPoseDetection();
       }
     } catch (e) {
@@ -249,52 +193,22 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   void _startMasterTimer() {
     _masterTimer?.cancel();
     _masterTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted || _workoutCompleted) {
-        timer.cancel();
-        return;
-      }
-
-      // Always increment duration when not in rest period
-      if (!_isRestPeriod) {
+      if (_isPoseVisible && !_isRestPeriod && !_workoutCompleted && mounted) {
         setState(() {
           _durationSeconds++;
-        });
-      }
-
-      // Calculate calories only when actively working out with good form
-      final shouldBurnCalories = _isPoseVisible &&
-          !_isRestPeriod &&
-          !_workoutCompleted &&
-          _isFormValidForCurrentExercise(_currentExerciseState);
-
-      if (shouldBurnCalories) {
-        setState(() {
-          final caloriesPerSecond = (_metValue * 3.5 * _userWeightKg) / (200 * 60);
-          _caloriesBurned += caloriesPerSecond;
         });
       }
     });
   }
 
   void _startRestTimer() {
-    _restTimer?.cancel();
     _restSeconds = 60;
+    _restTimer?.cancel();
     _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      if (_restSeconds > 0) {
+      if (_restSeconds > 0 && mounted) {
         setState(() => _restSeconds--);
       } else {
         timer.cancel();
-        if (mounted) {
-          setState(() {
-            _formStatus = "Rest period over! Start next set";
-            _formStatusColor = Colors.green;
-          });
-        }
       }
     });
   }
@@ -302,13 +216,10 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   void _startNextSet() {
     setState(() {
       _isRestPeriod = false;
-      _currentExerciseState = "starting";
-      _previousExerciseState = "starting";
+      _repState = RepState.starting;
       _formStatus = "Begin next set!";
       _formStatusColor = Colors.white;
     });
-    // Restart master timer for the new set
-    _startMasterTimer();
   }
 
   void _startPoseDetection() {
@@ -321,245 +232,418 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   }
 
   Future<void> _processCameraImage(CameraImage image) async {
+    if (_imageSize == null && mounted) {
+      setState(() {
+        _imageSize = Size(image.width.toDouble(), image.height.toDouble());
+      });
+    }
+
     try {
       final inputImage = _convertCameraImage(image);
       if (inputImage == null) {
         if (mounted) {
           _isDetecting = false;
-          _handleNoPoseDetection();
+          setState(() => _isPoseVisible = false);
         }
         return;
       }
       final poses = await _poseDetector.processImage(inputImage);
       if (poses.isNotEmpty && mounted) {
-        _noPoseFrames = 0;
-
-        if (!_isPoseVisible) {
-          setState(() => _isPoseVisible = true);
+        if (_formStatus == "No person detected") {
+          _updateFormStatus("Position yourself correctly", Colors.white);
         }
+
+        if (!_isPoseVisible) setState(() => _isPoseVisible = true);
         setState(() => _currentPose = poses.first);
-        if (!_isRestPeriod && !_workoutCompleted) _analyzePose(poses.first);
+        if (!_isRestPeriod) _analyzePose(poses.first);
       } else if (mounted) {
-        _handleNoPoseDetection();
+        setState(() {
+          _isPoseVisible = false;
+          _currentPose = null;
+          _formStatus = "No person detected";
+          _formStatusColor = Colors.orange;
+        });
       }
     } catch (e) {
       debugPrint('Error processing image: $e');
-      if (mounted) {
-        _handleNoPoseDetection();
-      }
     } finally {
       if (mounted) _isDetecting = false;
     }
   }
 
-  void _handleNoPoseDetection() {
-    _noPoseFrames++;
+  MotionType _classifyExercise(String exerciseName) {
+    final name = exerciseName.toLowerCase();
+    if (name.contains('bench press') || name.contains('flyes')) return MotionType.horizontalPress;
+    if (name.contains('shoulder press')) return MotionType.verticalPress;
+    if (name.contains('triceps extension')) return MotionType.tricepsExtension;
+    if (name.contains('pullover')) return MotionType.shoulderArc;
+    if (name.contains('rows')) return MotionType.horizontalPull;
+    if (name.contains('bicep curl')) return MotionType.bicepCurl;
+    if (name.contains('hammer curl')) return MotionType.hammerCurl;
+    if (name.contains('shrugs')) return MotionType.shoulderElevation;
+    if (name.contains('reverse flyes') || name.contains('lateral raise')) return MotionType.lateralRaise;
+    if (name.contains('squat') || name.contains('lunge') || name.contains('step-up')) return MotionType.squat;
+    if (name.contains('deadlift')) return MotionType.hipHinge;
+    if (name.contains('calf raise')) return MotionType.legExtension;
+    if (name.contains('russian twist') || name.contains('wood chop')) return MotionType.torsoRotation;
+    if (name.contains('side bend')) return MotionType.lateralBend;
+    if (name.contains('sit-up') || name.contains('crunch')) return MotionType.coreFlexion;
+    if (name.contains('windmill')) return MotionType.shoulderArc;
+    return MotionType.unclassified;
+  }
 
-    if (_noPoseFrames >= _maxNoPoseFrames) {
+  void _analyzePose(Pose pose) {
+    MotionType motionType = _classifyExercise(widget.exercise);
+    switch (motionType) {
+      case MotionType.bicepCurl:
+      case MotionType.hammerCurl:
+        _analyzeBicepCurl(pose);
+        break;
+      case MotionType.tricepsExtension:
+        _analyzeTricepsExtension(pose);
+        break;
+      case MotionType.squat:
+        _analyzeSquat(pose);
+        break;
+      case MotionType.verticalPress:
+        _analyzeVerticalPress(pose);
+        break;
+      case MotionType.horizontalPress:
+        _analyzeHorizontalPress(pose);
+        break;
+      case MotionType.lateralRaise:
+        _analyzeLateralRaise(pose);
+        break;
+      case MotionType.shoulderElevation:
+        _analyzeShoulderElevation(pose);
+        break;
+      case MotionType.hipHinge:
+        _analyzeHipHinge(pose);
+        break;
+      case MotionType.horizontalPull:
+        _analyzeHorizontalPull(pose);
+        break;
+      case MotionType.coreFlexion:
+        _analyzeCoreFlexion(pose);
+        break;
+      case MotionType.legExtension:
+        _analyzeLegExtension(pose);
+        break;
+      case MotionType.shoulderArc:
+        _analyzeShoulderArc(pose);
+        break;
+      case MotionType.lateralBend:
+        _analyzeLateralBend(pose);
+        break;
+      case MotionType.torsoRotation:
+        _analyzeTorsoRotation(pose);
+        break;
+      default:
+        _updateFormStatus("Exercise analysis not implemented.", Colors.red);
+        break;
+    }
+  }
+
+  // CORRECTED: This helper now takes a String and correctly finds the left/right landmarks.
+  PoseLandmark? _getLandmark(Pose pose, String landmarkName) {
+    final leftLandmarkName = 'left${landmarkName.capitalize()}';
+    final rightLandmarkName = 'right${landmarkName.capitalize()}';
+
+    final leftLandmark = pose.landmarks[PoseLandmarkType.values.byName(leftLandmarkName)];
+    final rightLandmark = pose.landmarks[PoseLandmarkType.values.byName(rightLandmarkName)];
+
+    // Prefer left landmark, fallback to right
+    return leftLandmark ?? rightLandmark;
+  }
+
+  // Angle-based exercises
+  void _analyzeBicepCurl(Pose pose) {
+    // CORRECTED: Pass strings to _getLandmark
+    final shoulder = _getLandmark(pose, "shoulder");
+    final elbow = _getLandmark(pose, "elbow");
+    final wrist = _getLandmark(pose, "wrist");
+    if (shoulder == null || elbow == null || wrist == null) return;
+
+    final angle = _calculateAngle(shoulder, elbow, wrist);
+    if (angle < 60 && _repState == RepState.starting) {
+      _updateFormStatus("Good form!", Colors.green);
+      setState(() => _repState = RepState.up);
+    } else if (angle > 140 && _repState == RepState.up) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    }
+  }
+
+  void _analyzeTricepsExtension(Pose pose) {
+    final shoulder = _getLandmark(pose, "shoulder");
+    final elbow = _getLandmark(pose, "elbow");
+    final wrist = _getLandmark(pose, "wrist");
+    if (shoulder == null || elbow == null || wrist == null) return;
+
+    final angle = _calculateAngle(shoulder, elbow, wrist);
+    if (angle > 160 && _repState == RepState.down) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    } else if (angle < 90 && _repState == RepState.starting) {
+      _updateFormStatus("Good Form!", Colors.green);
+      setState(() => _repState = RepState.down);
+    }
+  }
+
+  void _analyzeSquat(Pose pose) {
+    final hip = _getLandmark(pose, "hip");
+    final knee = _getLandmark(pose, "knee");
+    final ankle = _getLandmark(pose, "ankle");
+    if (hip == null || knee == null || ankle == null) return;
+
+    final kneeAngle = _calculateAngle(hip, knee, ankle);
+    if (kneeAngle < 100 && _repState == RepState.starting) {
+      _updateFormStatus("Go deeper!", Colors.orange);
+      setState(() => _repState = RepState.down);
+    } else if (kneeAngle > 160 && _repState == RepState.down) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    }
+  }
+
+  void _analyzeVerticalPress(Pose pose) { // Shoulder Press
+    final shoulder = _getLandmark(pose, "shoulder");
+    final elbow = _getLandmark(pose, "elbow");
+    final wrist = _getLandmark(pose, "wrist");
+    if (shoulder == null || elbow == null || wrist == null) return;
+
+    final angle = _calculateAngle(shoulder, elbow, wrist);
+    if (angle > 160 && _repState == RepState.down) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    } else if (angle < 80 && _repState == RepState.starting) {
+      _updateFormStatus("Good form!", Colors.green);
+      setState(() => _repState = RepState.down);
+    }
+  }
+
+  void _analyzeHorizontalPress(Pose pose) { // Bench Press
+    final shoulder = _getLandmark(pose, "shoulder");
+    final elbow = _getLandmark(pose, "elbow");
+    final wrist = _getLandmark(pose, "wrist");
+    if (shoulder == null || elbow == null || wrist == null) return;
+
+    final angle = _calculateAngle(shoulder, elbow, wrist);
+    if (angle < 90 && _repState == RepState.starting) {
+      setState(() => _repState = RepState.down);
+    } else if (angle > 150 && _repState == RepState.down) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    }
+  }
+
+  void _analyzeLateralRaise(Pose pose) {
+    final hip = _getLandmark(pose, "hip");
+    final shoulder = _getLandmark(pose, "shoulder");
+    final elbow = _getLandmark(pose, "elbow");
+    if (hip == null || shoulder == null || elbow == null) return;
+
+    final angle = _calculateAngle(hip, shoulder, elbow);
+    if (angle > 80 && _repState == RepState.starting) {
+      setState(() => _repState = RepState.up);
+    } else if (angle < 30 && _repState == RepState.up) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    }
+  }
+
+  void _analyzeHipHinge(Pose pose) { // Deadlifts
+    final shoulder = _getLandmark(pose, "shoulder");
+    final hip = _getLandmark(pose, "hip");
+    final knee = _getLandmark(pose, "knee");
+    if (shoulder == null || hip == null || knee == null) return;
+
+    final angle = _calculateAngle(shoulder, hip, knee);
+    if (angle < 100 && _repState == RepState.starting) {
+      setState(() => _repState = RepState.down);
+    } else if (angle > 160 && _repState == RepState.down) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    }
+  }
+
+  void _analyzeHorizontalPull(Pose pose) { // Rows
+    final shoulder = _getLandmark(pose, "shoulder");
+    final elbow = _getLandmark(pose, "elbow");
+    final wrist = _getLandmark(pose, "wrist");
+    if (shoulder == null || elbow == null || wrist == null) return;
+
+    final angle = _calculateAngle(shoulder, elbow, wrist);
+    if (angle < 80 && _repState == RepState.starting) {
+      setState(() => _repState = RepState.up);
+    } else if (angle > 140 && _repState == RepState.up) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    }
+  }
+
+  void _analyzeCoreFlexion(Pose pose) { // Sit-ups
+    final shoulder = _getLandmark(pose, "shoulder");
+    final hip = _getLandmark(pose, "hip");
+    final knee = _getLandmark(pose, "knee");
+    if (shoulder == null || hip == null || knee == null) return;
+
+    final angle = _calculateAngle(shoulder, hip, knee);
+    if (angle < 100 && _repState == RepState.starting) {
+      setState(() => _repState = RepState.up);
+    } else if (angle > 150 && _repState == RepState.up) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    }
+  }
+
+  void _analyzeShoulderArc(Pose pose) { // Pullovers
+    final elbow = _getLandmark(pose, "elbow");
+    final shoulder = _getLandmark(pose, "shoulder");
+    final hip = _getLandmark(pose, "hip");
+    if (elbow == null || shoulder == null || hip == null) return;
+
+    final angle = _calculateAngle(elbow, shoulder, hip);
+    if (angle < 100 && _repState == RepState.starting) {
+      setState(() => _repState = RepState.down);
+    } else if (angle > 160 && _repState == RepState.down) {
+      _countRep();
+      setState(() => _repState = RepState.starting);
+    }
+  }
+
+  // Position-based exercises
+  // Position-based exercises
+  void _analyzeShoulderElevation(Pose pose) { // Shrugs
+    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final leftEar = pose.landmarks[PoseLandmarkType.leftEar];
+    final rightEar = pose.landmarks[PoseLandmarkType.rightEar];
+
+    if (leftShoulder == null || rightShoulder == null || leftEar == null || rightEar == null) return;
+
+    // Use a relative distance (shoulder to ear) to be less sensitive to the user moving up/down.
+    // A smaller distance means a higher shrug.
+    final shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+    final earY = (leftEar.y + rightEar.y) / 2;
+    final shrugDistance = (shoulderY - earY).abs();
+
+    // On the first frame, establish the baseline "down" (relaxed) distance.
+    if (_repState == RepState.starting) {
       setState(() {
-        _isPoseVisible = false;
-        _currentPose = null;
-        _formStatus = "No person detected.\nPosition yourself in frame.";
-        _formStatusColor = Colors.redAccent;
+        // This variable now stores the relaxed shoulder-to-ear distance.
+        _previousVerticalPosition = shrugDistance;
+        _repState = RepState.down;
+      });
+      return;
+    }
+
+    // Define the "up" and "down" thresholds based on the user's own body.
+    // A shrug is counted when the shoulders get ~15% closer to the ears.
+    final downThreshold = _previousVerticalPosition;
+    final upThreshold = downThreshold * 0.85;
+
+    // If shoulders are relaxed, we are looking for them to move up.
+    if (_repState == RepState.down && shrugDistance < upThreshold) {
+      _updateFormStatus("Shrug Up!", Colors.green);
+      setState(() {
+        _repState = RepState.up;
+      });
+    }
+    // If shoulders are up, we are looking for them to return to the relaxed position.
+    else if (_repState == RepState.up && shrugDistance > downThreshold * 0.95) {
+      _countRep();
+      setState(() {
+        _repState = RepState.down;
       });
     }
   }
 
-  bool _detectDumbbells(Pose pose) {
-    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
-    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
-    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
-    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
+  void _analyzeLegExtension(Pose pose) { // Calf Raises
+    final leftAnkle = pose.landmarks[PoseLandmarkType.leftAnkle];
+    final rightAnkle = pose.landmarks[PoseLandmarkType.rightAnkle];
+    final leftHeel = pose.landmarks[PoseLandmarkType.leftHeel];
+    final rightHeel = pose.landmarks[PoseLandmarkType.rightHeel];
+    if (leftAnkle == null || rightAnkle == null || leftHeel == null || rightHeel == null) return;
 
-    if (leftWrist == null || rightWrist == null || leftHip == null || rightHip == null) {
-      return false;
-    }
-
-    // For shrugs, check if wrists are positioned near hips (dumbbell position)
-    final leftWristToHip = (leftWrist.x - leftHip.x).abs() + (leftWrist.y - leftHip.y).abs();
-    final rightWristToHip = (rightWrist.x - rightHip.x).abs() + (rightWrist.y - rightHip.y).abs();
-
-    return leftWristToHip < 0.3 && rightWristToHip < 0.3;
-  }
-
-  void _analyzePose(Pose pose) {
-    String currentState = "starting";
-    String previousState = _currentExerciseState;
-
-    // Check for dumbbells
-    bool hasDumbbells = _detectDumbbells(pose);
-
-    if (!hasDumbbells) {
-      _updateFormStatus("Hold dumbbells at your sides", false);
-      _currentExerciseState = "no_dumbbells";
+    final heelY = (leftHeel.y + rightHeel.y) / 2;
+    if (_repState == RepState.starting) {
+      setState(() {
+        _previousVerticalPosition = heelY;
+        _repState = RepState.down;
+      });
       return;
     }
 
-    switch (widget.exercise.toLowerCase()) {
-      case "dumbbell shrugs":
-        currentState = DumbbellShrugsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellShrugsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
+    final verticalDisplacement = _previousVerticalPosition - heelY;
+    if (verticalDisplacement > 15 && _repState == RepState.down) { // Heels up
+      setState(() => _repState = RepState.up);
+    } else if (verticalDisplacement < 5 && _repState == RepState.up) { // Heels down
+      _countRep();
+      setState(() => _repState = RepState.down);
+    }
+  }
 
-      case "dumbbell bicep curls":
-        currentState = DumbbellBicepCurlsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellBicepCurlsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
+  void _analyzeLateralBend(Pose pose) { // Side Bends
+    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    if (leftShoulder == null || rightShoulder == null) return;
 
-      case "dumbbell shoulder press":
-        currentState = DumbbellShoulderPressLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellShoulderPressLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
+    final shoulderYDiff = (leftShoulder.y - rightShoulder.y).abs();
+    if (_repState == RepState.starting) {
+      if (shoulderYDiff < 20) {
+        setState(() => _repState = RepState.up); // Using 'up' for neutral
+      }
+    } else if (shoulderYDiff > 40) {
+      if (_repState == RepState.up) setState(() => _repState = RepState.down);
+    } else if (shoulderYDiff < 20 && _repState == RepState.down) {
+      _countRep();
+      setState(() => _repState = RepState.up);
+    }
+  }
 
-      case "dumbbell squats":
-        currentState = DumbbellSquatsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellSquatsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
+  void _analyzeTorsoRotation(Pose pose) { // Russian Twists
+    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
+    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
+    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
+    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
+    if (leftHip == null || rightHip == null || leftWrist == null || rightWrist == null) return;
 
-      case "dumbbell rows":
-        currentState = DumbbellRowsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellRowsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
+    final hipCenterX = (leftHip.x + rightHip.x) / 2;
+    final wristCenterX = (leftWrist.x + rightWrist.x) / 2;
 
-      case "dumbbell triceps extension":
-        currentState = DumbbellTricepsExtensionLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellTricepsExtensionLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell russian twists":
-        currentState = DumbbellRussianTwistsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellRussianTwistsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell hammer curls":
-        currentState = DumbbellHammerCurlsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellHammerCurlsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell flyes":
-        currentState = DumbbellFlyesLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellFlyesLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell reverse flyes":
-        currentState = DumbbellReverseFlyesLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellReverseFlyesLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell lunges":
-        currentState = DumbbellLungesLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellLungesLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell deadlifts":
-        currentState = DumbbellDeadliftsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellDeadliftsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell calf raises":
-        currentState = DumbbellCalfRaisesLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellCalfRaisesLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell step-ups":
-        currentState = DumbbellStepUpsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellStepUpsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell side bends":
-        currentState = DumbbellSideBendsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellSideBendsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell wood chops":
-        currentState = DumbbellWoodChopsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellWoodChopsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell sit-ups":
-        currentState = DumbbellSitupsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellSitupsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell windmills":
-        currentState = DumbbellWindmillsLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellWindmillsLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      case "dumbbell pullover":
-        currentState = DumbbellPulloverLogic.analyzePose(pose, _updateFormStatus);
-        if (DumbbellPulloverLogic.shouldCountRep(currentState, previousState)) {
-          _countRep();
-        }
-        break;
-
-      default:
-        _updateFormStatus("Exercise analysis not available", false);
-        break;
+    if (_repState == RepState.starting) {
+      setState(() => _repState = RepState.up); // Using 'up' as center state
     }
 
-    _currentExerciseState = currentState;
+    if (wristCenterX < hipCenterX - 50 && _repState != RepState.left) { // Twisted Left
+      if(_repState == RepState.right) _countRep();
+      setState(() => _repState = RepState.left);
+    } else if (wristCenterX > hipCenterX + 50 && _repState != RepState.right) { // Twisted Right
+      if(_repState == RepState.left) _countRep();
+      setState(() => _repState = RepState.right);
+    }
   }
 
   void _countRep() {
     if (_workoutCompleted || _isRestPeriod || _repCount >= widget.reps) return;
 
     final now = DateTime.now();
-    // Prevent multiple counts within 1 second
-    if (_lastRepTime != null && now.difference(_lastRepTime!).inMilliseconds < 1000) return;
+    if (_lastRepTime != null && now.difference(_lastRepTime!).inMilliseconds < 500) return;
 
     if (mounted) {
+      final double caloriesPerRep = (_metValue * 3.5 * _userWeightKg) / (200 * 20);
+
       setState(() {
         _repCount++;
+        _caloriesBurned += caloriesPerRep;
         _lastRepTime = now;
       });
 
-      // Show success message
-      _updateFormStatus("REP COUNTED! Good form!", true);
-
-      // Reset message after delay
+      _updateFormStatus("REP COUNTED!", Colors.green);
       Future.delayed(const Duration(seconds: 1), () {
-        if (mounted && _formStatus.contains("REP COUNTED")) {
-          _updateFormStatus("Continue exercise", true);
-        }
+        if (mounted && _formStatus == "REP COUNTED!") _updateFormStatus("Keep Going!", Colors.white);
       });
-
       _checkSetCompletion();
     }
   }
@@ -575,6 +659,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   }
 
   void _startRestPeriod() {
+    _repState = RepState.starting;
     setState(() {
       _isRestPeriod = true;
       _currentSet++;
@@ -582,7 +667,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       _formStatus = "Set completed! Rest period";
       _formStatusColor = Colors.yellow;
     });
-    _masterTimer?.cancel(); // Pause main timer during rest
     _startRestTimer();
   }
 
@@ -606,6 +690,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
         : (_currentSet - 1) * widget.reps + _repCount;
 
     if (totalCompletedReps == 0) return;
+    _isSaving = true;
 
     try {
       await http.post(
@@ -624,37 +709,144 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       ).timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint("Could not save workout  $e");
+    } finally {
+      if (mounted) _isSaving = false;
+    }
+  }
+
+  Future<void> _showRestartConfirmationDialog() async {
+    final bool? shouldRestart = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: const Color(0xFF2C2C2E),
+          title: const Center(
+            child: Text(
+              'Restart Workout?',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 50),
+              const SizedBox(height: 16),
+              const Text(
+                'Are you sure? This will reset your reps and sets for this exercise.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orangeAccent,
+                    side: const BorderSide(color: Colors.orangeAccent),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Restart'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (shouldRestart == true) {
+      _restartWorkout();
     }
   }
 
   Future<bool> _showExitConfirmationDialog() async {
-    final result = await showDialog<bool>(
+    _masterTimer?.cancel();
+
+    final bool? result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('End Workout?'),
-        content: const Text('Your progress will be discarded if you exit.'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Continue Workout'),
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: const Color(0xFF2C2C2E),
+          title: const Center(
+            child: Text('End Workout?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Exit Workout'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.info_outline_rounded, color: Colors.blueAccent, size: 50),
+              const SizedBox(height: 16),
+              const Text(
+                'Are you sure you want to exit? Your current progress will be discarded.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Continue Workout'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.redAccent,
+                    side: const BorderSide(color: Colors.redAccent),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Discard'),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
-    return result ?? false;
+
+    if (result == true) {
+      return true;
+    } else {
+      _startMasterTimer();
+      return false;
+    }
   }
 
-  void _updateFormStatus(String text, bool isGoodForm) {
+  void _updateFormStatus(String text, Color color) {
     if(mounted) {
       setState(() {
         _formStatus = text;
-        _formStatusColor = isGoodForm ? Colors.green : Colors.orange;
+        _formStatusColor = color;
       });
     }
   }
@@ -682,6 +874,13 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     return InputImage.fromBytes(bytes: bytes, metadata: metadata);
   }
 
+  double _calculateAngle(PoseLandmark a, PoseLandmark b, PoseLandmark c) {
+    final radians = math.atan2(c.y - b.y, c.x - b.x) - math.atan2(a.y - b.y, a.x - b.x);
+    double angle = (radians * 180.0 / math.pi).abs();
+    if (angle > 180.0) angle = 360.0 - angle;
+    return angle;
+  }
+
   void _restartWorkout() {
     setState(() {
       _repCount = 0;
@@ -689,19 +888,17 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
       _workoutCompleted = false;
       _showSuccessAnimation = false;
       _durationSeconds = 0;
-      _restSeconds = 60;
+      _restSeconds = 0;
       _caloriesBurned = 0.0;
       _isRestPeriod = false;
-      _currentExerciseState = "starting";
-      _previousExerciseState = "starting";
+      _repState = RepState.starting;
       _formStatus = "Workout restarted!";
       _formStatusColor = Colors.white;
+      _previousAngle = 0.0;
+      _previousVerticalPosition = 0.0;
       _isSaving = false;
       _currentPose = null;
-      _noPoseFrames = 0;
     });
-    _masterTimer?.cancel();
-    _restTimer?.cancel();
     _startMasterTimer();
   }
 
@@ -718,24 +915,33 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: _showExitConfirmationDialog, // Directly use your existing method
+      onWillPop: _showExitConfirmationDialog,
       child: Scaffold(
         appBar: AppBar(
           title: Text(widget.exercise),
           backgroundColor: Colors.deepPurple,
-          actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _restartWorkout)],
+          actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _showRestartConfirmationDialog)],
         ),
         body: _isInitialized && _cameraController != null && _cameraController!.value.isInitialized
             ? Stack(
           fit: StackFit.expand,
           children: [
-            _buildCameraPreview(),
-            if (_currentPose != null)
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: PosePainter(_currentPose, _cameraController!.value.previewSize!),
+            FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: _cameraController!.value.previewSize!.height,
+                height: _cameraController!.value.previewSize!.width,
+                child: CameraPreview(_cameraController!),
+              ),
+            ),
+            Positioned.fill(
+              child: CustomPaint(
+                painter: PosePainter(
+                    (_isRestPeriod || !_isPoseVisible) ? null : _currentPose,
+                    _imageSize ?? _cameraController!.value.previewSize!
                 ),
               ),
+            ),
             _buildUIOverlays(),
             if (_showSuccessAnimation)
               Container(
@@ -755,129 +961,82 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     );
   }
 
-  Widget _buildCameraPreview() {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final previewSize = _cameraController!.value.previewSize!;
-    final screenSize = MediaQuery.of(context).size;
-    final aspectRatio = previewSize.height / previewSize.width;
-
-    return OverflowBox(
-      maxWidth: screenSize.width,
-      maxHeight: screenSize.height,
-      child: AspectRatio(
-        aspectRatio: aspectRatio,
-        child: CameraPreview(_cameraController!),
-      ),
-    );
-  }
-
   Widget _buildUIOverlays() {
     return SafeArea(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // 🔝 Top stats container
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             margin: const EdgeInsets.only(top: 10),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+            decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(15)),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 16.0,
+              runSpacing: 8.0,
               children: [
-                _buildStatItem(Icons.timer, '${_durationSeconds ~/ 60}:${(_durationSeconds % 60).toString().padLeft(2, '0')}'),
-                _buildStatItem(Icons.fitness_center, 'Set $_currentSet/${widget.sets}'),
-                _buildStatItem(Icons.local_fire_department, '${_caloriesBurned.toStringAsFixed(1)} kcal'),
-                if (_isRestPeriod)
-                  _buildStatItem(Icons.timer_outlined, 'Rest: $_restSeconds s', color: Colors.yellow),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.timer, color: Colors.white, size: 20),
+                  const SizedBox(width: 6),
+                  Text('${_durationSeconds ~/ 60}:${(_durationSeconds % 60).toString().padLeft(2, '0')}', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                ]),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.fitness_center, color: Colors.white, size: 20),
+                  const SizedBox(width: 6),
+                  Text('Set $_currentSet/${widget.sets}', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                ]),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 20),
+                  const SizedBox(width: 6),
+                  Text('${_caloriesBurned.toStringAsFixed(1)} kcal', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                ]),
               ],
             ),
           ),
 
-          // 🧍‍♂️ Form status or no pose warning
-          if (!_isPoseVisible)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                "No dumbbells detected.\nMake sure your shoulders and head are clearly visible.",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold),
-              ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
+            child: _isRestPeriod
+                ? Text(
+              'REST: $_restSeconds s',
+              style: const TextStyle(color: Colors.yellow, fontSize: 18, fontWeight: FontWeight.bold),
             )
-          else if (_formStatus.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                _formStatus,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: _formStatusColor, fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+                : Text(
+              _formStatus,
+              style: TextStyle(color: _formStatusColor, fontSize: 18, fontWeight: FontWeight.bold),
             ),
+          ),
 
-          // 🔢 Bottom rep counter and controls
           Padding(
-            padding: const EdgeInsets.only(bottom: 30.0),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    '$_repCount / ${widget.reps}',
-                    style: const TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold),
+            padding: const EdgeInsets.only(bottom: 20.0),
+            child: Column(children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                child: Text('$_repCount / ${widget.reps}', style: const TextStyle(fontSize: 40, color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+              if (_isRestPeriod && _restSeconds == 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 20.0),
+                  child: ElevatedButton(
+                    onPressed: _startNextSet,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    child: const Text('START NEXT SET'),
                   ),
                 ),
-                const SizedBox(height: 20),
-                if (_isRestPeriod && _restSeconds == 0)
-                  ElevatedButton(
-                    onPressed: _startNextSet,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                    ),
-                    child: const Text('START NEXT SET', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  ),
-              ],
-            ),
+            ]),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildStatItem(IconData icon, String text, {Color color = Colors.white}) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(height: 4),
-        Text(
-          text,
-          style: TextStyle(
-            color: color,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
+// Helper extension to capitalize strings for landmark lookups
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return "${this[0].toUpperCase()}${substring(1)}";
   }
 }

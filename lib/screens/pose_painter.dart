@@ -1,3 +1,4 @@
+// pose_painter.dart
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
