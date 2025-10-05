@@ -32,7 +32,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
     try {
       final url = Uri.parse(
-        'http://192.168.100.76/repEatApi/get_favorites.php?user_id=${widget.userId}',
+        'https://repeatapp.site/repEatApi/get_favorites.php?user_id=${widget.userId}',
       );
 
       final response =
@@ -85,7 +85,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
     try {
       final url =
-      Uri.parse('http://192.168.100.76/repEatApi/remove_favorite.php');
+      Uri.parse('https://repeatapp.site/repEatApi/remove_favorite.php');
       final response = await http.delete(
         url,
         headers: {'Content-Type': 'application/json'},

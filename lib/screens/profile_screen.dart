@@ -68,7 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final response = await http.get(
         Uri.parse(
-            'http://192.168.100.76/repEatApi/get_profile.php?user_id=${widget.userId}'),
+            'https://repeatapp.site/repEatApi/get_profile.php?user_id=${widget.userId}'),
       );
 
       if (response.statusCode == 200) {

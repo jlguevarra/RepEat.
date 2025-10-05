@@ -79,7 +79,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
     try {
       final response = await http.get(Uri.parse(
-        'http://192.168.100.76/repEatApi/get_profile.php?user_id=$userId',
+        'https://repeatapp.site/repEatApi/get_profile.php?user_id=$userId',
       ));
       final data = json.decode(response.body);
 
@@ -159,7 +159,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       }
 
       final response = await http.post(
-        Uri.parse('http://192.168.100.76/repEatApi/update_account.php'),
+        Uri.parse('https://repeatapp.site/repEatApi/update_account.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestData),
       );
