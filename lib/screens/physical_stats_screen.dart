@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -108,6 +110,21 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     return shouldPop ?? false;
   }
 
+  void _handleLoadError() {
+    if (mounted) {
+      setState(() {
+        // Set to original (potentially empty) values to prevent null errors
+        currentWeightController.text = originalCurrentWeight;
+        targetWeightController.text = originalTargetWeight;
+        heightController.text = originalHeight;
+        hasInjury = originalHasInjury;
+        selectedInjuryCategory = originalInjuryDetails;
+        bmiCategory = originalBodyType;
+        updatedGoal = originalGoal;
+      });
+    }
+  }
+
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     userId = prefs.getInt('user_id');
@@ -120,7 +137,8 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
     try {
       final response = await http.get(
         Uri.parse('https://repeatapp.site/repEatApi/get_profile.php?user_id=$userId'),
-      );
+      ).timeout(const Duration(seconds: 10));
+
       final data = json.decode(response.body);
 
       if (data['success'] == true) {
@@ -150,20 +168,26 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
             originalInjuryDetails = injuryStatus && injuryDetails != 'None' ? injuryDetails : 'None';
             originalBodyType = bodyType.isNotEmpty ? bodyType : 'Unknown';
             originalGoal = goal.isNotEmpty ? goal : 'General Fitness';
-            isLoading = false;
           });
         }
       } else {
         _showCustomSnackBar(data['message'] ?? 'Failed to load stats.', false);
-        if (mounted) setState(() => isLoading = false);
+        _handleLoadError();
       }
+    } on TimeoutException catch (_) {
+      _showCustomSnackBar('The server took too long to respond.', false);
+      _handleLoadError();
+    } on SocketException catch (_) {
+      _showCustomSnackBar('No Internet connection. Please check your network.', false);
+      _handleLoadError();
     } catch (e) {
-      _showCustomSnackBar('Error loading stats: ${e.toString()}', false);
+      _showCustomSnackBar('An unexpected error occurred.', false);
+      _handleLoadError();
+    } finally {
       if (mounted) setState(() => isLoading = false);
     }
   }
 
-  // MODIFIED: Only checks for changes in injury information
   bool get hasChanges {
     return hasInjury != originalHasInjury ||
         (hasInjury && selectedInjuryCategory != originalInjuryDetails);
@@ -206,9 +230,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
   }
 
   Future<void> _saveData() async {
-    // MODIFIED: Removed validation for weight and height as they are not editable.
-
-    // Validate injury selection if injury is present
     if (hasInjury && selectedInjuryCategory == 'None') {
       setState(() => _injuryValid = false);
       _showCustomSnackBar('Please select an injury category', false);
@@ -217,7 +238,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       setState(() => _injuryValid = true);
     }
 
-    // Update BMI before saving (in case it wasn't calculated, although fields are read-only)
     _calculateBMI();
 
     setState(() => isSaving = true);
@@ -235,14 +255,13 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
           'goal': updatedGoal,
           'body_type': bmiCategory,
         },
-      );
+      ).timeout(const Duration(seconds: 10));
 
       final data = json.decode(response.body);
       if (data['success'] == true) {
         _showCustomSnackBar(data['message'] ?? 'Physical stats updated successfully!', true);
         if (mounted) {
           setState(() {
-            // Update original values to reflect saved state
             originalHasInjury = hasInjury;
             originalInjuryDetails = hasInjury ? selectedInjuryCategory : 'None';
             isEditing = false;
@@ -251,8 +270,12 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       } else {
         _showCustomSnackBar(data['message'] ?? 'Failed to update stats.', false);
       }
+    } on TimeoutException catch (_) {
+      _showCustomSnackBar('The server took too long to respond.', false);
+    } on SocketException catch (_) {
+      _showCustomSnackBar('No Internet connection. Please check your network.', false);
     } catch (e) {
-      _showCustomSnackBar('Network error. Please try again.', false);
+      _showCustomSnackBar('An unexpected error occurred while saving.', false);
     } finally {
       if (mounted) {
         setState(() => isSaving = false);
@@ -286,7 +309,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
 
     if (result == true && mounted) {
       setState(() {
-        // MODIFIED: Only revert injury information
         hasInjury = originalHasInjury;
         selectedInjuryCategory = originalHasInjury ? originalInjuryDetails : 'None';
         isEditing = false;
@@ -351,7 +373,7 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                     isEditing = true;
                   });
                 },
-                tooltip: 'Edit Injury Info', // MODIFIED: Tooltip text for clarity
+                tooltip: 'Edit Injury Info',
               ),
           ],
         ),
@@ -440,7 +462,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                   const SizedBox(height: 8),
                                   TextFormField(
                                     controller: currentWeightController,
-                                    // MODIFIED: Always read-only
                                     readOnly: true,
                                     style: const TextStyle(color: Colors.black87),
                                     decoration: _inputDecoration(),
@@ -464,7 +485,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                   const SizedBox(height: 8),
                                   TextFormField(
                                     controller: targetWeightController,
-                                    // MODIFIED: Always read-only
                                     readOnly: true,
                                     style: const TextStyle(color: Colors.black87),
                                     decoration: _inputDecoration(),
@@ -526,7 +546,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                                   const SizedBox(height: 8),
                                   TextFormField(
                                     controller: heightController,
-                                    // MODIFIED: Always read-only
                                     readOnly: true,
                                     style: const TextStyle(color: Colors.black87),
                                     decoration: _inputDecoration(),
@@ -577,7 +596,6 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Injury Section - This remains editable
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(

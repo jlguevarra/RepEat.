@@ -1,3 +1,5 @@
+import 'dart:async'; // --- 1. ADD THIS IMPORT ---
+import 'dart:io';   // --- 2. ADD THIS IMPORT ---
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -97,10 +99,25 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
         ],
       ),
     );
-
     return shouldPop ?? false;
   }
 
+  // --- 3. ADD THIS HELPER FUNCTION ---
+  void _handleLoadError() {
+    // Fallback to cached weights to determine diet options
+    _updateFilteredDietOptions('None');
+    if (mounted) {
+      setState(() {
+        // Set to sensible defaults
+        selectedDiet = 'None';
+        originalDiet = 'None';
+        selectedAllergies = {};
+        originalAllergies = {};
+      });
+    }
+  }
+
+  // --- 4. REFINED THIS ENTIRE FUNCTION ---
   Future<void> _loadProfile() async {
     final prefs = await SharedPreferences.getInstance();
     userId = prefs.getInt('user_id');
@@ -115,7 +132,9 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     }
 
     try {
-      final response = await http.get(Uri.parse('https://repeatapp.site/repEatApi/get_profile.php?user_id=$userId'));
+      final response = await http.get(Uri.parse('https://repeatapp.site/repEatApi/get_profile.php?user_id=$userId'))
+          .timeout(const Duration(seconds: 10));
+
       final data = json.decode(response.body);
 
       if (data['success'] == true) {
@@ -145,9 +164,17 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
         }
       } else {
         _showCustomSnackBar(data['message'] ?? 'Failed to load profile.', false);
+        _handleLoadError();
       }
+    } on TimeoutException catch (_) {
+      _showCustomSnackBar('The server took too long to respond.', false);
+      _handleLoadError();
+    } on SocketException catch (_) {
+      _showCustomSnackBar('No Internet connection. Please check your network.', false);
+      _handleLoadError();
     } catch (e) {
-      _showCustomSnackBar('Error loading profile: $e', false);
+      _showCustomSnackBar('An unexpected error occurred.', false);
+      _handleLoadError();
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -174,6 +201,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
     return selectedDiet != originalDiet || !setEquals(selectedAllergies, originalAllergies);
   }
 
+  // --- 5. REFINED THIS ENTIRE FUNCTION ---
   Future<void> _saveProfile() async {
     setState(() => isSaving = true);
 
@@ -185,7 +213,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
           'diet_preference': selectedDiet,
           'allergies': selectedAllergies.isEmpty ? 'None' : selectedAllergies.join(', '),
         },
-      );
+      ).timeout(const Duration(seconds: 10));
 
       final result = json.decode(response.body);
 
@@ -201,8 +229,12 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
       } else {
         _showCustomSnackBar(result['message'] ?? 'Failed to update preferences.', false);
       }
+    } on TimeoutException catch (_) {
+      _showCustomSnackBar('The server took too long to respond.', false);
+    } on SocketException catch (_) {
+      _showCustomSnackBar('No Internet connection. Please check your network.', false);
     } catch (e) {
-      _showCustomSnackBar('Error: $e', false);
+      _showCustomSnackBar('An unexpected error occurred while saving.', false);
     } finally {
       if (mounted) setState(() => isSaving = false);
     }
@@ -282,7 +314,6 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Section
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -295,8 +326,6 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
                 const SizedBox(height: 8),
                 const Text('Manage your dietary needs and restrictions', style: TextStyle(fontSize: 14, color: Colors.grey)),
                 const SizedBox(height: 30),
-
-                // Diet Preference Section
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -322,9 +351,9 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
 
                               if (val == 'Dairy Free') {
                                 if (selectedAllergies.contains('None')) selectedAllergies.remove('None');
-                                selectedAllergies.add('Milk'); // Auto-add Milk
+                                selectedAllergies.add('Milk');
                               } else {
-                                selectedAllergies.remove('Milk'); // Remove if diet changes
+                                selectedAllergies.remove('Milk');
                               }
                             });
                           }
@@ -336,8 +365,6 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // Allergies Section
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -362,7 +389,7 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
                               label: Text(allergy),
                               selected: isSelected,
                               onSelected: isDisabled
-                                  ? null // Disable if Dairy Free and Milk
+                                  ? null
                                   : (selected) {
                                 setState(() {
                                   if (selected) {

@@ -1,3 +1,5 @@
+import 'dart:async'; // --- 1. ADD THIS IMPORT ---
+import 'dart:io';   // --- 2. ADD THIS IMPORT ---
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -32,9 +34,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     _loadData();
   }
 
-  // Custom Snackbar method - Improved Design
+  // Custom Snackbar method (No changes here)
   void _showCustomSnackBar(String message, bool isSuccess) {
-    if (!mounted) return; // Guard against state changes if widget is disposed
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -67,12 +69,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     );
   }
 
+  // --- 3. REFINED THIS ENTIRE FUNCTION ---
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     userId = prefs.getInt('user_id');
 
     if (userId == null) {
-      _showCustomSnackBar('User ID not found. Please log in again.', false); // Updated SnackBar
+      _showCustomSnackBar('User ID not found. Please log in again.', false);
       if (mounted) Navigator.pop(context);
       return;
     }
@@ -80,24 +83,29 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     try {
       final response = await http.get(Uri.parse(
         'https://repeatapp.site/repEatApi/get_profile.php?user_id=$userId',
-      ));
+      )).timeout(const Duration(seconds: 10));
+
       final data = json.decode(response.body);
 
       if (data['success'] == true) {
         final profile = data['data'];
         originalName = profile['name'] ?? '';
-        if (mounted) { // Check if mounted before setState
+        if (mounted) {
           setState(() {
             nameController.text = originalName;
           });
         }
       } else {
-        _showCustomSnackBar(data['message'] ?? 'Failed to load account settings.', false); // Updated SnackBar
+        _showCustomSnackBar(data['message'] ?? 'Failed to load account settings.', false);
       }
+    } on TimeoutException catch (_) {
+      _showCustomSnackBar('The server took too long to respond.', false);
+    } on SocketException catch (_) {
+      _showCustomSnackBar('No Internet connection. Please check your network.', false);
     } catch (e) {
-      _showCustomSnackBar('Error: $e', false); // Updated SnackBar
+      _showCustomSnackBar('An unexpected error occurred.', false);
     } finally {
-      if (mounted) { // Check if mounted before setState
+      if (mounted) {
         setState(() => isLoading = false);
       }
     }
@@ -141,6 +149,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     return hasValidNameChanges || hasPasswordChanges;
   }
 
+  // --- 4. REFINED THIS ENTIRE FUNCTION ---
   Future<void> _saveData() async {
     setState(() => isSaving = true);
 
@@ -162,7 +171,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         Uri.parse('https://repeatapp.site/repEatApi/update_account.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestData),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       final data = json.decode(response.body);
 
@@ -170,16 +179,16 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         final prefs = await SharedPreferences.getInstance();
         if (hasValidNameChanges) {
           await prefs.setString('user_name', nameController.text.trim());
-          if (mounted) { // Check if mounted before setState
+          if (mounted) {
             setState(() {
               originalName = nameController.text.trim();
             });
           }
         }
 
-        _showCustomSnackBar(data['message'] ?? 'Account updated successfully.', true); // Updated SnackBar
+        _showCustomSnackBar(data['message'] ?? 'Account updated successfully.', true);
 
-        if (mounted) { // Check if mounted before setState
+        if (mounted) {
           setState(() {
             isEditing = false;
             currentPasswordController.clear();
@@ -188,12 +197,16 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           });
         }
       } else {
-        _showCustomSnackBar(data['message'] ?? 'Failed to update account.', false); // Updated SnackBar
+        _showCustomSnackBar(data['message'] ?? 'Failed to update account.', false);
       }
+    } on TimeoutException catch (_) {
+      _showCustomSnackBar('The server took too long to respond.', false);
+    } on SocketException catch (_) {
+      _showCustomSnackBar('No Internet connection. Please check your network.', false);
     } catch (e) {
-      _showCustomSnackBar('Error: $e', false); // Updated SnackBar
+      _showCustomSnackBar('An unexpected error occurred while saving.', false);
     } finally {
-      if (mounted) { // Check if mounted before setState
+      if (mounted) {
         setState(() => isSaving = false);
       }
     }
@@ -249,7 +262,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(
-        backgroundColor: Colors.deepPurple, // Match app bar color
+        backgroundColor: Colors.deepPurple,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -274,7 +287,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: Colors.deepPurple.shade50, // Softer background - Improved Design
+        backgroundColor: Colors.deepPurple.shade50,
         appBar: AppBar(
           title: const Text('Account Settings'),
           backgroundColor: Colors.deepPurple,
@@ -289,10 +302,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           ),
           actions: [
             IconButton(
-              icon: Icon(isEditing ? Icons.cancel : Icons.edit), // Changed icon for clarity
+              icon: Icon(isEditing ? Icons.cancel : Icons.edit),
               onPressed: () async {
                 if (isEditing && await _confirmDiscardChanges()) {
-                  if (mounted) { // Check if mounted before setState
+                  if (mounted) {
                     setState(() {
                       isEditing = false;
                       nameController.text = originalName;
@@ -305,17 +318,16 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   setState(() => isEditing = true);
                 }
               },
-              tooltip: isEditing ? 'Cancel' : 'Edit', // Added tooltip
+              tooltip: isEditing ? 'Cancel' : 'Edit',
             ),
           ],
         ),
-        body: SafeArea( // Improved Design
-          child: SingleChildScrollView( // Improved Design
-            padding: const EdgeInsets.all(16), // Improved Design
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start, // Improved Design
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Section - Improved Design
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -348,8 +360,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 30),
-
-                // Basic Information Section - Improved Design (Card)
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
@@ -385,8 +395,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // Password Section - Improved Design (Card)
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
@@ -417,7 +425,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                         ),
                         const SizedBox(height: 16),
                         if (!isEditing)
-                          _readOnlyPasswordField('Password not shown') // Improved read-only display
+                          _readOnlyPasswordField('Password not shown')
                         else
                           _passwordInput(
                             'Current Password',
@@ -427,7 +435,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                           ),
                         const SizedBox(height: 16),
                         if (!isEditing)
-                          _readOnlyPasswordField('Password not shown') // Improved read-only display
+                          _readOnlyPasswordField('Password not shown')
                         else
                           _passwordInput(
                             'New Password',
@@ -437,7 +445,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                           ),
                         const SizedBox(height: 16),
                         if (!isEditing)
-                          _readOnlyPasswordField('Password not shown') // Improved read-only display
+                          _readOnlyPasswordField('Password not shown')
                         else
                           _passwordInput(
                             'Confirm New Password',
@@ -445,7 +453,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                             obscureConfirmPassword,
                                 () => setState(() => obscureConfirmPassword = !obscureConfirmPassword),
                           ),
-                        // Password validation messages
                         if (isEditing) ...[
                           if (newPasswordController.text.isNotEmpty &&
                               newPasswordController.text.length < 8)
@@ -486,7 +493,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
                 const SizedBox(height: 30),
 
-                // Save Button (only visible when editing) - Improved Design
                 if (isEditing)
                   Center(
                     child: SizedBox(
@@ -529,7 +535,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     );
   }
 
-  // Improved Text Input - Better Design Consistency
   Widget _textInput(String label, TextEditingController controller, bool enabled) {
     return TextFormField(
       controller: controller,
@@ -541,12 +546,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             color: enabled ? Colors.deepPurple : Colors.grey),
       ),
       onChanged: (_) {
-        if (enabled) setState(() {}); // Only trigger rebuild if enabled
+        if (enabled) setState(() {});
       },
     );
   }
 
-  // Improved Password Input - Better Design Consistency
   Widget _passwordInput(
       String label,
       TextEditingController controller,
@@ -562,28 +566,27 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         labelText: label,
         labelStyle: TextStyle(
             color: isEditing ? Colors.deepPurple : Colors.grey),
-        suffixIcon: isEditing // Only show icon when editing
+        suffixIcon: isEditing
             ? IconButton(
           icon: Icon(
             obscureText ? Icons.visibility_off : Icons.visibility,
-            color: Colors.grey.shade600, // Fixed potential null color
+            color: Colors.grey.shade600,
           ),
           onPressed: onToggleVisibility,
         )
-            : null, // No suffix icon when not editing
+            : null,
       ),
       onChanged: (_) {
-        if (isEditing) setState(() {}); // Only trigger rebuild if editing
+        if (isEditing) setState(() {});
       },
     );
   }
 
-  // Improved Read-Only Password Field Display
   Widget _readOnlyPasswordField(String label) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100, // Softer background
+        color: Colors.grey.shade100,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.deepPurple.shade200),
       ),
@@ -608,7 +611,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     );
   }
 
-  // Improved Input Decoration - Better Design Consistency
   InputDecoration _inputDecoration() {
     return InputDecoration(
       filled: true,

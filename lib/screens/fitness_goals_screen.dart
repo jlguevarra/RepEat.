@@ -1,3 +1,5 @@
+import 'dart:async'; // --- 1. ADD THIS IMPORT ---
+import 'dart:io';   // --- 2. ADD THIS IMPORT ---
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -29,9 +31,9 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     _loadData();
   }
 
-  // Custom Snackbar method - Improved Design
+  // Custom Snackbar method (No changes here)
   void _showCustomSnackBar(String message, bool isSuccess) {
-    if (!mounted) return; // Guard against state changes if widget is disposed
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -64,6 +66,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     );
   }
 
+  // --- 3. REFINED THIS ENTIRE FUNCTION ---
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     userId = prefs.getInt('user_id');
@@ -72,21 +75,29 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       if (mounted) Navigator.pop(context);
       return;
     }
+
+    // Load cached weights first as a fallback
     currentWeight = double.tryParse(prefs.getString('current_weight') ?? '') ?? 0;
     targetWeight = double.tryParse(prefs.getString('target_weight') ?? '') ?? 0;
+
     try {
       final response = await http.get(Uri.parse(
         'https://repeatapp.site/repEatApi/get_profile.php?user_id=$userId',
-      ));
+      )).timeout(const Duration(seconds: 10));
+
       final data = json.decode(response.body);
+
       if (data['success'] == true) {
         final profile = data['data'];
+        // Update weights from server if they were missing locally
         if (currentWeight == 0) {
           currentWeight = double.tryParse(profile['current_weight'] ?? '0') ?? 0;
         }
         if (targetWeight == 0) {
           targetWeight = double.tryParse(profile['target_weight'] ?? '0') ?? 0;
         }
+
+        // Determine goals with the most up-to-date information
         _determineAllowedGoals();
         originalGoal = profile['goal'] ?? allowedGoals.first;
         selectedGoal = originalGoal;
@@ -94,15 +105,30 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
           selectedGoal = allowedGoals.first;
         }
       } else {
-        _showCustomSnackBar(data['message'] ?? 'Failed to load goals.', false);
+        _showCustomSnackBar(data['message'] ?? 'Failed to load goals. Using cached data.', false);
+        _handleLoadError(); // Fallback to cached data
       }
+    } on TimeoutException catch (_) {
+      _showCustomSnackBar('Server is not responding. Using cached data.', false);
+      _handleLoadError(); // Fallback to cached data
+    } on SocketException catch (_) {
+      _showCustomSnackBar('No Internet connection. Please check your network. ', false);
+      _handleLoadError(); // Fallback to cached data
     } catch (e) {
-      _showCustomSnackBar('Error loading goals: $e', false);
+      _showCustomSnackBar('An unexpected error occurred. Using cached data.', false);
+      _handleLoadError(); // Fallback to cached data
     } finally {
       if (mounted) {
         setState(() => isLoading = false);
       }
     }
+  }
+
+  // Helper to set default state on error
+  void _handleLoadError() {
+    _determineAllowedGoals();
+    selectedGoal = allowedGoals.isNotEmpty ? allowedGoals.first : 'Maintain Weight';
+    originalGoal = selectedGoal;
   }
 
   void _determineAllowedGoals() {
@@ -112,6 +138,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     } else if (targetWeight < currentWeight) {
       allowedGoals.add('Weight Loss');
     } else {
+      // Handles case where target equals current or both are zero
       allowedGoals.add('Maintain Weight');
     }
   }

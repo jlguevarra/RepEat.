@@ -1,3 +1,5 @@
+import 'dart:async'; // --- 1. ADD THIS IMPORT ---
+import 'dart:io';   // --- 2. ADD THIS IMPORT ---
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -64,21 +66,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // --- 3. ADD THIS HELPER FUNCTION TO HANDLE ALL ERRORS ---
+  Future<void> _loadFromCache(String errorReason) async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedName = prefs.getString('user_name') ?? 'User';
+    if (mounted) {
+      final newErrorMessage = 'Offline mode: $errorReason';
+      setState(() {
+        fullName = cachedName;
+        isLoading = false;
+        isRefreshing = false;
+        errorMessage = newErrorMessage;
+      });
+      _showCustomSnackBar(newErrorMessage, false);
+    }
+  }
+
+  // --- 4. REFINED THIS ENTIRE FUNCTION ---
   Future<void> _loadUserData() async {
     try {
       final response = await http.get(
         Uri.parse(
             'https://repeatapp.site/repEatApi/get_profile.php?user_id=${widget.userId}'),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['success'] == true) {
+        if (data['success'] == true && data['data'] != null) {
+          // This is the only successful path
           final name = data['data']['name'] ?? 'User';
-
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('user_name', name);
-
           if (mounted) {
             setState(() {
               fullName = name;
@@ -87,47 +105,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               errorMessage = null;
             });
           }
-          return;
         } else {
-          final prefs = await SharedPreferences.getInstance();
-          final cachedName = prefs.getString('user_name') ?? 'User';
-          if (mounted) {
-            setState(() {
-              fullName = cachedName;
-              isLoading = false;
-              isRefreshing = false;
-              errorMessage =
-              'Using cached data - ${data['message'] ?? 'API returned error'}';
-            });
-          }
-          _showCustomSnackBar(errorMessage!, false);
-          return;
+          // API returned success: false
+          await _loadFromCache(data['message'] ?? 'API returned an error');
         }
+      } else {
+        // Bad status code (e.g., 404, 500)
+        await _loadFromCache('Could not connect to the server.');
       }
-
-      final prefs = await SharedPreferences.getInstance();
-      final cachedName = prefs.getString('user_name') ?? 'User';
-      if (mounted) {
-        setState(() {
-          fullName = cachedName;
-          isLoading = false;
-          isRefreshing = false;
-          errorMessage = 'Using cached data - Network error';
-        });
-      }
-      _showCustomSnackBar(errorMessage!, false);
+    } on TimeoutException catch (_) {
+      await _loadFromCache('Server took too long to respond.');
+    } on SocketException catch (_) {
+      await _loadFromCache('No Internet connection. Please check your network.');
     } catch (e) {
-      final prefs = await SharedPreferences.getInstance();
-      final cachedName = prefs.getString('user_name') ?? 'User';
-      if (mounted) {
-        setState(() {
-          fullName = cachedName;
-          isLoading = false;
-          isRefreshing = false;
-          errorMessage = 'Using cached data - ${e.toString()}';
-        });
-      }
-      _showCustomSnackBar(errorMessage!, false);
+      await _loadFromCache('An unexpected error occurred.');
     }
   }
 

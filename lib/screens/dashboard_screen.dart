@@ -1,5 +1,8 @@
+// lib/screens/dashboard_screen.dart
+
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io'; // --- 1. ADD THIS IMPORT ---
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -64,6 +67,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+  // --- 2. ADD THIS SNACKBAR METHOD ---
+  void _showCustomSnackBar(String message, {bool isError = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.all(20),
+      ),
+    );
+  }
+
   void _updateGreeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) {
@@ -87,6 +112,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _motivationalQuote = quotes[dayOfYear % quotes.length];
   }
 
+  // --- 3. REFINED THIS ENTIRE FUNCTION ---
   Future<void> _loadDashboardData() async {
     try {
       final response = await http.post(
@@ -99,27 +125,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         if (data['error'] != null) {
           debugPrint("API Error: ${data['error']}");
+          _showCustomSnackBar("Error loading data: ${data['error']}");
           return;
         }
 
-        setState(() {
-          workoutsCompleted = data['workoutsCompleted'] ?? 0;
-          caloriesBurned = data['caloriesBurned'] ?? 0;
-          streakDays = data['streakDays'] ?? 0;
-          weight = (data['weight'] as num?)?.toDouble() ?? 0.0;
-          workoutsThisWeek = data['workoutsThisWeek'] ?? 0;
-          weeklyGoal = data['weeklyGoal'] ?? 28;
-          weeklyActivity =
-          List<Map<String, dynamic>>.from(data['weeklyActivity'] ?? []);
-          upcomingWorkouts =
-          List<Map<String, dynamic>>.from(data['upcomingWorkouts'] ?? []);
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            workoutsCompleted = data['workoutsCompleted'] ?? 0;
+            caloriesBurned = data['caloriesBurned'] ?? 0;
+            streakDays = data['streakDays'] ?? 0;
+            weight = (data['weight'] as num?)?.toDouble() ?? 0.0;
+            workoutsThisWeek = data['workoutsThisWeek'] ?? 0;
+            weeklyGoal = data['weeklyGoal'] ?? 28;
+            weeklyActivity = List<Map<String, dynamic>>.from(data['weeklyActivity'] ?? []);
+            upcomingWorkouts = List<Map<String, dynamic>>.from(data['upcomingWorkouts'] ?? []);
+            _isLoading = false; // Stop loading only on success
+          });
+        }
       } else {
         debugPrint("HTTP Error: ${response.statusCode}");
+        _showCustomSnackBar('Server error: Please try again later.');
       }
+    } on TimeoutException catch (_) {
+      _showCustomSnackBar('Server is not responding. Please try again.');
+    } on SocketException catch (_) {
+      _showCustomSnackBar('No Internet connection. Please check your network.');
     } catch (e) {
       debugPrint("API Exception: $e");
+      _showCustomSnackBar('An unexpected error occurred.');
+    } finally {
+      // Ensure loading indicator is always turned off if an error occurs on first load
+      if (_isLoading && mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -195,6 +235,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // --- NO CHANGES BELOW THIS LINE ---
   Widget _greetingCard() {
     return Container(
       decoration: BoxDecoration(

@@ -3,6 +3,8 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async'; // --- 1. ADD THIS IMPORT ---
+import 'dart:io';   // --- 2. ADD THIS IMPORT ---
 
 // --- DATA MODELS ---
 // A base class for any item that can appear on the calendar
@@ -69,15 +71,17 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
     super.dispose();
   }
 
-  // --- DATA HANDLING ---
+  // --- 3. REFINED THIS ENTIRE FUNCTION ---
   Future<void> _fetchAllEvents() async {
     setState(() => _isLoading = true);
     final events = <DateTime, List<CalendarEvent>>{};
 
     try {
       final responses = await Future.wait([
-        http.get(Uri.parse('https://repeatapp.site/repEatApi/get_reminders.php?user_id=${widget.userId}')),
-        http.get(Uri.parse('https://repeatapp.site/repEatApi/get_holidays.php')), // Assumes this file exists
+        http.get(Uri.parse('https://repeatapp.site/repEatApi/get_reminders.php?user_id=${widget.userId}'))
+            .timeout(const Duration(seconds: 10)),
+        http.get(Uri.parse('https://repeatapp.site/repEatApi/get_holidays.php'))
+            .timeout(const Duration(seconds: 10)),
       ]);
 
       // Process reminders
@@ -103,14 +107,20 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
           }
         }
       }
+    } on TimeoutException catch (_) {
+      _showSnackbar('The server took too long to respond.', isError: true);
+    } on SocketException catch (_) {
+      _showSnackbar('No Internet connection. Please check your network.', isError: true);
     } catch (e) {
-      _showSnackbar('Error fetching events: $e', isError: true);
+      _showSnackbar('An unexpected error occurred while fetching events.', isError: true);
     }
 
-    setState(() {
-      _events = events;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _events = events;
+        _isLoading = false;
+      });
+    }
   }
 
   List<CalendarEvent> _getEventsForDay(DateTime day) {
@@ -181,7 +191,7 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
     final selectedEvents = _getEventsForDay(_selectedDay!);
     if (selectedEvents.isEmpty) {
       return const Center(
-        child: Text("No reminders for this day.", style: TextStyle(color: Colors.grey)),
+        child: Text("No reminders or holidays for this day.", style: TextStyle(color: Colors.grey)),
       );
     }
 
@@ -203,7 +213,6 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
   Widget _buildReminderTile(Reminder reminder) {
     return Card(
       child: ListTile(
-        // MODIFICATION: Changed the icon to represent a note
         leading: Icon(Icons.note_alt_outlined, color: Theme.of(context).primaryColor),
         title: Text(reminder.title, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: reminder.notes.isNotEmpty ? Text(reminder.notes) : null,
@@ -269,13 +278,14 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
     );
   }
 
+  // --- 4. REFINED THIS ENTIRE FUNCTION ---
   Future<void> _saveReminder({int? id}) async {
     if (_titleController.text.isEmpty) {
       _showSnackbar('Title cannot be empty.', isError: true);
       return;
     }
 
-    Navigator.of(context).pop(); // Close modal first
+    Navigator.of(context).pop();
     setState(() => _isLoading = true);
 
     try {
@@ -289,22 +299,30 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
           'notes': _notesController.text,
           'reminder_date': DateFormat('yyyy-MM-dd').format(_selectedDay!),
         }),
-      );
+      ).timeout(const Duration(seconds: 10));
+
       final data = json.decode(response.body);
       if (data['success']) {
         _showSnackbar('Reminder saved!');
         await _fetchAllEvents();
       } else {
-        throw Exception(data['message']);
+        throw Exception(data['message'] ?? 'Failed to save reminder.');
       }
-    } catch(e) {
-      _showSnackbar('Error saving reminder: $e', isError: true);
-      setState(() => _isLoading = false);
+    } on TimeoutException catch (_) {
+      _showSnackbar('Failed to save reminder: Server timeout.', isError: true);
+      if (mounted) setState(() => _isLoading = false);
+    } on SocketException catch (_) {
+      _showSnackbar('Failed to save reminder: No connection.', isError: true);
+      if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      _showSnackbar('An unexpected error occurred while saving.', isError: true);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // --- 5. REFINED THIS ENTIRE FUNCTION ---
   Future<void> _deleteReminder(int id) async {
-    Navigator.of(context).pop(); // Close modal
+    Navigator.of(context).pop();
     setState(() => _isLoading = true);
 
     try {
@@ -312,21 +330,27 @@ class _NotesCalendarScreenState extends State<NotesCalendarScreen> {
         Uri.parse('https://repeatapp.site/repEatApi/delete_reminder.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'id': id, 'user_id': widget.userId}),
-      );
+      ).timeout(const Duration(seconds: 10));
+
       final data = json.decode(response.body);
       if (data['success']) {
         _showSnackbar('Reminder deleted.');
         await _fetchAllEvents();
       } else {
-        throw Exception(data['message']);
+        throw Exception(data['message'] ?? 'Failed to delete reminder.');
       }
-    } catch(e) {
-      _showSnackbar('Error deleting reminder: $e', isError: true);
-      setState(() => _isLoading = false);
+    } on TimeoutException catch (_) {
+      _showSnackbar('Failed to delete reminder: Server timeout.', isError: true);
+      if (mounted) setState(() => _isLoading = false);
+    } on SocketException catch (_) {
+      _showSnackbar('Failed to delete reminder: No connection.', isError: true);
+      if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      _showSnackbar('An unexpected error occurred while deleting.', isError: true);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // MODIFICATION: Changed to a modern, floating snackbar with an icon
   void _showSnackbar(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();

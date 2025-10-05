@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async'; // --- 1. ADD THIS IMPORT for TimeoutException ---
+import 'dart:io';   // --- 2. ADD THIS IMPORT for SocketException ---
 import 'verify_code_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -17,8 +19,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final TextEditingController _emailCtrl = TextEditingController();
   bool _isLoading = false;
 
-  // Custom Snackbar method
+  // Custom Snackbar method (No changes here)
   void _showCustomSnackBar(String message, bool isSuccess) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -56,20 +59,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     setState(() => _isLoading = true);
 
-    final apiUrl = 'https://repeatapp.site/repEatApi/forgot_password.php'; // emulator local
+    final apiUrl = 'https://repeatapp.site/repEatApi/forgot_password.php';
 
+    // --- 3. REFINED TRY-CATCH BLOCK ---
     try {
+      // Add a timeout to the request to prevent it from hanging indefinitely
       final response = await http.post(
         Uri.parse(apiUrl),
         body: {'email': _emailCtrl.text.trim()},
-      );
+      ).timeout(const Duration(seconds: 10)); // Request will fail if it takes longer than 10 seconds
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
-        if (!mounted) return;
         _showCustomSnackBar('Reset code sent successfully!', true);
-        // Add a small delay before navigation to let user see success message
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) {
             Navigator.push(
@@ -81,15 +84,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           }
         });
       } else {
-        _showCustomSnackBar(data['message'] ?? 'Failed to send reset code', false);
+        _showCustomSnackBar(data['message'] ?? 'Failed to send reset code. Please try again.', false);
       }
+    } on TimeoutException catch (_) {
+      // This is caught when the server is too slow to respond.
+      _showCustomSnackBar('The server took too long to respond. Please try again later.', false);
+    } on SocketException catch (_) {
+      // This is caught when there is no internet connection or the server is down.
+      _showCustomSnackBar('No Internet connection. Please check your network.', false);
+    } on http.ClientException catch (_) {
+      // This can catch other HTTP-related errors.
+      _showCustomSnackBar('Failed to connect to the server. Please try again later.', false);
     } catch (e) {
-      if (!mounted) return;
-      _showCustomSnackBar('Network error: ${e.toString()}', false);
+      // This is a general catch-all for any other unexpected errors.
+      _showCustomSnackBar('An unexpected error occurred: ${e.toString()}', false);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
+  // --- END OF REFINED BLOCK ---
+
 
   @override
   void dispose() {
@@ -99,6 +115,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // --- NO CHANGES NEEDED IN THE BUILD METHOD ---
     return Scaffold(
       backgroundColor: Colors.deepPurple.shade50,
       appBar: AppBar(
@@ -158,6 +175,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 // Email Field
                 TextFormField(
                   controller: _emailCtrl,
+                  // CORRECT
                   keyboardType: TextInputType.emailAddress,
                   style: const TextStyle(color: Colors.black87),
                   decoration: InputDecoration(
