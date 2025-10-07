@@ -25,7 +25,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   String? apiError;
 
   // MODIFIED: Use your new Google Gemini API key.
-  static const String geminiApiKey = 'AIzaSyC3IhY-aAkXfPKeteU0WKyQCJmr5TRsAuw'; // <-- PASTE YOUR FRESH KEY HERE
+  static const String geminiApiKey = 'AIzaSyCeDxLLx2dHS_O6OSZhZEoQPGFwcWkiz0U'; // <-- PASTE YOUR FRESH KEY HERE
 
   @override
   void initState() {

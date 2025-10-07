@@ -39,7 +39,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   List<Map<String, dynamic>> _chatMessages = [];
   bool isChatLoading = false;
 
-  final String _geminiModel = 'gemini-pro-latest';
+  final String _geminiModel = 'gemini-pro-latest'; // Assuming you meant gemini-pro
   late AnimationController _dotsController;
   GenerativeModel? _model;
   ChatSession? _chat;
@@ -71,7 +71,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _chat = _model!.startChat();
   }
 
-  // MODIFIED: Added instruction to prevent Markdown formatting
+  // MODIFIED: Removed the instruction that prevented Markdown formatting.
   String _buildSystemPrompt() {
     final profile = widget.userData;
     String basePrompt =
@@ -87,11 +87,7 @@ Personalize all responses based on this user profile:
 - Allergies: ${profile['allergies']?.isNotEmpty == true ? profile['allergies'] : 'None'}''';
     }
 
-    // This is the new, crucial instruction
-    String formattingRule =
-        '\n\nImportant: Do not use any Markdown formatting like asterisks for bolding or lists. Respond in plain, formal text only.';
-
-    return basePrompt + profileInfo + formattingRule;
+    return basePrompt + profileInfo;
   }
 
   int _addAssistantPlaceholder() {
