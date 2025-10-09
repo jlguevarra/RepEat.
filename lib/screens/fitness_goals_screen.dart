@@ -1,5 +1,5 @@
-import 'dart:async'; // --- 1. ADD THIS IMPORT ---
-import 'dart:io';   // --- 2. ADD THIS IMPORT ---
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -19,9 +19,12 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
   int? userId;
   double currentWeight = 0;
   double targetWeight = 0;
+  // ✅ FIX 1: Updated the list of all possible goals
   final allGoals = [
-    'Muscle Gain',
+    'Muscle Gain - Lean',
+    'Muscle Gain - Bulk',
     'Weight Loss',
+    'Maintain Weight',
   ];
   List<String> allowedGoals = [];
 
@@ -66,7 +69,6 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     );
   }
 
-  // --- 3. REFINED THIS ENTIRE FUNCTION ---
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     userId = prefs.getInt('user_id');
@@ -131,10 +133,16 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     originalGoal = selectedGoal;
   }
 
+  // ✅ FIX 2: Updated the logic to determine the specific goal
   void _determineAllowedGoals() {
     allowedGoals = [];
     if (targetWeight > currentWeight) {
-      allowedGoals.add('Muscle Gain');
+      final difference = targetWeight - currentWeight;
+      if (difference > 5) {
+        allowedGoals.add('Muscle Gain - Bulk');
+      } else { // difference is > 0 and <= 5
+        allowedGoals.add('Muscle Gain - Lean');
+      }
     } else if (targetWeight < currentWeight) {
       allowedGoals.add('Weight Loss');
     } else {
@@ -172,7 +180,10 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     return Scaffold(
       backgroundColor: Colors.deepPurple.shade50,
       appBar: AppBar(
-        title: const Text('Fitness Goals'),
+        title: const Text(
+          'Fitness Goals',
+          style: TextStyle(fontWeight: FontWeight.bold), // Made title bold
+        ),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
         leading: IconButton(

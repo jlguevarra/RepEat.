@@ -24,7 +24,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   final NumberFormat caloriesFormat = NumberFormat.decimalPattern();
   String? apiError;
 
-  // MODIFIED: Use your new Google Gemini API key.
   static const String geminiApiKey = 'AIzaSyCeDxLLx2dHS_O6OSZhZEoQPGFwcWkiz0U'; // <-- PASTE YOUR FRESH KEY HERE
 
   @override
@@ -33,7 +32,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     initializeMealPlan();
   }
 
-  // MODIFIED: This function is now updated to launch the Gemini-powered ChatScreen.
   void _navigateToChatScreen() {
     Navigator.push(
       context,
@@ -41,14 +39,12 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         builder: (context) => ChatScreen(
           userId: widget.userId,
           userData: userData,
-          apiKey: geminiApiKey, // Use the new Gemini key
-          apiType: 'gemini',     // Specify the API type as 'gemini'
+          apiKey: geminiApiKey,
+          apiType: 'gemini',
         ),
       ),
     );
   }
-
-  // ... (All other code in this file remains exactly the same)
 
   Future<void> initializeMealPlan() async {
     setState(() {
@@ -196,13 +192,15 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     return dietMap[normalized] ?? '';
   }
 
+  // ✅ FIX: Updated calorie targets based on specific goals
   int mapGoalToCalories(String goal) {
     final String normalized = goal.toLowerCase().trim();
     const Map<String, int> goalMap = {
-      'muscle gain': 2500,
-      'weight loss': 1500,
+      'muscle gain - bulk': 2800, // Higher surplus for bulking
+      'muscle gain - lean': 2300, // Slight surplus for lean gains
+      'weight loss': 1500,        // Caloric deficit
     };
-    return goalMap[normalized] ?? 2000;
+    return goalMap[normalized] ?? 2000; // Default calories
   }
 
   IconData _getMealIcon(String mealType) {

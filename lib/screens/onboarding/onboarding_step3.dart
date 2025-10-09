@@ -24,21 +24,19 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
   final TextEditingController _currentWeightController = TextEditingController();
   final TextEditingController _targetWeightController = TextEditingController();
 
+  // REVERTED: Brought back variables for the dropdown
   String? _selectedGoal;
-  // 1. Removed 'Endurance' and 'General Fitness'
   final List<String> _allGoals = [
-    'Muscle Gain',
+    'Muscle Gain - Lean',
+    'Muscle Gain - Bulk',
     'Weight Loss',
-    // 'Endurance', // Removed
-    // 'General Fitness', // Removed
   ];
-  late List<String> _allowedGoals; // Declare as late, initialize in initState
+  late List<String> _allowedGoals;
 
   String? _bmiCategory;
 
-  // Custom Snackbar method (Added for consistency)
   void _showCustomSnackBar(String message, bool isSuccess) {
-    if (!mounted) return; // Guard against state changes if widget is disposed
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -99,72 +97,54 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
     }
   }
 
-  // 4. Determine allowed goals based on current and target weight
-  // Note: This now only updates _allowedGoals, not _selectedGoal automatically.
+  // MODIFIED: This function now FILTERS the dropdown options based on your new logic
   void _updateAllowedGoals() {
     final currentStr = _currentWeightController.text;
     final targetStr = _targetWeightController.text;
-
-    // Only proceed if both fields have content
-    if (currentStr.isEmpty || targetStr.isEmpty) {
-      // If either is empty, reset to allow both goals
-      setState(() {
-        _allowedGoals = List.from(_allGoals);
-        // Do not auto-select or clear selection here
-        // Keep current selection if it's still valid
-        if (_selectedGoal != null && !_allowedGoals.contains(_selectedGoal)) {
-          _selectedGoal = null; // Clear if no longer valid
-        }
-      });
-      return;
-    }
-
     final current = double.tryParse(currentStr);
     final target = double.tryParse(targetStr);
 
-    // Only proceed if both are valid numbers
-    if (current == null || target == null) {
-      return;
+    List<String> newAllowedGoals;
+
+    if (current == null || target == null || current == target) {
+      // If inputs are invalid or the same, allow all goals to be seen
+      newAllowedGoals = List.from(_allGoals);
+    } else if (target > current) {
+      final difference = target - current;
+      if (difference > 5) { // e.g., 70kg to 76kg (diff > 5)
+        newAllowedGoals = ['Muscle Gain - Bulk'];
+      } else { // e.g., 70kg to 75kg (diff <= 5)
+        newAllowedGoals = ['Muscle Gain - Lean'];
+      }
+    } else { // target < current
+      newAllowedGoals = ['Weight Loss'];
     }
 
     setState(() {
-      if (current > target) {
-        // Suggest Weight Loss by limiting options (but don't auto-select)
-        _allowedGoals = ['Weight Loss'];
-        // Clear selection only if it's no longer valid
-        if (_selectedGoal != null && !_allowedGoals.contains(_selectedGoal)) {
-          _selectedGoal = null;
-        }
-      } else if (current < target) {
-        // Suggest Muscle Gain by limiting options (but don't auto-select)
-        _allowedGoals = ['Muscle Gain'];
-        // Clear selection only if it's no longer valid
-        if (_selectedGoal != null && !_allowedGoals.contains(_selectedGoal)) {
-          _selectedGoal = null;
-        }
-      } else {
-        // Current == Target, allow both (validation will prevent saving)
-        _allowedGoals = List.from(_allGoals);
-        // Clear selection only if it's no longer valid (shouldn't happen here)
-        if (_selectedGoal != null && !_allowedGoals.contains(_selectedGoal)) {
-          _selectedGoal = null;
-        }
+      _allowedGoals = newAllowedGoals;
+
+      // If the previously selected goal is no longer valid, clear the selection
+      if (_selectedGoal != null && !_allowedGoals.contains(_selectedGoal)) {
+        _selectedGoal = null;
+      }
+
+      // UX Improvement: If filtering results in only one option, auto-select it
+      if (_allowedGoals.length == 1) {
+        _selectedGoal = _allowedGoals.first;
       }
     });
   }
 
+  // MODIFIED: Changed validation back to check for a selected goal
   void _nextStep() {
     if (_formKey.currentState!.validate()) {
-      // Final check to ensure goal is selected if weights are different
       if (_selectedGoal == null) {
-        // This case should ideally be caught by validation, but double-check
         _showCustomSnackBar('Please select a fitness goal.', false);
         return;
       }
 
       String bodyType = _bmiCategory ?? 'Unknown';
 
-      // Navigate to next step (removed sets and reps)
       if (mounted) {
         Navigator.push(
           context,
@@ -177,8 +157,7 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
               bodyType: bodyType,
               currentWeight: _currentWeightController.text,
               targetWeight: _targetWeightController.text,
-              goal: _selectedGoal!, // Guaranteed by validation
-              // Removed sets and reps as they are auto-determined by the system
+              goal: _selectedGoal!, // Pass the selected goal
             ),
           ),
         );
@@ -195,13 +174,12 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
     return null;
   }
 
-  // 3. Validate for unreasonable target weight (shorter message)
   String? _validateTargetWeight(String? value) {
     final baseValidation = _validateNumber(value, 'Target weight', min: 30, max: 300);
     if (baseValidation != null) return baseValidation;
 
     final currentStr = _currentWeightController.text;
-    if (currentStr.isEmpty) return null; // Let current weight validation handle this
+    if (currentStr.isEmpty) return null;
 
     final current = double.tryParse(currentStr);
     final target = double.tryParse(value ?? '');
@@ -212,7 +190,6 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
       return 'Target must be different';
     }
 
-    // 3. Check for unreasonable weight loss/gain (shorter message)
     final double percentageDifference = ((target - current).abs() / current) * 100;
     const double unreasonableThresholdPercent = 40.0;
 
@@ -226,20 +203,17 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
   @override
   void initState() {
     super.initState();
+    _allowedGoals = List.from(_allGoals); // Initialize with all goals visible
     _heightController.addListener(_updateBMICategory);
     _currentWeightController.addListener(_updateBMICategory);
-    // 4. Add listeners for weight fields to trigger goal updates
     _currentWeightController.addListener(_updateAllowedGoals);
     _targetWeightController.addListener(_updateAllowedGoals);
-    // Initialize allowed goals
-    _allowedGoals = List.from(_allGoals);
   }
 
   @override
   void dispose() {
     _heightController.removeListener(_updateBMICategory);
     _currentWeightController.removeListener(_updateBMICategory);
-    // 4. Remove listeners for goal updates
     _currentWeightController.removeListener(_updateAllowedGoals);
     _targetWeightController.removeListener(_updateAllowedGoals);
     _heightController.dispose();
@@ -251,23 +225,26 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.deepPurple.shade50, // Softer background
+      backgroundColor: Colors.deepPurple.shade50,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('Your Fitness Info'),
+        // ✅ FIX: Added a TextStyle to make the title bold
+        title: const Text(
+          'Your Fitness Info',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white, // Explicitly set app bar text/icon color
-        elevation: 0, // Remove shadow for a flatter look
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
-      body: SafeArea( // Wrap content in SafeArea
-        child: SingleChildScrollView( // Allow scrolling if needed
+      body: SafeArea(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Section
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(20),
@@ -276,15 +253,13 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      Icons.fitness_center, // Changed icon to fitness related
+                      Icons.fitness_center,
                       size: 50,
                       color: Colors.deepPurple.shade800,
                     ),
                   ),
                 ),
                 const SizedBox(height: 30),
-
-                // Title
                 Text(
                   "Let's Get Fit!",
                   style: TextStyle(
@@ -294,8 +269,6 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                   ),
                 ),
                 const SizedBox(height: 10),
-
-                // Subtitle
                 Text(
                   "Tell us about your goals and current stats",
                   style: TextStyle(
@@ -304,107 +277,96 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                   ),
                 ),
                 const SizedBox(height: 40),
-
-                // Height Field
                 TextFormField(
                   controller: _heightController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
                   style: const TextStyle(color: Colors.black87),
                   decoration: InputDecoration(
                     labelText: 'Height (cm)',
                     labelStyle: TextStyle(color: Colors.deepPurple.shade700),
-                    hintText: 'e.g., 175',
-                    hintStyle: TextStyle(color: Colors.grey[400]),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.deepPurple.shade200),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
-                    ),
                     prefixIcon: Icon(
                       Icons.height,
                       color: Colors.deepPurple.shade700,
                     ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                        BorderSide(color: Colors.deepPurple.shade200)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                            color: Colors.deepPurple.shade700, width: 2)),
                   ),
-                  validator: (value) => _validateNumber(value, 'Height', min: 100, max: 250),
+                  validator: (value) =>
+                      _validateNumber(value, 'Height', min: 100, max: 250),
                 ),
                 const SizedBox(height: 20),
-
-                // Current Weight Field
                 TextFormField(
                   controller: _currentWeightController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
                   style: const TextStyle(color: Colors.black87),
                   decoration: InputDecoration(
                     labelText: 'Current Weight (kg)',
                     labelStyle: TextStyle(color: Colors.deepPurple.shade700),
-                    hintText: 'e.g., 70',
-                    hintStyle: TextStyle(color: Colors.grey[400]),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.deepPurple.shade200),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
-                    ),
                     prefixIcon: Icon(
                       Icons.monitor_weight_outlined,
                       color: Colors.deepPurple.shade700,
                     ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                        BorderSide(color: Colors.deepPurple.shade200)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                            color: Colors.deepPurple.shade700, width: 2)),
                   ),
-                  validator: (value) => _validateNumber(value, 'Current weight', min: 30, max: 300),
+                  validator: (value) => _validateNumber(
+                      value, 'Current weight',
+                      min: 30, max: 300),
                 ),
                 const SizedBox(height: 20),
-
-                // Target Weight Field
                 TextFormField(
                   controller: _targetWeightController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
                   style: const TextStyle(color: Colors.black87),
                   decoration: InputDecoration(
                     labelText: 'Target Weight (kg)',
                     labelStyle: TextStyle(color: Colors.deepPurple.shade700),
-                    hintText: 'e.g., 75',
-                    hintStyle: TextStyle(color: Colors.grey[400]),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.deepPurple.shade200),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
-                    ),
                     prefixIcon: Icon(
                       Icons.flag_outlined,
                       color: Colors.deepPurple.shade700,
                     ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                        BorderSide(color: Colors.deepPurple.shade200)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                            color: Colors.deepPurple.shade700, width: 2)),
                   ),
-                  validator: _validateTargetWeight, // 3. Use the new validator
+                  validator: _validateTargetWeight,
                 ),
                 const SizedBox(height: 10),
-
-                // BMI Category Display
                 if (_bmiCategory != null) ...[
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -416,8 +378,12 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                     child: Row(
                       children: [
                         Icon(
-                          _bmiCategory == 'Normal' ? Icons.check_circle : Icons.info,
-                          color: _bmiCategory == 'Normal' ? Colors.green : Colors.deepPurple,
+                          _bmiCategory == 'Normal'
+                              ? Icons.check_circle
+                              : Icons.info,
+                          color: _bmiCategory == 'Normal'
+                              ? Colors.green
+                              : Colors.deepPurple,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
@@ -434,7 +400,7 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                 ],
                 const SizedBox(height: 20),
 
-                // Fitness Goal Dropdown (4. Uses _allowedGoals, user can always select)
+                // REVERTED: The DropdownButtonFormField is back
                 DropdownButtonFormField<String?>(
                   decoration: InputDecoration(
                     labelText: 'Fitness Goal',
@@ -459,18 +425,17 @@ class _OnboardingStep3State extends State<OnboardingStep3> {
                     ),
                   ),
                   value: _selectedGoal,
-                  items: _allowedGoals.map((goal) => DropdownMenuItem(value: goal, child: Text(goal))).toList(),
+                  items: _allowedGoals
+                      .map((goal) =>
+                      DropdownMenuItem(value: goal, child: Text(goal)))
+                      .toList(),
                   onChanged: (value) {
-                    // Always allow user to change the selection
                     setState(() => _selectedGoal = value);
                   },
-                  validator: (value) => value == null ? 'Please select a goal' : null,
+                  validator: (value) =>
+                  value == null ? 'Please select a goal' : null,
                 ),
-                // 1. Removed Sets and Reps Row
-
-                const SizedBox(height: 40), // Space before button
-
-                // Next Button
+                const SizedBox(height: 40),
                 SizedBox(
                   width: double.infinity,
                   height: 55,

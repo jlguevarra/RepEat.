@@ -114,7 +114,11 @@ class _OnboardingStep4State extends State<OnboardingStep4> {
       backgroundColor: Colors.deepPurple.shade50, // Softer background
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text("Injury Info"),
+        // ✅ FIX: Added a TextStyle to make the title bold
+        title: const Text(
+          "Injury Info",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white, // Explicitly set app bar text/icon color
         elevation: 0, // Remove shadow for a flatter look

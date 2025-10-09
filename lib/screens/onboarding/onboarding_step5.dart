@@ -121,14 +121,15 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
       // Apply filtering based on goal
       final String goalLC = widget.goal.toLowerCase();
-      if (goalLC == 'weight loss') {
+      if (goalLC.contains('weight loss')) {
         _filteredDietOptions.remove('High Protein');
-      } else if (goalLC == 'muscle gain') {
+      } else if (goalLC.contains('muscle gain')) {
         _filteredDietOptions.remove('Low Carb');
       }
 
       // If the currently selected diet is no longer valid, clear it
-      if (_dietPreference != null && !_filteredDietOptions.contains(_dietPreference)) {
+      if (_dietPreference != null &&
+          !_filteredDietOptions.contains(_dietPreference)) {
         _dietPreference = null;
         // Re-evaluate allergies if diet preference is cleared
         _evaluateAutoAllergies();
@@ -156,9 +157,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
         } else if (!_milkAutoAdded) {
           // If Milk was already selected but not marked as auto-added,
           // it means the user selected it themselves. Keep the flag as false.
-          // (This case is handled by the logic in _showAllergySelector/_evaluateAutoAllergies when selecting)
         }
-        // If Milk is already selected (alone or with others), do nothing special.
         _noneAutoDisabled = true; // Disable "None" when Dairy Free is selected
         _allergyError = false; // Clear error state when auto-changing
       } else {
@@ -172,9 +171,6 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
             _selectedAllergies.add("None");
           }
         }
-        // If Milk was selected by the user (not auto-added), leave it.
-        // If "None" is selected, leave it.
-        // If other items are selected, leave them.
         _noneAutoDisabled = false; // Enable "None" when Dairy Free is deselected
         _allergyError = false; // Clear error state
       }
@@ -184,38 +180,18 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
   Future<void> _submitData() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Handle allergy validation:
-    // Scenario 1: User explicitly selected "None" -> Valid (shows "No Allergies")
-    // Scenario 2: User selected specific allergies -> Valid
-    // Scenario 3: User selected "None" AND other allergies -> Invalid
-    // Scenario 4: User selected nothing (initial state {}) -> Invalid (Prompt to select)
-
+    // Handle allergy validation
     bool isValidSelection = true;
     String errorMessage = "";
 
-    // Check if user made any selections
     if (_selectedAllergies.isEmpty) {
-      // Scenario 4: Nothing selected (initial prompt state)
       isValidSelection = false;
-      errorMessage = "Please select 'None' if you have no allergies, or select specific allergies.";
-    } else if (_selectedAllergies.contains("None")) {
-      if (_selectedAllergies.length > 1) {
-        // Scenario 3: "None" mixed with others
-        isValidSelection = false;
-        errorMessage = "Cannot select 'None' with other allergies.";
-      } else {
-        // Scenario 1: Only "None" selected -> Valid (do nothing)
-        // Display will be "No Allergies"
-      }
-    } else {
-      if (_selectedAllergies.isEmpty) {
-        // Edge case: somehow got to empty set without "None"
-        isValidSelection = false;
-        errorMessage = "Please select 'None' if you have no allergies, or select specific allergies.";
-      } else {
-        // Scenario 2: Specific allergies selected -> Valid (do nothing)
-        // Display will be the list of allergies
-      }
+      errorMessage =
+      "Please select 'None' if you have no allergies, or select specific allergies.";
+    } else if (_selectedAllergies.contains("None") &&
+        _selectedAllergies.length > 1) {
+      isValidSelection = false;
+      errorMessage = "Cannot select 'None' with other allergies.";
     }
 
     if (!isValidSelection) {
@@ -232,16 +208,16 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
     setState(() => _isSubmitting = true);
 
-    final url = Uri.parse("https://repeatapp.site/repEatApi/save_onboarding.php"); // Ensure IP is correct
+    final url =
+    Uri.parse("https://repeatapp.site/repEatApi/save_onboarding.php");
 
-    // Prepare data, handling "None" case correctly for submission
     String allergiesToSend;
-    // Check if it's effectively "None" (empty or contains only "None")
-    if (_selectedAllergies.isEmpty || (_selectedAllergies.length == 1 && _selectedAllergies.contains("None"))) {
+    if (_selectedAllergies.isEmpty ||
+        (_selectedAllergies.length == 1 && _selectedAllergies.contains("None"))) {
       allergiesToSend = "None";
     } else {
-      // Remove "None" from the set before joining, just in case it's mixed (though validation should prevent this)
-      Set<String> cleanedAllergies = Set.from(_selectedAllergies)..remove("None");
+      Set<String> cleanedAllergies = Set.from(_selectedAllergies)
+        ..remove("None");
       allergiesToSend = cleanedAllergies.join(",");
     }
 
@@ -256,8 +232,8 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
       "goal": widget.goal,
       "has_injury": widget.hasInjury ? "1" : "0",
       "injury_details": widget.hasInjury ? widget.injuryDetails : "None",
-      "diet_preference": _dietPreference ?? "None", // Send "None" if nothing selected
-      "allergies": allergiesToSend, // Send processed allergies
+      "diet_preference": _dietPreference ?? "None",
+      "allergies": allergiesToSend,
     };
 
     try {
@@ -286,7 +262,8 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
           }
         });
       } else {
-        _showCustomSnackBar(result['message'] ?? 'Failed to save onboarding data', false);
+        _showCustomSnackBar(
+            result['message'] ?? 'Failed to save onboarding data', false);
       }
     } catch (e) {
       _showCustomSnackBar('Network error. Please try again.', false);
@@ -301,15 +278,12 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
     showDialog(
       context: context,
       builder: (context) {
-        // Use a temporary set for selections within the dialog
-        // Initialize with the current main state selections
         Set<String> tempSelection = Set.from(_selectedAllergies);
-        // Determine if "Milk" should be locked and if "None" should be disabled
         final bool isMilkLocked = _dietPreference == "Dairy Free";
-        final bool isNoneDisabled = _dietPreference == "Dairy Free"; // Disable "None" when Dairy Free is selected
+        final bool isNoneDisabled = _dietPreference == "Dairy Free";
 
         return StatefulBuilder(
-          builder: (context, dialogStateSetter) { // State setter for the dialog
+          builder: (context, dialogStateSetter) {
             return AlertDialog(
               title: const Text("Select Allergies"),
               titleTextStyle: TextStyle(
@@ -320,7 +294,6 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
               content: SizedBox(
                 width: double.maxFinite,
                 child: StatefulBuilder(
-                  // Nested StatefulBuilder for dialog content state
                   builder: (context, contentStateSetter) {
                     return ListView(
                       shrinkWrap: true,
@@ -329,17 +302,18 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                         bool isDisabled = (allergy == "Milk" && isMilkLocked) ||
                             (allergy == "None" && isNoneDisabled);
                         return IgnorePointer(
-                          ignoring: isDisabled, // Disable interaction if locked or disabled
+                          ignoring: isDisabled,
                           child: Opacity(
-                            opacity: isDisabled ? 0.6 : 1.0, // Visually indicate it's locked/disabled
+                            opacity: isDisabled ? 0.6 : 1.0,
                             child: CheckboxListTile(
                               title: Row(
                                 children: [
                                   Text(allergy),
-                                  if (isDisabled) // Visually indicate it's locked/disabled
+                                  if (isDisabled)
                                     const Padding(
                                       padding: EdgeInsets.only(left: 8.0),
-                                      child: Icon(Icons.lock, size: 16, color: Colors.grey),
+                                      child: Icon(Icons.lock,
+                                          size: 16, color: Colors.grey),
                                     ),
                                 ],
                               ),
@@ -347,40 +321,32 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                               activeColor: Colors.deepPurple,
                               checkColor: Colors.white,
                               onChanged: (val) {
-                                contentStateSetter(() { // Update state within dialog content
+                                contentStateSetter(() {
                                   if (val == true) {
                                     if (allergy == "None") {
-                                      // Selecting "None" clears all other selections
                                       tempSelection.clear();
                                       tempSelection.add("None");
-                                      // If user explicitly selects "None", it wasn't auto-added
-                                      _milkAutoAdded = false; // Reset milk flag
-                                      _noneAutoDisabled = false; // Reset none disabled flag
+                                      _milkAutoAdded = false;
+                                      _noneAutoDisabled = false;
                                     } else {
-                                      // Selecting a specific allergy
-                                      tempSelection.remove("None"); // Remove "None"
-                                      tempSelection.add(allergy);   // Add the allergy
-                                      // If user explicitly selects Milk, update flag
+                                      tempSelection.remove("None");
+                                      tempSelection.add(allergy);
                                       if (allergy == "Milk") {
-                                        _milkAutoAdded = false; // User selected it
+                                        _milkAutoAdded = false;
                                       }
                                     }
                                   } else {
-                                    // Deselecting an item (only if not locked/disabled)
                                     if (!isDisabled) {
                                       tempSelection.remove(allergy);
-                                      // Do not automatically add "None" here.
-                                      // Let the final "OK" logic or validation handle empty states if needed.
-                                      // If user explicitly deselects Milk, update flag
                                       if (allergy == "Milk") {
-                                        _milkAutoAdded = false; // User deselected it
+                                        _milkAutoAdded = false;
                                       }
                                     }
                                   }
                                 });
                               },
-                              // Make the tile visually distinct when locked/disabled
-                              tileColor: isDisabled ? Colors.grey.shade100 : null,
+                              tileColor:
+                              isDisabled ? Colors.grey.shade100 : null,
                             ),
                           ),
                         );
@@ -399,29 +365,19 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    // When OK is pressed, commit the temp selection to main state
                     setState(() {
                       _selectedAllergies = Set.from(tempSelection);
-                      _milkAutoAdded = tempSelection.contains("Milk") && _dietPreference == "Dairy Free"; // Update flag correctly
-                      _noneAutoDisabled = _dietPreference == "Dairy Free"; // Update flag correctly
+                      _milkAutoAdded = tempSelection.contains("Milk") &&
+                          _dietPreference == "Dairy Free";
+                      _noneAutoDisabled = _dietPreference == "Dairy Free";
 
-                      // Finalize selection logic upon closing dialog:
-                      // If absolutely nothing is selected, leave it empty {}
-                      // This preserves the initial prompt state if user cancels all selections.
-                      // DO NOT set to {"None"} here.
-                      // The validation on submit will handle the empty state.
                       if (_selectedAllergies.isEmpty) {
-                        // Keep it empty {}
-                        // Also reset the auto-added flags as there are no selections
-                        _milkAutoAdded = false; // Reset flag
-                        _noneAutoDisabled = false; // Reset flag
+                        _milkAutoAdded = false;
+                        _noneAutoDisabled = false;
                       }
-                      // If "None" is explicitly in the selection (and passed validation in dialog),
-                      // or other items are selected, keep them as is.
-                      // Clear the error state as selections are committed (validation happens on submit)
                       _allergyError = false;
                     });
-                    Navigator.pop(context); // Close the dialog
+                    Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepPurple.shade700,
@@ -437,27 +393,22 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
     );
   }
 
-  /// Formats the display text for the allergies input field.
   String getAllergyDisplay() {
-    // Check for initial prompt state (empty set)
     if (_selectedAllergies.isEmpty) {
-      return "Select Allergies"; // Prompt text
-    }
-    // Check for "None" selection
-    else if (_selectedAllergies.length == 1 && _selectedAllergies.contains("None")) {
-      return "No Allergies"; // Confirmed "None" selection
-    }
-    // Join multiple selections
-    else {
+      return "Select Allergies";
+    } else if (_selectedAllergies.length == 1 &&
+        _selectedAllergies.contains("None")) {
+      return "No Allergies";
+    } else {
       return _selectedAllergies.join(", ");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) { // Use the correct variable
+    if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Colors.deepPurple, // Match app bar color
+        backgroundColor: Colors.deepPurple,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -482,23 +433,26 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: Colors.deepPurple.shade50, // Softer background - Improved Design
+        backgroundColor: Colors.deepPurple.shade50,
         appBar: AppBar(
           automaticallyImplyLeading: false,
-          title: const Text("Diet & Allergies"),
+          // ✅ FIX: Added a TextStyle to make the title bold
+          title: const Text(
+            "Diet & Allergies",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           backgroundColor: Colors.deepPurple,
-          foregroundColor: Colors.white, // Explicitly set app bar text/icon color
-          elevation: 0, // Remove shadow for a flatter look
+          foregroundColor: Colors.white,
+          elevation: 0,
         ),
-        body: SafeArea( // Wrap content in SafeArea
-          child: SingleChildScrollView( // Allow scrolling if needed
+        body: SafeArea(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Form(
               key: _formKey,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start, // Improved Design
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header Section
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(20),
@@ -514,8 +468,6 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                     ),
                   ),
                   const SizedBox(height: 30),
-
-                  // Title
                   Text(
                     "Dietary Preferences",
                     style: TextStyle(
@@ -525,8 +477,6 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                     ),
                   ),
                   const SizedBox(height: 10),
-
-                  // Subtitle
                   Text(
                     "Tell us about your dietary needs",
                     style: TextStyle(
@@ -535,54 +485,6 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                     ),
                   ),
                   const SizedBox(height: 40),
-
-                  // Goal Display (Informational)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.deepPurple.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.deepPurple.shade300),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          widget.goal.toLowerCase() == 'muscle gain'
-                              ? Icons.fitness_center
-                              : (widget.goal.toLowerCase() == 'weight loss'
-                              ? Icons.monitor_weight_outlined
-                              : Icons.restaurant_menu),
-                          color: Colors.deepPurple.shade700,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Goal: ${widget.goal}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.deepPurple.shade800,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.filter_alt_outlined,
-                          color: Colors.deepPurple.shade700,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '(filtered)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic,
-                            color: Colors.deepPurple.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
 
                   // Diet Preference Dropdown (Filtered)
                   DropdownButtonFormField<String?>(
@@ -597,48 +499,48 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.deepPurple.shade200),
+                        borderSide:
+                        BorderSide(color: Colors.deepPurple.shade200),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
+                        borderSide: BorderSide(
+                            color: Colors.deepPurple.shade700, width: 2),
                       ),
                       prefixIcon: Icon(
                         Icons.fastfood,
                         color: Colors.deepPurple.shade700,
                       ),
-                      suffixIcon: Icon(
-                        Icons.info_outline,
-                        color: Colors.deepPurple.shade700,
-                        size: 18,
-                      ),
                     ),
                     value: _dietPreference,
-                    items: _filteredDietOptions.map(
+                    items: _filteredDietOptions
+                        .map(
                           (diet) => DropdownMenuItem(
                         value: diet,
                         child: Text(diet),
                       ),
-                    ).toList(),
+                    )
+                        .toList(),
                     onChanged: (val) {
                       setState(() {
                         _dietPreference = val;
-                        // 1, 2 & 3. Trigger auto-allergy evaluation when diet changes
                         _evaluateAutoAllergies();
                       });
                     },
-                    validator: (val) => val == null ? 'Please select a diet preference' : null,
+                    validator: (val) =>
+                    val == null ? 'Please select a diet preference' : null,
                   ),
                   const SizedBox(height: 24),
 
                   // Allergies Selector
                   GestureDetector(
                     onTap: _showAllergySelector,
-                    child: AbsorbPointer( // Prevents keyboard focus
+                    child: AbsorbPointer(
                       child: InputDecorator(
                         decoration: InputDecoration(
                           labelText: "Allergies",
-                          labelStyle: TextStyle(color: Colors.deepPurple.shade700),
+                          labelStyle:
+                          TextStyle(color: Colors.deepPurple.shade700),
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(
@@ -647,36 +549,41 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.deepPurple.shade200),
+                            borderSide: BorderSide(
+                                color: Colors.deepPurple.shade200),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
+                            borderSide: BorderSide(
+                                color: Colors.deepPurple.shade700, width: 2),
                           ),
                           prefixIcon: Icon(
                             Icons.warning_amber_outlined,
                             color: Colors.deepPurple.shade700,
                           ),
-                          // Conditionally show error text
-                          errorText: _allergyError ? "Please review your allergy selection" : null,
+                          errorText: _allergyError
+                              ? "Please review your allergy selection"
+                              : null,
                           errorBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.red, width: 2),
+                            borderSide:
+                            const BorderSide(color: Colors.red, width: 2),
                           ),
                           focusedErrorBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.red, width: 2),
+                            borderSide:
+                            const BorderSide(color: Colors.red, width: 2),
                           ),
                         ),
                         child: Text(
-                          getAllergyDisplay(), // Use the formatted display text
+                          getAllergyDisplay(),
                           style: TextStyle(
                             color: _selectedAllergies.isEmpty ||
                                 getAllergyDisplay() == "Select Allergies"
-                                ? Colors.grey.shade600 // Grey for placeholder/prompt
+                                ? Colors.grey.shade600
                                 : (getAllergyDisplay() == "No Allergies"
-                                ? Colors.grey.shade600 // Grey for "No Allergies"
-                                : Colors.black87),      // Black for selections
+                                ? Colors.grey.shade600
+                                : Colors.black87),
                             fontSize: 16,
                           ),
                         ),
@@ -686,7 +593,7 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
 
                   const SizedBox(height: 40),
 
-                  // Save Button (only visible when editing)
+                  // Save Button
                   SizedBox(
                     width: double.infinity,
                     height: 55,
@@ -704,7 +611,8 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
                           ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
                       )
                           : const Text(
                         "Complete Setup",
@@ -725,34 +633,11 @@ class _OnboardingStep5State extends State<OnboardingStep5> {
   }
 
   Future<bool> _onWillPop() async {
-    // Handle unsaved changes logic here if needed
-    // For now, just allow popping
     return true;
-  }
-
-  InputDecoration _inputDecoration() {
-    return InputDecoration(
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.deepPurple.shade200),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.deepPurple.shade700, width: 2),
-      ),
-    );
   }
 
   @override
   void dispose() {
-    // Remove listeners and dispose controllers if needed
     super.dispose();
   }
 }
