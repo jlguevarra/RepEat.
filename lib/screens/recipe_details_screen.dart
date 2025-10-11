@@ -210,8 +210,16 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.recipeTitle),
+        // ✅ FIX: Updated the title's style to be bold and white
+        title: Text(
+          widget.recipeTitle,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white, // Ensures back arrow is also white
         actions: [
           IconButton(
             icon: Icon(
@@ -409,28 +417,36 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            if (recipeDetails!['nutrition']['calories'] != null)
+                            if (recipeDetails!['nutrition']['nutrients']
+                                .firstWhere((n) => n['name'] == 'Calories', orElse: () => null) != null)
                               _buildNutritionFact(
                                 'Calories',
-                                recipeDetails!['nutrition']['calories'],
+                                recipeDetails!['nutrition']['nutrients']
+                                    .firstWhere((n) => n['name'] == 'Calories')['amount'],
                                 'kcal',
                               ),
-                            if (recipeDetails!['nutrition']['protein'] != null)
+                            if (recipeDetails!['nutrition']['nutrients']
+                                .firstWhere((n) => n['name'] == 'Protein', orElse: () => null) != null)
                               _buildNutritionFact(
                                 'Protein',
-                                recipeDetails!['nutrition']['protein'],
+                                recipeDetails!['nutrition']['nutrients']
+                                    .firstWhere((n) => n['name'] == 'Protein')['amount'],
                                 'g',
                               ),
-                            if (recipeDetails!['nutrition']['fat'] != null)
+                            if (recipeDetails!['nutrition']['nutrients']
+                                .firstWhere((n) => n['name'] == 'Fat', orElse: () => null) != null)
                               _buildNutritionFact(
                                 'Fat',
-                                recipeDetails!['nutrition']['fat'],
+                                recipeDetails!['nutrition']['nutrients']
+                                    .firstWhere((n) => n['name'] == 'Fat')['amount'],
                                 'g',
                               ),
-                            if (recipeDetails!['nutrition']['carbs'] != null)
+                            if (recipeDetails!['nutrition']['nutrients']
+                                .firstWhere((n) => n['name'] == 'Carbohydrates', orElse: () => null) != null)
                               _buildNutritionFact(
                                 'Carbs',
-                                recipeDetails!['nutrition']['carbs'],
+                                recipeDetails!['nutrition']['nutrients']
+                                    .firstWhere((n) => n['name'] == 'Carbohydrates')['amount'],
                                 'g',
                               ),
                           ],

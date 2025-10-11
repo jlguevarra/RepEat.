@@ -290,7 +290,15 @@ class _DietPreferenceScreenState extends State<DietPreferenceScreen> {
       child: Scaffold(
         backgroundColor: Colors.deepPurple.shade50,
         appBar: AppBar(
-          title: const Text('Diet & Allergies'),
+          // --- MODIFICATION START ---
+          title: const Text(
+            'Diet & Allergies',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          // --- MODIFICATION END ---
           backgroundColor: Colors.deepPurple,
           foregroundColor: Colors.white,
           leading: IconButton(

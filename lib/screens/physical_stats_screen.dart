@@ -347,7 +347,15 @@ class _PhysicalStatsScreenState extends State<PhysicalStatsScreen> {
       child: Scaffold(
         backgroundColor: Colors.deepPurple.shade50,
         appBar: AppBar(
-          title: const Text('Physical Stats'),
+          // --- MODIFICATION START ---
+          title: const Text(
+            'Physical Stats',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          // --- MODIFICATION END ---
           backgroundColor: Colors.deepPurple,
           foregroundColor: Colors.white,
           leading: IconButton(
