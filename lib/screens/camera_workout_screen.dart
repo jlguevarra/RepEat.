@@ -1,5 +1,3 @@
-// camera_workout_screen.dart
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -10,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 
 // Import the PosePainter from its own file
 import 'pose_painter.dart';
@@ -17,21 +16,21 @@ import 'pose_painter.dart';
 // Enum to categorize the type of motion for different exercises.
 enum MotionType {
   unclassified,
-  squat,              // Squats, Lunges, Step-ups
-  hipHinge,           // Deadlifts
-  horizontalPress,    // Bench Press, Flyes
-  verticalPress,      // Shoulder Press
-  horizontalPull,     // Rows
-  shoulderElevation,  // Shrugs
-  legExtension,       // Calf Raises
-  torsoRotation,      // Russian Twists, Wood Chops
-  lateralBend,        // Side Bends
-  coreFlexion,        // Sit-ups
-  shoulderArc,        // Pullovers, Windmills
-  bicepCurl,          // Bicep Curls
-  hammerCurl,         // Hammer Curls
-  tricepsExtension,   // Triceps Extensions
-  lateralRaise,       // Reverse Flyes
+  squat, // Squats, Lunges, Step-ups
+  hipHinge, // Deadlifts
+  horizontalPress, // Bench Press, Flyes
+  verticalPress, // Shoulder Press
+  horizontalPull, // Rows
+  shoulderElevation, // Shrugs
+  legExtension, // Calf Raises
+  torsoRotation, // Russian Twists, Wood Chops
+  lateralBend, // Side Bends
+  coreFlexion, // Sit-ups
+  shoulderArc, // Pullovers, Windmills
+  bicepCurl, // Bicep Curls
+  hammerCurl, // Hammer Curls
+  tricepsExtension, // Triceps Extensions
+  lateralRaise, // Reverse Flyes
 }
 
 // State machine for tracking the phase of a repetition.
@@ -83,6 +82,8 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   Color _formStatusColor = Colors.white;
   bool _isPoseVisible = false;
   Size? _imageSize;
+  bool _isBusy = false;
+  DateTime? _lastProcessingTime;
 
   // Rep state variables
   RepState _repState = RepState.starting;
@@ -232,6 +233,7 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
   }
 
   Future<void> _processCameraImage(CameraImage image) async {
+    // Set image size correctly
     if (_imageSize == null && mounted) {
       setState(() {
         _imageSize = Size(image.width.toDouble(), image.height.toDouble());
@@ -512,7 +514,6 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     }
   }
 
-  // Position-based exercises
   // Position-based exercises
   void _analyzeShoulderElevation(Pose pose) { // Shrugs
     final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
@@ -868,10 +869,19 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
     final bytes = Uint8List.fromList(allBytes);
     final metadata = InputImageMetadata(
         size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
+        rotation: rotation, // This is important
         format: format,
         bytesPerRow: image.planes.first.bytesPerRow);
     return InputImage.fromBytes(bytes: bytes, metadata: metadata);
+  }
+
+  InputImageRotation _convertCameraImageRotation(int sensorOrientation) {
+    switch (sensorOrientation) {
+      case 90: return InputImageRotation.rotation90deg;
+      case 180: return InputImageRotation.rotation180deg;
+      case 270: return InputImageRotation.rotation270deg;
+      default: return InputImageRotation.rotation0deg;
+    }
   }
 
   double _calculateAngle(PoseLandmark a, PoseLandmark b, PoseLandmark c) {
@@ -926,19 +936,26 @@ class _CameraWorkoutScreenState extends State<CameraWorkoutScreen> with WidgetsB
             ? Stack(
           fit: StackFit.expand,
           children: [
-            FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: _cameraController!.value.previewSize!.height,
-                height: _cameraController!.value.previewSize!.width,
-                child: CameraPreview(_cameraController!),
+            // MODIFIED: Stretched camera preview to fill screen
+            SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.fill,
+                child: SizedBox(
+                  // Use the controller's aspect ratio to size the preview box
+                  width: _cameraController!.value.aspectRatio,
+                  height: 1,
+                  child: CameraPreview(_cameraController!),
+                ),
               ),
             ),
+            // This CustomPaint overlays the camera and is already set to fill
             Positioned.fill(
               child: CustomPaint(
                 painter: PosePainter(
-                    (_isRestPeriod || !_isPoseVisible) ? null : _currentPose,
-                    _imageSize ?? _cameraController!.value.previewSize!
+                  (_isRestPeriod || !_isPoseVisible) ? null : _currentPose,
+                  _imageSize ?? _cameraController!.value.previewSize!,
+                  _convertCameraImageRotation(_cameraController!.description.sensorOrientation),
+                  _cameraController!.description.lensDirection,
                 ),
               ),
             ),
